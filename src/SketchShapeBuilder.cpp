@@ -18,6 +18,7 @@
 #include <Geom_TrimmedCurve.hxx>
 #include <Precision.hxx>
 #include <ShapeFix_Wire.hxx>
+#include <Standard_Failure.hxx>
 #include <TColStd_Array1OfInteger.hxx>
 #include <TColStd_Array1OfReal.hxx>
 #include <TColgp_Array1OfPnt.hxx>
@@ -74,6 +75,15 @@ namespace
     return std::sqrt(std::max(0.0, dx * dx + dy * dy - minorRadius * minorRadius));
 }
 
+[[nodiscard]] TopoDS_Edge checkedEdge(BRepBuilderAPI_MakeEdge& builder, const char* desc, std::string& error)
+{
+    if (!builder.IsDone()) {
+        error = std::string("Failed to build ") + desc + " edge.";
+        return {};
+    }
+    return builder.Edge();
+}
+
 [[nodiscard]] bool appendGeometry(
     const Compat::Geometry& geometry,
     std::list<TopoDS_Edge>& edges,
@@ -88,12 +98,22 @@ namespace
     switch (geometry.kind) {
         case Compat::GeometryKind::Point: {
             const auto& point = std::get<Compat::PointGeometry>(geometry.data);
-            vertices.push_back(BRepBuilderAPI_MakeVertex(makePoint(point.point)).Vertex());
+            BRepBuilderAPI_MakeVertex makeVertex(makePoint(point.point));
+            if (!makeVertex.IsDone()) {
+                error = "Failed to build point vertex.";
+                return false;
+            }
+            vertices.push_back(makeVertex.Vertex());
             return true;
         }
         case Compat::GeometryKind::LineSegment: {
             const auto& line = std::get<Compat::LineSegmentGeometry>(geometry.data);
-            edges.push_back(BRepBuilderAPI_MakeEdge(makePoint(line.start), makePoint(line.end)).Edge());
+            BRepBuilderAPI_MakeEdge makeLine(makePoint(line.start), makePoint(line.end));
+            if (!makeLine.IsDone()) {
+                error = "Failed to build line segment edge.";
+                return false;
+            }
+            edges.push_back(makeLine.Edge());
             return true;
         }
         case Compat::GeometryKind::Circle: {
@@ -158,9 +178,8 @@ namespace
                 focal
             );
             Handle(Geom_Parabola) curve = new Geom_Parabola(gpParabola);
-            const double scale = focal > Precision::Confusion() ? (2.0 * focal) : 1.0;
             Handle(Geom_TrimmedCurve) trimmed =
-                new Geom_TrimmedCurve(curve, arc.startAngle / scale, arc.endAngle / scale, true, true);
+                new Geom_TrimmedCurve(curve, arc.startAngle, arc.endAngle, true, true);
             edges.push_back(BRepBuilderAPI_MakeEdge(trimmed).Edge());
             return true;
         }
@@ -218,44 +237,45 @@ gp_Trsf makePlacementTransform(const Compat::Placement& placement)
 
 TopoDS_Shape buildSketchShape(const Compat::SketchModel& model, std::string& error)
 {
-    std::list<TopoDS_Edge> edgeList;
-    std::list<TopoDS_Vertex> vertexList;
-    std::list<TopoDS_Wire> wires;
+    try {
+        std::list<TopoDS_Edge> edgeList;
+        std::list<TopoDS_Vertex> vertexList;
+        std::list<TopoDS_Wire> wires;
 
-    for (const auto& geometry : model.geometries()) {
-        if (!appendGeometry(geometry, edgeList, vertexList, error)) {
-            return {};
-        }
-    }
-
-    while (!edgeList.empty()) {
-        BRepBuilderAPI_MakeWire makeWire;
-        makeWire.Add(edgeList.front());
-        edgeList.pop_front();
-
-        TopoDS_Wire newWire = makeWire.Wire();
-        bool found = false;
-        do {
-            found = false;
-            for (auto edgeIt = edgeList.begin(); edgeIt != edgeList.end(); ++edgeIt) {
-                makeWire.Add(*edgeIt);
-                if (makeWire.Error() != BRepBuilderAPI_DisconnectedWire) {
-                    found = true;
-                    edgeList.erase(edgeIt);
-                    newWire = makeWire.Wire();
-                    break;
-                }
+        for (const auto& geometry : model.geometries()) {
+            if (!appendGeometry(geometry, edgeList, vertexList, error)) {
+                return {};
             }
-        } while (found);
+        }
 
-        ShapeFix_Wire fixWire;
-        fixWire.SetPrecision(Precision::Confusion());
-        fixWire.Load(newWire);
-        fixWire.FixReorder();
-        fixWire.FixConnected();
-        fixWire.FixClosed();
-        wires.push_back(fixWire.Wire());
-    }
+        while (!edgeList.empty()) {
+            BRepBuilderAPI_MakeWire makeWire;
+            makeWire.Add(edgeList.front());
+            edgeList.pop_front();
+
+            TopoDS_Wire newWire = makeWire.Wire();
+            bool found = false;
+            do {
+                found = false;
+                for (auto edgeIt = edgeList.begin(); edgeIt != edgeList.end(); ++edgeIt) {
+                    makeWire.Add(*edgeIt);
+                    if (makeWire.Error() != BRepBuilderAPI_DisconnectedWire) {
+                        found = true;
+                        edgeList.erase(edgeIt);
+                        newWire = makeWire.Wire();
+                        break;
+                    }
+                }
+            } while (found);
+
+            ShapeFix_Wire fixWire;
+            fixWire.SetPrecision(Precision::Confusion());
+            fixWire.Load(newWire);
+            fixWire.FixReorder();
+            fixWire.FixConnected();
+            fixWire.FixClosed();
+            wires.push_back(fixWire.Wire());
+        }
 
     if (wires.size() == 1 && vertexList.empty()) {
         return *wires.begin();
@@ -274,6 +294,15 @@ TopoDS_Shape buildSketchShape(const Compat::SketchModel& model, std::string& err
     }
 
     return compound;
+    }
+    catch (const Standard_Failure& e) {
+        error = std::string("OCCT error: ") + e.GetMessageString();
+        return {};
+    }
+    catch (const std::exception& e) {
+        error = std::string("Error building sketch shape: ") + e.what();
+        return {};
+    }
 }
 
 TopoDS_Shape applySketchPlacement(const TopoDS_Shape& shape, const Compat::SketchModel& model)

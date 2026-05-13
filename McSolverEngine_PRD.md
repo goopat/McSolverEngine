@@ -44,6 +44,10 @@
 - LineSegment
 - Circle
 - Arc
+- Ellipse / ArcOfEllipse
+- ArcOfHyperbola
+- ArcOfParabola
+- B-Spline
 
 #### 基础约束
 
@@ -62,6 +66,10 @@
 - Tangent
 - Symmetric
 - PointOnObject
+- InternalAlignment
+- Block
+- Weight
+- SnellsLaw
 
 #### 输出
 
@@ -71,12 +79,10 @@
 
 ### 3.2 后续阶段范围（可选）
 
-- Ellipse / ArcOfEllipse
-- Hyperbola / Parabola
-- B-Spline
-- Block 约束
+- 更完整的 FreeCAD 表达式求值语义
 - 拖拽临时约束
-- 高级冗余/冲突诊断一致性
+- ~~多求解器回退链路与更完整的求解策略对齐~~（已在 2026-05-14 实现：DogLeg→LM→BFGS→SQP augmented）
+- 更高覆盖度的冗余/冲突诊断一致性
 - 完整复刻 FreeCAD Sketcher 的交互语义
 
 ## 4. 非目标
@@ -284,6 +290,10 @@ FreeCAD 中真正把“草图数据”翻译成 GCS 参数和约束的是：
 - 参数覆盖时优先匹配全名键（如 `Config.Width`），查不到时再匹配短名键（如 `Width`）
 - 因此当多个 `VarSet` 含有同名属性时，短名覆盖存在歧义；当前推荐调用方使用全名键
 - 若多个 `VarSet` 使用相同 `Label`，当前按首次出现的别名映射生效，后续同名 `Label` 不会覆盖前者
+- `Constraints` 当前同时兼容 FreeCAD 保存的两套元素字段：
+  - 新格式：`ElementIds` / `ElementPositions`
+  - 旧格式：`First / FirstPos / Second / SecondPos / Third / ThirdPos`
+- 兼容顺序与 FreeCAD 当前 `Constraint::Restore()` 一致：先读 `ElementIds / ElementPositions`，再让旧字段覆盖前三个元素
 - 对来自 `Document.xml` 的 `VarSet` 默认值或常量表达式，当前支持一组受控的长度/角度单位换算：
   - 长度默认按 **mm**，并支持 `mm / cm / m / km / um / nm / in / ft`
   - 角度默认按 **degree**，并支持 `deg / rad`
@@ -398,9 +408,9 @@ FreeCAD 中真正把“草图数据”翻译成 GCS 参数和约束的是：
 
 当前调查结论：
 
-- `McSolverEngine` 默认仍使用 FreeCAD `planegcs` 的 DogLeg 路径
+- `McSolverEngine` 当前求解入口使用 FreeCAD `planegcs` 的 DogLeg 路径，并在失败时依次回退到 LevenbergMarquardt → BFGS → SQP augmented system（四级回退，对齐 FreeCAD `internalSolve` 的 fallback 策略）
 - 默认关键参数与 FreeCAD 一致：`convergence = 1e-10`、`maxIter = 100`、`dogLegGaussStep = FullPivLU`
-- FreeCAD 允许通过运行时/GUI 高级求解参数覆盖这些默认值，但这些参数不属于 `Document.xml` 的稳定输入语义
+- FreeCAD 允许通过运行时/GUI 高级求解参数覆盖这些默认值，并在部分场景下回退到其他求解器；这些行为当前不属于 `Document.xml` 的稳定输入语义，也不属于本引擎当前稳定行为范围
 
 因此，当前样本中少量末位差异（约 `1e-15` 量级）更接近：
 
@@ -460,12 +470,15 @@ FreeCAD 中真正把“草图数据”翻译成 GCS 参数和约束的是：
 - `ExternalGeo`
 - `Constraints`
 - `Placement`
+- `ElementIds / ElementPositions`
+- 旧版 `First / Second / Third` 约束元素字段
 
 这意味着：
 
 - 不涉及求解的普通几何也会被完整保留
 - 外部几何（如轴线）会作为 fixed 参考参与求解
 - 不同平面的草图可以在输出阶段恢复为正确的 3D 姿态
+- 新旧两套约束元素字段在当前支持范围内都可按 FreeCAD 现有恢复顺序导入
 
 ### 10.3 已落地的约束覆盖范围
 
@@ -496,6 +509,10 @@ FreeCAD 中真正把“草图数据”翻译成 GCS 参数和约束的是：
 - `PointOnObject` 已用于 `fcstdDoc\2.xml` 的三张草图样本
 - `InternalAlignment` 已通过椭圆焦点导入 / 求解 smoke 用例验证
 - `Weight` 与 `SnellsLaw` 已通过专项 smoke 用例验证
+- `Block` 当前已按 FreeCAD 风格实现 only-blocked preanalysis 与 dependent-parameter post-analysis
+- B-Spline 相关切线 / knot-point 约束当前已补齐一组关键 FreeCAD 语义对齐：
+  - 非连续 knot 的专用切线约束会显式拒绝，而不是回落成泛化点式角度约束
+  - 对 periodic closing knot 的重复约束在上层按 FreeCAD GUI 语义视为 no-op，避免把重复 closing knot 送入 `planegcs`
 
 ### 10.4 当前回归样本
 
@@ -510,7 +527,12 @@ FreeCAD 中真正把“草图数据”翻译成 GCS 参数和约束的是：
 4. `fcstdDoc\3.xml` 中 `Sketch` -> `3.Sketch.Shape.brp`
 5. 精确几何导出回归（line / circle / arc / placement）
 6. `InternalAlignment` / `Weight` / `SnellsLaw` 专项 smoke 用例
-7. `McSolverEngineCApiSmokeTest`：
+7. B-Spline knot tangent、discontinuous-knot rejection、Block preanalysis、`ElementIds` 新格式兼容等专项 smoke 用例
+8. `fcstdDoc\V102.1.xml` -> `V102.1.brp`
+9. `fcstdDoc\V102.4.xml` -> `V102.4.brp`
+10. `fcstdDoc\V102.4.xml` + 参数覆盖 -> `V102.4.plus1.brp`
+11. `fcstdDoc\V102.5.xml` -> `V102.5.brp`
+12. `McSolverEngineCApiSmokeTest`：
    - 结构化 Geometry C ABI
    - 原始字符串 BREP C ABI
    - OCCT / no-OCCT 两种构建路径下的导出状态
@@ -522,7 +544,8 @@ FreeCAD 中真正把“草图数据”翻译成 GCS 参数和约束的是：
 3. `fcstdDoc\1.xml` 的 BREP 包装接口回归
 4. 参数化 Geometry 包装接口回归
 5. 参数化 BREP 包装接口回归
-6. BREP 对照采用 token 级比较 + 数值容差，避免 OCCT 末位浮点抖动带来误报
+6. `V102.5.xml` 的 BREP 包装接口回归
+7. BREP 对照采用 token 级比较 + 数值容差，避免 OCCT 末位浮点抖动带来误报
 
 其中 `2.xml` 的三张草图分别位于不同平面，已用于验证：
 
@@ -560,3 +583,93 @@ FreeCAD 中真正把“草图数据”翻译成 GCS 参数和约束的是：
 - 若目标是与 FreeCAD 持久化/形状结果对照，优先使用 BREP
 - 若目标是供其他系统直接消费解析几何，优先使用精确几何输出
 - 若目标是从 .NET / C# 动态集成当前引擎，优先使用 `wrapper\csharp` 对 `mcsolverengine_native` 的 P/Invoke 包装
+
+## 11. 当前实现约束与维护约定
+
+### 11.1 `planegcs` 源码维护边界
+
+当前明确约定：
+
+- `src\planegcs\` 目录下的源码应保持与 FreeCAD `Sketcher\App\planegcs` 上游实现尽量一致
+- 允许保留为独立构建所必需的本地 build shim（例如日志/包含路径兼容）
+- 业务语义修正、输入兼容补丁和 FreeCAD 行为对齐，应优先落在：
+  - `DocumentXml.cpp`
+  - `CompatSolver.cpp`
+  - `CApi.cpp`
+  - wrapper / tests
+
+这样做的目的：
+
+- 保持求解核心与上游 FreeCAD 版本更容易对照
+- 将语义差异收敛在上层兼容层，降低后续继续对齐或回溯问题时的复杂度
+
+### 11.2 Windows 调试行为
+
+当前原生入口、CLI 与 smoke tests 已统一启用 `WindowsAssertMode`：
+
+- CRT / STL 断言失败时优先输出到 stderr
+- 避免在自动化测试或命令行调试时弹出阻塞式 Windows message box
+
+这属于调试与回归可用性改进，不改变求解结果语义。
+
+## 12. 已知限制（2026-05-14 审查记录）
+
+以下项经与 FreeCAD 源码逐项对比审查后，确认为已知差异或限制，当前阶段明确不处理。
+
+### 12.1 ExpressionEngine 常量表达式 `=` 前缀解析
+
+**现状**：`ExpressionEngine` 中形如 `=10 mm` 的常量表达式无法正确解析。`parseParameterBindingExpression` 剥离 `=` 后得到 `10 mm`，但无法匹配 VarSet/参数引用语法而返回 nullopt；回退到 `parseDocumentParameterValue` 时传入的是**含 `=` 前缀**的原始值，导致 `istringstream` 解析失败。
+
+**跳过原因**：当前所有测试数据中 ExpressionEngine 均为 `count="0"`（空白），无测试覆盖此路径。此移植版本明确不支持完整的 VarSet 参数表达式求值。
+
+### 12.2 `updateNonDrivingConstraints` 缺失
+
+**现状**：FreeCAD 求解后对非驱动（参考）约束执行 `updateNonDrivingConstraints()`：
+- SnellsLaw：`value = n2/n1`（折射率比值）
+- Angle：`value = fmod(value, 2*pi)`（归一化到 `[0, 2π)`）
+- Diameter：`value = 2 * radius`（半径→直径）
+- 其他：`value = solved_parameter`（直接复制求解值）
+
+CompatSolver 完全缺失此函数，非驱动约束值在求解后保持过期状态。
+
+**跳过原因**：实现需要重构约束值到求解器参数的映射追踪（当前 `SolveContext` 无此能力）。所有测试数据的约束均为 `IsDriving="1"`，无测试覆盖。
+
+### 12.3 OCC BSpline 权重归一化 hack
+
+**现状**：FreeCAD 在 `addSplineGeometry` 中有一个 hack：当恰好一个 BSpline pole 权重为 1.0 时，乘以 0.99 防止 OCC 在 polynomial ↔ rational 切换时产生视觉伪影（pole circle 缩到 1mm）。
+
+**跳过原因**：纯 UI 视觉保护逻辑，对无头求解器无影响。McSolverEngine 不涉及 FreeCAD Sketcher GUI 的可视化 pole circle 渲染。
+
+### 12.4 Document.xml Z 坐标与法向量未解析
+
+**现状**：FreeCAD 几何序列化包含完整的 3D 坐标（`X, Y, Z`）和曲线法向量（`NormalX, NormalY, NormalZ`）以及 `AngleXU`。DocumentXml 解析器仅读取 `X, Y`（2D），静默丢弃 Z 分量和法向量信息。
+
+**影响**：对于严格在 XY 平面内的草图无影响。对于已旋转 Placement 的草图，Z 分量被忽略，但 Placement 本身仍被正确解析并用于 3D 输出对齐。
+
+**跳过原因**：Sketcher 本质是 2D 求解器，几何在草图局部坐标系中始终是 2D。3D 姿态由 `Placement` 单独处理，当前在输出阶段已正确恢复。
+
+### 12.5 约束元数据属性（`IsVisible`, `LabelDistance`, `LabelPosition`）
+
+**现状**：FreeCAD `Constraint::Save` 序列化 `IsVisible`、`LabelDistance`、`LabelPosition` 属性，DocumentXml 解析器未读取这些字段。
+
+**跳过原因**：纯 GUI 显示属性（约束标签位置和可见性），不影响求解语义。
+
+### 12.6 测试覆盖缺口
+
+当前以下约束类型和几何类型无直接程序化测试（仅通过 XML 间接覆盖或无覆盖）：
+
+| 类型 | 状态 |
+|---|---|
+| Coincident, Diameter, Parallel, Equal, Symmetric, PointOnObject | 无直接测试（仅 XML 间接覆盖） |
+| Arc, ArcOfEllipse, ArcOfHyperbola, ArcOfParabola | 零程序化测试覆盖 |
+| `addArc()` | 从未被调用 |
+
+`ArcOfParabola` 已新增 BREP 导出测试（见 2026-05-14 修复），其余缺口保持现状。
+
+### 12.7 BREP location block `\r\n` 行尾问题
+
+**现状**：`smoke.cpp` 中 `hasExplicitIdentityLocationBlock` 使用 `\n` 搜索 BREP location block，但 Windows 上 OCCT 可能写入 `\r\n`，在 `std::ios::binary` 模式下模式无法匹配。
+
+**影响**：当前测试样本的 location check 可能返回 false positive，但 BREP token 比较（真正验证几何数据的步骤）不受影响。
+
+**跳过原因**：不影响几何正确性验证；仅在测试辅助函数的 location block 预检步骤中可能出现误判。

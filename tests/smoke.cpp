@@ -1848,5 +1848,23 @@ int main()
         }
     }
 
+    {
+        McSolverEngine::Compat::SketchModel parabolaModel;
+        parabolaModel.addArcOfParabola(
+            {0.0, 0.0},  // vertex
+            {0.0, 2.0},  // focus1 → focal=2
+            -4.0,        // startAngle (u-parameter, not geometric angle)
+            4.0          // endAngle (u-parameter)
+        );
+
+#if MCSOLVERENGINE_WITH_OCCT
+        const auto parabolaBrep = McSolverEngine::BRep::exportSketchToBRep(parabolaModel);
+        if (!parabolaBrep.exported() || !parabolaBrep.brep.has_value()) {
+            std::cerr << "Expected ArcOfParabola sketch to export to BREP.\n";
+            return 1;
+        }
+#endif
+    }
+
     return 0;
 }

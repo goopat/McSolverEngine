@@ -1544,7 +1544,8 @@ void addBSplineGeometry(SolveContext& context, const BSplineGeometry& geometry, 
     knots.reserve(geometry.knots.size());
     for (const auto& knot : geometry.knots) {
         auto* value = context.ownParameter(knot.value);
-        storeGeometryParameter(context, geometryIndex, value, fixed);
+        // Knots are not solver parameters (aligned with FreeCAD).
+        // storeGeometryParameter(context, geometryIndex, value, fixed);
         knots.push_back(value);
     }
 
@@ -2131,6 +2132,19 @@ bool addConstraint(SolveContext& context, const Constraint& constraint)
                 }
                 std::swap(firstGeometry, secondGeometry);
             }
+            if (secondBinding->kind == GeometryKind::Ellipse
+                || secondBinding->kind == GeometryKind::ArcOfEllipse) {
+                if (auto* firstEllipse = ellipseFor(context, firstGeometry)) {
+                    auto* secondEllipse = ellipseFor(context, secondGeometry);
+                    if (!secondEllipse) {
+                        return false;
+                    }
+                    context.system.addConstraintEqualRadii(
+                        *firstEllipse, *secondEllipse, nextTag(context), constraint.driving);
+                    return true;
+                }
+                std::swap(firstGeometry, secondGeometry);
+            }
             if (auto* firstLine = lineFor(context, firstGeometry)) {
                 auto* secondLine = lineFor(context, secondGeometry);
                 if (!secondLine) {
@@ -2206,6 +2220,44 @@ bool addConstraint(SolveContext& context, const Constraint& constraint)
             if (!line) {
                 return false;
             }
+
+            // Degenerate case detection (aligned with FreeCAD):
+            // When the two symmetric points are endpoints of the same arc AND
+            // the arc's center lies on the symmetry line, the perpendicular
+            // part of the P2PSymmetric constraint is redundant. We weaken to
+            // a midpoint-on-line constraint to avoid solver errors.
+            const auto p1Id = pointIdFor(context, constraint.first);
+            const auto p2Id = pointIdFor(context, constraint.second);
+            if (p1Id && p2Id) {
+                for (const auto& binding : context.geometries) {
+                    if (binding.kind != GeometryKind::Arc) {
+                        continue;
+                    }
+                    if ((*p1Id == binding.startPointId && *p2Id == binding.endPointId)
+                        || (*p1Id == binding.endPointId && *p2Id == binding.startPointId)) {
+                        if (binding.midPointId >= 0
+                            && binding.midPointId < static_cast<int>(context.points.size())) {
+                            const GCS::Point& center = context.points[binding.midPointId];
+                            const double dx = *line->p2.x - *line->p1.x;
+                            const double dy = *line->p2.y - *line->p1.y;
+                            const double lineLenSq = dx * dx + dy * dy;
+                            if (lineLenSq > 1e-20) {
+                                const double area = (*center.x - *line->p1.x) * dy
+                                                  - (*center.y - *line->p1.y) * dx;
+                                if (std::abs(area) / std::sqrt(lineLenSq) < 1e-10) {
+                                    context.system.addConstraintMidpointOnLine(
+                                        *p1, *p2, line->p1, line->p2,
+                                        nextTag(context), constraint.driving
+                                    );
+                                    return true;
+                                }
+                            }
+                        }
+                        break;
+                    }
+                }
+            }
+
             context.system.addConstraintP2PSymmetric(*p1, *p2, *line, nextTag(context), constraint.driving);
             return true;
         }
@@ -2545,11 +2597,14 @@ void updateSolvedGeometry(SketchModel& model, const SolveContext& context)
                     spline.poles[poleIndex].point.y = *gcsSpline.poles[poleIndex].y;
                     spline.poles[poleIndex].weight = *gcsSpline.weights[poleIndex];
                 }
-                for (std::size_t knotIndex = 0; knotIndex < spline.knots.size()
+                // Knot write-back disabled: knots are not solver parameters
+                // (aligned with FreeCAD, which has the same code commented out
+                // with note "when/if b-spline gets its full implementation in the solver").
+                /*for (std::size_t knotIndex = 0; knotIndex < spline.knots.size()
                                                  && knotIndex < gcsSpline.knots.size();
                      ++knotIndex) {
                     spline.knots[knotIndex].value = *gcsSpline.knots[knotIndex];
-                }
+                }*/
                 break;
             }
         }
@@ -2642,7 +2697,36 @@ SolveResult solveSketch(SketchModel& model, const McSolverEngine::ParameterMap& 
     }
 
     SolveResult result;
-    result.status = fromGcsStatus(context.system.solve(true, GCS::DogLeg));
+    int gcsStatus = context.system.solve(true, GCS::DogLeg);
+
+    if (gcsStatus != GCS::Success) {
+        gcsStatus = context.system.solve(true, GCS::LevenbergMarquardt);
+    }
+    if (gcsStatus != GCS::Success) {
+        gcsStatus = context.system.solve(true, GCS::BFGS);
+    }
+    if (gcsStatus != GCS::Success) {
+        std::vector<double> initParameterValues;
+        initParameterValues.reserve(context.parameters.size());
+        for (auto* p : context.parameters) {
+            initParameterValues.push_back(*p);
+        }
+
+        for (std::size_t i = 0; i < context.parameters.size(); ++i) {
+            double* initParam = context.ownParameter(initParameterValues[i]);
+            context.system.addConstraintEqual(
+                context.parameters[i],
+                initParam,
+                GCS::DefaultTemporaryConstraint
+            );
+        }
+
+        context.system.initSolution();
+        gcsStatus = context.system.solve(true);
+        context.system.clearByTag(GCS::DefaultTemporaryConstraint);
+    }
+
+    result.status = fromGcsStatus(gcsStatus);
     result.degreesOfFreedom = context.system.dofsNumber();
     context.system.getConflicting(result.conflicting);
     context.system.getRedundant(result.redundant);
