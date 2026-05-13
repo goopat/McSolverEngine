@@ -2,6 +2,7 @@
 
 #include "ParameterValueUtils.h"
 
+#include <array>
 #include <cctype>
 #include <cmath>
 #include <fstream>
@@ -1156,19 +1157,76 @@ void applyConstraintExpressionBindings(
     return true;
 }
 
+[[nodiscard]] std::optional<std::vector<int>> parseConstraintElementAttribute(std::string_view value)
+{
+    std::vector<int> parsedValues;
+    std::istringstream stream(makeString(value));
+    int parsed = 0;
+    while (stream >> parsed) {
+        parsedValues.push_back(parsed);
+    }
+
+    if (stream.bad()) {
+        return std::nullopt;
+    }
+
+    stream.clear();
+    stream >> std::ws;
+    if (!stream.eof()) {
+        return std::nullopt;
+    }
+
+    return parsedValues;
+}
+
 [[nodiscard]] std::optional<RawConstraint> parseRawConstraint(std::string_view element)
 {
     const auto name = extractAttribute(element, "Name");
     const auto type = extractIntAttribute(element, "Type");
     const auto value = extractDoubleAttribute(element, "Value");
-    const auto first = extractIntAttribute(element, "First");
-    const auto firstPos = extractIntAttribute(element, "FirstPos");
-    const auto second = extractIntAttribute(element, "Second");
-    const auto secondPos = extractIntAttribute(element, "SecondPos");
-    const auto third = extractIntAttribute(element, "Third");
-    const auto thirdPos = extractIntAttribute(element, "ThirdPos");
+    if (!type || !value) {
+        return std::nullopt;
+    }
 
-    if (!type || !value || !first || !firstPos || !second || !secondPos || !third || !thirdPos) {
+    std::array<int, 3> geoIds {GeoUndef, GeoUndef, GeoUndef};
+    std::array<int, 3> posIds {0, 0, 0};
+    bool hasParsedElements = false;
+
+    const auto elementIds = extractAttribute(element, "ElementIds");
+    const auto elementPositions = extractAttribute(element, "ElementPositions");
+    if (elementIds.has_value() != elementPositions.has_value()) {
+        return std::nullopt;
+    }
+    if (elementIds && elementPositions) {
+        const auto parsedGeoIds = parseConstraintElementAttribute(*elementIds);
+        const auto parsedPosIds = parseConstraintElementAttribute(*elementPositions);
+        if (!parsedGeoIds || !parsedPosIds || parsedGeoIds->size() != parsedPosIds->size()) {
+            return std::nullopt;
+        }
+
+        for (std::size_t index = 0; index < parsedGeoIds->size() && index < geoIds.size(); ++index) {
+            geoIds[index] = (*parsedGeoIds)[index];
+            posIds[index] = (*parsedPosIds)[index];
+        }
+        hasParsedElements = true;
+    }
+
+    constexpr std::array<std::string_view, 3> legacyNames {"First", "Second", "Third"};
+    constexpr std::array<std::string_view, 3> legacyPosNames {"FirstPos", "SecondPos", "ThirdPos"};
+    for (std::size_t index = 0; index < legacyNames.size(); ++index) {
+        const auto geoId = extractIntAttribute(element, legacyNames[index]);
+        const auto posId = extractIntAttribute(element, legacyPosNames[index]);
+        if (geoId.has_value() != posId.has_value()) {
+            return std::nullopt;
+        }
+        if (geoId && posId) {
+            geoIds[index] = *geoId;
+            posIds[index] = *posId;
+            hasParsedElements = true;
+        }
+    }
+
+    if (!hasParsedElements) {
         return std::nullopt;
     }
 
@@ -1176,12 +1234,12 @@ void applyConstraintExpressionBindings(
         .name = name ? unescapeXmlAttribute(*name) : std::string {},
         .type = *type,
         .value = *value,
-        .first = *first,
-        .firstPos = *firstPos,
-        .second = *second,
-        .secondPos = *secondPos,
-        .third = *third,
-        .thirdPos = *thirdPos,
+        .first = geoIds[0],
+        .firstPos = posIds[0],
+        .second = geoIds[1],
+        .secondPos = posIds[1],
+        .third = geoIds[2],
+        .thirdPos = posIds[2],
         .isDriving = extractBoolAttribute(element, "IsDriving", true),
         .isVirtualSpace = extractBoolAttribute(element, "IsInVirtualSpace", false),
         .isActive = extractBoolAttribute(element, "IsActive", true),

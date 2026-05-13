@@ -532,6 +532,88 @@ int main()
         return 1;
     }
 
+    constexpr std::string_view elementOnlyDocumentXml = R"(<?xml version="1.0" encoding="UTF-8"?>
+<Document>
+    <ObjectData Count="1">
+        <Object name="Sketch">
+            <Properties Count="2" TransientCount="0">
+                <Property name="Constraints" type="Sketcher::PropertyConstraintList">
+                    <ConstraintList count="2">
+                        <Constrain Name="" Type="2" Value="0.0" LabelDistance="10.0" LabelPosition="0.0" IsDriving="1" IsInVirtualSpace="0" IsActive="1" ElementIds="0 -2000 -2000" ElementPositions="0 0 0" />
+                        <Constrain Name="" Type="6" Value="2.0" LabelDistance="10.0" LabelPosition="0.0" IsDriving="1" IsInVirtualSpace="0" IsActive="1" ElementIds="0 -2000 -2000" ElementPositions="0 0 0" />
+                    </ConstraintList>
+                </Property>
+                <Property name="Geometry" type="Part::PropertyGeometryList">
+                    <GeometryList count="1">
+                        <Geometry type="Part::GeomLineSegment" id="1" migrated="1">
+                            <LineSegment StartX="4.0" StartY="3.0" StartZ="0.0" EndX="6.0" EndY="5.0" EndZ="0.0"/>
+                            <Construction value="0"/>
+                        </Geometry>
+                    </GeometryList>
+                </Property>
+            </Properties>
+        </Object>
+    </ObjectData>
+</Document>)";
+
+    auto importedElementOnly =
+        McSolverEngine::DocumentXml::importSketchFromDocumentXml(elementOnlyDocumentXml, "Sketch");
+    if (!importedElementOnly.imported()
+        || importedElementOnly.status != McSolverEngine::DocumentXml::ImportStatus::Success) {
+        std::cerr << "Expected ElementIds-only constraint import to succeed.\n";
+        return 1;
+    }
+
+    const auto importedElementOnlySolve = McSolverEngine::Compat::solveSketch(importedElementOnly.model);
+    if (!importedElementOnlySolve.solved()) {
+        std::cerr << "Expected ElementIds-only sketch to solve successfully.\n";
+        return 1;
+    }
+
+    const auto& importedElementOnlyLine =
+        std::get<McSolverEngine::Compat::LineSegmentGeometry>(importedElementOnly.model.geometries().front().data);
+    if (std::abs(importedElementOnlyLine.end.y - importedElementOnlyLine.start.y) > 1e-8
+        || std::abs(lineLength(importedElementOnlyLine) - 2.0) > 1e-8) {
+        std::cerr << "ElementIds-only constraints did not solve to the expected line.\n";
+        return 1;
+    }
+
+    constexpr std::string_view legacyOverrideDocumentXml = R"(<?xml version="1.0" encoding="UTF-8"?>
+<Document>
+    <ObjectData Count="1">
+        <Object name="Sketch">
+            <Properties Count="2" TransientCount="0">
+                <Property name="Constraints" type="Sketcher::PropertyConstraintList">
+                    <ConstraintList count="1">
+                        <Constrain Name="" Type="13" Value="0.0" LabelDistance="10.0" LabelPosition="0.0" IsDriving="1" IsInVirtualSpace="0" IsActive="1" ElementIds="1 0 -2000" ElementPositions="0 1 0" First="1" FirstPos="1" Second="0" SecondPos="0" Third="-2000" ThirdPos="0" />
+                    </ConstraintList>
+                </Property>
+                <Property name="Geometry" type="Part::PropertyGeometryList">
+                    <GeometryList count="2">
+                        <Geometry type="Part::GeomLineSegment" id="1" migrated="1">
+                            <LineSegment StartX="0.0" StartY="0.0" StartZ="0.0" EndX="2.0" EndY="0.0" EndZ="0.0"/>
+                            <Construction value="0"/>
+                        </Geometry>
+                        <Geometry type="Part::GeomPoint" id="2" migrated="1">
+                            <Point X="1.0" Y="3.0" Z="0.0"/>
+                            <Construction value="0"/>
+                        </Geometry>
+                    </GeometryList>
+                </Property>
+            </Properties>
+        </Object>
+    </ObjectData>
+</Document>)";
+
+    auto importedLegacyOverride =
+        McSolverEngine::DocumentXml::importSketchFromDocumentXml(legacyOverrideDocumentXml, "Sketch");
+    if (!importedLegacyOverride.imported()
+        || importedLegacyOverride.status != McSolverEngine::DocumentXml::ImportStatus::Success
+        || importedLegacyOverride.model.constraintCount() != 1) {
+        std::cerr << "Expected legacy constraint fields to override ElementIds for the first three elements.\n";
+        return 1;
+    }
+
     constexpr std::string_view parameterizedDocumentXml = R"(<?xml version="1.0" encoding="UTF-8"?>
 <Document>
     <Objects Count="2">
