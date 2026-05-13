@@ -1,0 +1,8 @@
+build
+obj
+.vs
+bin
+TestResults
+
+fcstdDoc/*.solver.brp
+
