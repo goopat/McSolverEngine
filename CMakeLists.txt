@@ -11,7 +11,7 @@ if(CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
     if(NOT EIGEN3_INCLUDE_DIR)
         set(_mcsolverengine_eigen_candidates
             "${CMAKE_CURRENT_SOURCE_DIR}/../.pixi/envs/default/Library/include/eigen3"
-            "D:/work/bim2025-client/Common/CppThird/Eigen"
+            "C:/work/bim-common-client/Common/CppThird/Eigen"
         )
         foreach(_mcsolverengine_eigen_candidate IN LISTS _mcsolverengine_eigen_candidates)
             if(EXISTS "${_mcsolverengine_eigen_candidate}/Eigen/Core")
@@ -35,7 +35,7 @@ if(CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
     if(NOT BOOST_INCLUDEDIR)
         set(_mcsolverengine_boost_candidates
             "${CMAKE_CURRENT_SOURCE_DIR}/../.pixi/envs/default/Library/include"
-            "D:/work/bim2025-client/packages/boost.1.81.0-native.1.0.3/lib/native/inc"
+            "C:/work/bim-common-client/packages/boost.1.81.0-native.1.0.3/lib/native/inc"
         )
         foreach(_mcsolverengine_boost_candidate IN LISTS _mcsolverengine_boost_candidates)
             if(EXISTS "${_mcsolverengine_boost_candidate}/boost/graph/graph_concepts.hpp")
@@ -48,7 +48,7 @@ if(CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
     if(MCSOLVERENGINE_WITH_OCCT AND NOT OpenCASCADE_DIR AND NOT OCC_INCLUDE_DIR)
         set(_mcsolverengine_occt_config_candidates
             "${CMAKE_CURRENT_SOURCE_DIR}/../.pixi/envs/default/Library/lib/cmake/opencascade"
-            "D:/work/bim2025-client/packages/opencascade.7.9-native.1.0.0/lib/cmake/opencascade"
+            "C:/work/bim-common-client/packages/opencascade.7.9-native.1.0.0/lib/cmake/opencascade"
         )
         foreach(_mcsolverengine_occt_config_candidate IN LISTS _mcsolverengine_occt_config_candidates)
             if(EXISTS "${_mcsolverengine_occt_config_candidate}/OpenCASCADEConfig.cmake")
@@ -60,8 +60,8 @@ if(CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
 
     if(MCSOLVERENGINE_WITH_OCCT AND NOT OpenCASCADE_DIR AND NOT OCC_INCLUDE_DIR)
         set(_mcsolverengine_occt_roots
-            "D:/work/bim2025-client/packages/opencascade.7.9-native.1.0.0/lib"
-            "D:/work/bim2025-client/packages/opencascade.7.9-native.1.0.0"
+            "C:/work/bim-common-client/packages/opencascade.7.9-native.1.0.0/lib"
+            "C:/work/bim-common-client/packages/opencascade.7.9-native.1.0.0"
         )
         foreach(_mcsolverengine_occt_root IN LISTS _mcsolverengine_occt_roots)
             if(
