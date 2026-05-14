@@ -34,7 +34,7 @@ Write-Host "============================================" -ForegroundColor Cyan
 $cmakeArgs = @(
     "-B", $buildDir,
     "-S", $repoRoot,
-    "-DMCSOLVERENGINE_WITH_OCCT=$($buildWithOcct ? 'ON' : 'OFF')"
+    "-DMCSOLVERENGINE_WITH_OCCT=$(if ($buildWithOcct) { 'ON' } else { 'OFF' })"
 )
 Write-Host "CMake configure: cmake $cmakeArgs"
 & cmake @cmakeArgs

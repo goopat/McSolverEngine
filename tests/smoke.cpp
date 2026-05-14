@@ -1,4 +1,4 @@
-#include <cmath>
+﻿#include <cmath>
 #include <algorithm>
 #include <array>
 #include <cstdlib>
