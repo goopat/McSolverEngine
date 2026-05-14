@@ -584,6 +584,58 @@ FreeCAD 中真正把“草图数据”翻译成 GCS 参数和约束的是：
 - 若目标是供其他系统直接消费解析几何，优先使用精确几何输出
 - 若目标是从 .NET / C# 动态集成当前引擎，优先使用 `wrapper\csharp` 对 `mcsolverengine_native` 的 P/Invoke 包装
 
+### 10.6 NuGet 原生 C++ 分发包
+
+提供两个 Windows x64 NuGet 包构造脚本，分别对应 OCCT 依赖和不依赖 OCCT 的构建变体。
+
+**包名**：
+
+| 包 | 说明 |
+|---|---|
+| `McSolverEngine_NoOcct` | 无 OCCT 依赖，BREP 导出返回 `OpenCascadeUnavailable` |
+| `McSolverEngine_UseOcct` | 依赖 OCCT 运行时 DLL，BREP 导出可用 |
+
+**构建脚本**：
+
+```
+scripts/
+├── package_nuget.ps1          # 核心脚本：-Variant UseOcct|NoOcct [-Version 0.1.0]
+├── package_use_occt.bat       # 快捷调用 UseOcct 变体
+├── package_no_occt.bat        # 快捷调用 NoOcct 变体
+└── McSolverEngine.targets     # MSBuild 集成模板（打包时按包 ID 重命名）
+```
+
+**使用方式**：
+
+```powershell
+# 构建 OCCT 版本
+.\scripts\package_nuget.ps1 -Variant UseOcct -Version 0.1.0
+
+# 构建无 OCCT 版本
+.\scripts\package_nuget.ps1 -Variant NoOcct -Version 0.1.0
+```
+
+**脚本流程**：
+
+1. 在独立目录 `build/nuget_<Variant>/` 中 CMake 配置（`-DMCSOLVERENGINE_WITH_OCCT=ON|OFF`）并 Release 构建
+2. 收集产物：头文件（`include/McSolverEngine/*.h`）、静态库（`McSolverEngineCore.lib`）、导入库（`mcsolverengine_native.lib`）、动态库（`mcsolverengine_native.dll`）
+3. 按 NuGet 原生包布局暂存，动态生成 `.nuspec`（包含 `native0.0` 依赖组声明）
+4. 调用 `nuget.exe pack` 输出 `.nupkg` 到 `artifacts/nuget/`
+
+**输出包结构**：
+
+```
+McSolverEngine_{Variant}.{version}.nupkg
+├── build\native\include\McSolverEngine\*.h   # 公共头文件（9 个）
+├── build\native\{PackageId}.targets            # MSBuild 自动集成
+├── lib\native\x64\Release\*.lib                # 静态库 + 导入库
+└── runtimes\win-x64\native\*.dll               # 运行时 DLL
+```
+
+**MSBuild 消费方**：`.targets` 文件在 `Platform=x64` 时自动追加 include 路径、库目录、链接依赖，并在构建后将 DLL 复制到输出目录。
+
+**前提条件**：`cmake`、MSVC 工具链、`nuget.exe`（脚本会自动查找 PATH 或 `tools/nuget.exe`）。`UseOcct` 变体还需 OpenCASCADE 已安装且 CMake 能找到。
+
 ## 11. 当前实现约束与维护约定
 
 ### 11.1 `planegcs` 源码维护边界

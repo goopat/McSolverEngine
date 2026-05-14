@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <PropertyGroup>
+    <McSolverEngineRoot>$(MSBuildThisFileDirectory)</McSolverEngineRoot>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(Platform)' == 'x64'">
+    <McSolverEngineLibDir>$(McSolverEngineRoot)..\..\lib\native\x64\Release</McSolverEngineLibDir>
+    <McSolverEngineDllDir>$(McSolverEngineRoot)..\..\runtimes\win-x64\native</McSolverEngineDllDir>
+  </PropertyGroup>
+
+  <ItemDefinitionGroup Condition="'$(Platform)' == 'x64'">
+    <ClCompile>
+      <AdditionalIncludeDirectories>$(McSolverEngineRoot)include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+    </ClCompile>
+    <Link>
+      <AdditionalLibraryDirectories>$(McSolverEngineLibDir);%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <AdditionalDependencies>McSolverEngineCore.lib;%(AdditionalDependencies)</AdditionalDependencies>
+    </Link>
+  </ItemDefinitionGroup>
+
+  <!-- Copy native DLL to output directory -->
+  <Target Name="CopyMcSolverEngineNative" AfterTargets="Build" Condition="'$(Platform)' == 'x64'">
+    <ItemGroup>
+      <McSolverEngineDlls Include="$(McSolverEngineDllDir)\*.dll" />
+    </ItemGroup>
+    <Copy SourceFiles="@(McSolverEngineDlls)" DestinationFolder="$(OutDir)" SkipUnchangedFiles="true" />
+  </Target>
+</Project>
