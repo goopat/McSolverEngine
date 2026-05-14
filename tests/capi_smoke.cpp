@@ -43,7 +43,7 @@ double lineAngleDegrees(const McSolverEngineGeometryRecord& record)
 
 std::string samplePath()
 {
-    return std::string(MCSOLVERENGINE_SOURCE_DIR) + "\\fcstdDoc\\1.xml";
+    return std::string(MCSOLVERENGINE_SOURCE_DIR) + "/fcstdDoc/1.xml";
 }
 
 std::string readTextFile(const std::string& path)

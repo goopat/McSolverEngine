@@ -64,30 +64,55 @@ if(CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
             "C:/work/bim-common-client/packages/opencascade.7.9-native.1.0.0"
         )
         foreach(_mcsolverengine_occt_root IN LISTS _mcsolverengine_occt_roots)
-            if(
-                EXISTS "${_mcsolverengine_occt_root}/build/lib/TKBRep.lib"
-                AND EXISTS "${_mcsolverengine_occt_root}/build/bin/TKBRep.dll"
-                AND EXISTS "${_mcsolverengine_occt_root}/../content/inc/BRepTools_ShapeSet.hxx"
-            )
-                file(GLOB _mcsolverengine_occ_libs "${_mcsolverengine_occt_root}/build/lib/*.lib")
-                list(SORT _mcsolverengine_occ_libs)
-                set(OCC_INCLUDE_DIR "${_mcsolverengine_occt_root}/../content/inc")
-                set(OCC_LIBRARY_DIR "${_mcsolverengine_occt_root}/build/lib")
-                set(OpenCASCADE_BINARY_DIR "${_mcsolverengine_occt_root}/build/bin")
-                set(OCC_LIBRARIES ${_mcsolverengine_occ_libs})
-                break()
-            elseif(
-                EXISTS "${_mcsolverengine_occt_root}/lib/build/lib/TKBRep.lib"
-                AND EXISTS "${_mcsolverengine_occt_root}/lib/build/bin/TKBRep.dll"
-                AND EXISTS "${_mcsolverengine_occt_root}/content/inc/BRepTools_ShapeSet.hxx"
-            )
-                file(GLOB _mcsolverengine_occ_libs "${_mcsolverengine_occt_root}/lib/build/lib/*.lib")
-                list(SORT _mcsolverengine_occ_libs)
-                set(OCC_INCLUDE_DIR "${_mcsolverengine_occt_root}/content/inc")
-                set(OCC_LIBRARY_DIR "${_mcsolverengine_occt_root}/lib/build/lib")
-                set(OpenCASCADE_BINARY_DIR "${_mcsolverengine_occt_root}/lib/build/bin")
-                set(OCC_LIBRARIES ${_mcsolverengine_occ_libs})
-                break()
+            if(WIN32)
+                if(
+                    EXISTS "${_mcsolverengine_occt_root}/build/lib/TKBRep.lib"
+                    AND EXISTS "${_mcsolverengine_occt_root}/build/bin/TKBRep.dll"
+                    AND EXISTS "${_mcsolverengine_occt_root}/../content/inc/BRepTools_ShapeSet.hxx"
+                )
+                    file(GLOB _mcsolverengine_occ_libs "${_mcsolverengine_occt_root}/build/lib/*.lib")
+                    list(SORT _mcsolverengine_occ_libs)
+                    set(OCC_INCLUDE_DIR "${_mcsolverengine_occt_root}/../content/inc")
+                    set(OCC_LIBRARY_DIR "${_mcsolverengine_occt_root}/build/lib")
+                    set(OpenCASCADE_BINARY_DIR "${_mcsolverengine_occt_root}/build/bin")
+                    set(OCC_LIBRARIES ${_mcsolverengine_occ_libs})
+                    break()
+                elseif(
+                    EXISTS "${_mcsolverengine_occt_root}/lib/build/lib/TKBRep.lib"
+                    AND EXISTS "${_mcsolverengine_occt_root}/lib/build/bin/TKBRep.dll"
+                    AND EXISTS "${_mcsolverengine_occt_root}/content/inc/BRepTools_ShapeSet.hxx"
+                )
+                    file(GLOB _mcsolverengine_occ_libs "${_mcsolverengine_occt_root}/lib/build/lib/*.lib")
+                    list(SORT _mcsolverengine_occ_libs)
+                    set(OCC_INCLUDE_DIR "${_mcsolverengine_occt_root}/content/inc")
+                    set(OCC_LIBRARY_DIR "${_mcsolverengine_occt_root}/lib/build/lib")
+                    set(OpenCASCADE_BINARY_DIR "${_mcsolverengine_occt_root}/lib/build/bin")
+                    set(OCC_LIBRARIES ${_mcsolverengine_occ_libs})
+                    break()
+                endif()
+            else()
+                if(
+                    EXISTS "${_mcsolverengine_occt_root}/lib/libTKBRep.so"
+                    AND EXISTS "${_mcsolverengine_occt_root}/include/opencascade/BRepTools_ShapeSet.hxx"
+                )
+                    file(GLOB _mcsolverengine_occ_libs "${_mcsolverengine_occt_root}/lib/lib*.so")
+                    list(SORT _mcsolverengine_occ_libs)
+                    set(OCC_INCLUDE_DIR "${_mcsolverengine_occt_root}/include/opencascade")
+                    set(OCC_LIBRARY_DIR "${_mcsolverengine_occt_root}/lib")
+                    set(OpenCASCADE_BINARY_DIR "${_mcsolverengine_occt_root}/lib")
+                    set(OCC_LIBRARIES ${_mcsolverengine_occ_libs})
+                    break()
+                elseif(
+                    EXISTS "${_mcsolverengine_occt_root}/lib/libTKBRep.a"
+                    AND EXISTS "${_mcsolverengine_occt_root}/include/opencascade/BRepTools_ShapeSet.hxx"
+                )
+                    file(GLOB _mcsolverengine_occ_libs "${_mcsolverengine_occt_root}/lib/lib*.a")
+                    list(SORT _mcsolverengine_occ_libs)
+                    set(OCC_INCLUDE_DIR "${_mcsolverengine_occt_root}/include/opencascade")
+                    set(OCC_LIBRARY_DIR "${_mcsolverengine_occt_root}/lib")
+                    set(OCC_LIBRARIES ${_mcsolverengine_occ_libs})
+                    break()
+                endif()
             endif()
         endforeach()
     endif()
@@ -322,17 +347,28 @@ if(MCSOLVERENGINE_BUILD_TESTS)
     )
 
     if(BUILD_TESTING)
+        if(WIN32)
+            set(MCSOLVERENGINE_PATH_SEP ";")
+            set(MCSOLVERENGINE_LIB_PATH_VAR "PATH")
+        elseif(APPLE)
+            set(MCSOLVERENGINE_PATH_SEP ":")
+            set(MCSOLVERENGINE_LIB_PATH_VAR "DYLD_LIBRARY_PATH")
+        else()
+            set(MCSOLVERENGINE_PATH_SEP ":")
+            set(MCSOLVERENGINE_LIB_PATH_VAR "LD_LIBRARY_PATH")
+        endif()
+
         if(MCSOLVERENGINE_RUNTIME_PATH)
             add_test(
                 NAME McSolverEngineSmokeTest
                 COMMAND
-                    ${CMAKE_COMMAND} -E env "PATH=${MCSOLVERENGINE_RUNTIME_PATH};$ENV{PATH}"
+                    ${CMAKE_COMMAND} -E env "${MCSOLVERENGINE_LIB_PATH_VAR}=${MCSOLVERENGINE_RUNTIME_PATH}${MCSOLVERENGINE_PATH_SEP}$ENV{${MCSOLVERENGINE_LIB_PATH_VAR}}"
                     $<TARGET_FILE:McSolverEngineSmokeTest>
             )
             add_test(
                 NAME McSolverEngineCApiSmokeTest
                 COMMAND
-                    ${CMAKE_COMMAND} -E env "PATH=$<TARGET_FILE_DIR:McSolverEngineNative>;${MCSOLVERENGINE_RUNTIME_PATH};$ENV{PATH}"
+                    ${CMAKE_COMMAND} -E env "${MCSOLVERENGINE_LIB_PATH_VAR}=$<TARGET_FILE_DIR:McSolverEngineNative>${MCSOLVERENGINE_PATH_SEP}${MCSOLVERENGINE_RUNTIME_PATH}${MCSOLVERENGINE_PATH_SEP}$ENV{${MCSOLVERENGINE_LIB_PATH_VAR}}"
                     $<TARGET_FILE:McSolverEngineCApiSmokeTest>
             )
         else()
@@ -340,7 +376,7 @@ if(MCSOLVERENGINE_BUILD_TESTS)
             add_test(
                 NAME McSolverEngineCApiSmokeTest
                 COMMAND
-                    ${CMAKE_COMMAND} -E env "PATH=$<TARGET_FILE_DIR:McSolverEngineNative>;$ENV{PATH}"
+                    ${CMAKE_COMMAND} -E env "${MCSOLVERENGINE_LIB_PATH_VAR}=$<TARGET_FILE_DIR:McSolverEngineNative>${MCSOLVERENGINE_PATH_SEP}$ENV{${MCSOLVERENGINE_LIB_PATH_VAR}}"
                     $<TARGET_FILE:McSolverEngineCApiSmokeTest>
             )
         endif()

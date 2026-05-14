@@ -13,6 +13,22 @@ public static class McSolverEngineClient
     private static string? _configuredNativeLibraryDirectory;
     private static IntPtr _loadedNativeLibraryHandle;
 
+#if NET6_0_OR_GREATER
+    private static string NativeLibraryFileName
+    {
+        get
+        {
+            if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+                return "mcsolverengine_native.dll";
+            if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
+                return "libmcsolverengine_native.so";
+            if (RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
+                return "libmcsolverengine_native.dylib";
+            return NativeLibraryName;
+        }
+    }
+#endif
+
     public static void ConfigureNativeLibrary(string nativeLibraryPath)
     {
         ValidateRequiredString(nativeLibraryPath, nameof(nativeLibraryPath));
@@ -200,6 +216,21 @@ public static class McSolverEngineClient
             }
 
             var candidate = GetConfiguredLibraryCandidate();
+#if NET6_0_OR_GREATER
+            if (!string.IsNullOrWhiteSpace(candidate)) {
+                var candidatePath = candidate!;
+                _loadedNativeLibraryHandle = NativeLibrary.Load(candidatePath);
+                if (_loadedNativeLibraryHandle != IntPtr.Zero) {
+                    return;
+                }
+                throw CreateDllNotFoundException(candidatePath);
+            }
+
+            _loadedNativeLibraryHandle = NativeLibrary.Load(NativeLibraryFileName);
+            if (_loadedNativeLibraryHandle == IntPtr.Zero) {
+                throw CreateDllNotFoundException(NativeLibraryFileName);
+            }
+#else
             if (!string.IsNullOrWhiteSpace(candidate)) {
                 var candidatePath = candidate!;
                 SetSearchDirectory(Path.GetDirectoryName(candidatePath));
@@ -214,6 +245,7 @@ public static class McSolverEngineClient
             if (_loadedNativeLibraryHandle == IntPtr.Zero) {
                 throw CreateDllNotFoundException(NativeLibraryName);
             }
+#endif
         }
     }
 
@@ -426,10 +458,12 @@ public static class McSolverEngineClient
 
     private static void SetSearchDirectory(string? directory)
     {
+#if !NET6_0_OR_GREATER
         var directoryPath = directory;
         if (!string.IsNullOrWhiteSpace(directoryPath)) {
             SetDllDirectory(directoryPath!);
         }
+#endif
     }
 
     private static Exception CreateDllNotFoundException(string libraryPath)
@@ -633,11 +667,13 @@ public static class McSolverEngineClient
     [DllImport(NativeLibraryName, CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
     private static extern IntPtr McSolverEngine_GetVersion();
 
+#if !NET6_0_OR_GREATER
     [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true, EntryPoint = "LoadLibraryW")]
     private static extern IntPtr LoadLibrary(string fileName);
 
     [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true, EntryPoint = "SetDllDirectoryW")]
     private static extern bool SetDllDirectory(string pathName);
+#endif
 
     [DllImport(NativeLibraryName, CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
     private static extern McSolverEngineNativeStatus McSolverEngine_SolveToGeometry(

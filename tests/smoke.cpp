@@ -1427,9 +1427,9 @@ int main()
 
     const std::string sourceDir {MCSOLVERENGINE_SOURCE_DIR};
 #if MCSOLVERENGINE_WITH_OCCT
-    const std::string sampleXmlPath = sourceDir + "\\fcstdDoc\\1.xml";
-    const std::string sampleBrpPath = sourceDir + "\\fcstdDoc\\1.brp";
-    const std::string sampleSolverBrpPath = sourceDir + "\\fcstdDoc\\1.solver.brp";
+    const std::string sampleXmlPath = sourceDir + "/fcstdDoc/1.xml";
+    const std::string sampleBrpPath = sourceDir + "/fcstdDoc/1.brp";
+    const std::string sampleSolverBrpPath = sourceDir + "/fcstdDoc/1.solver.brp";
     const McSolverEngine::ParameterMap noParameters {};
 
     const auto verifySampleRegression = [&](
@@ -1522,36 +1522,36 @@ int main()
             "Sketch",
             sampleBrpPath,
             sampleSolverBrpPath,
-            "fcstdDoc\\1.xml / Sketch",
+            "fcstdDoc/1.xml / Sketch",
             true,
             false,
             noParameters)) {
         return 1;
     }
 
-    const std::string sampleV1024XmlPath = sourceDir + "\\fcstdDoc\\V102.4.xml";
-    const std::string sampleV1024ExpectedPath = sourceDir + "\\fcstdDoc\\V102.4.brp";
-    const std::string sampleV1024ActualPath = sourceDir + "\\fcstdDoc\\V102.4.solver.brp";
+    const std::string sampleV1024XmlPath = sourceDir + "/fcstdDoc/V102.4.xml";
+    const std::string sampleV1024ExpectedPath = sourceDir + "/fcstdDoc/V102.4.brp";
+    const std::string sampleV1024ActualPath = sourceDir + "/fcstdDoc/V102.4.solver.brp";
     if (!verifySampleRegression(
             sampleV1024XmlPath,
             "Sketch",
             sampleV1024ExpectedPath,
             sampleV1024ActualPath,
-            "fcstdDoc\\V102.4.xml / Sketch",
+            "fcstdDoc/V102.4.xml / Sketch",
             true,
             true,
             noParameters)) {
         return 1;
     }
 
-    const std::string sampleV1024Plus1ExpectedPath = sourceDir + "\\fcstdDoc\\V102.4.plus1.brp";
-    const std::string sampleV1024Plus1ActualPath = sourceDir + "\\fcstdDoc\\V102.4.plus1.solver.brp";
+    const std::string sampleV1024Plus1ExpectedPath = sourceDir + "/fcstdDoc/V102.4.plus1.brp";
+    const std::string sampleV1024Plus1ActualPath = sourceDir + "/fcstdDoc/V102.4.plus1.solver.brp";
     if (!verifySampleRegression(
             sampleV1024XmlPath,
             "Sketch",
             sampleV1024Plus1ExpectedPath,
             sampleV1024Plus1ActualPath,
-            "fcstdDoc\\V102.4.xml / Sketch with parameters",
+            "fcstdDoc/V102.4.xml / Sketch with parameters",
             true,
             true,
             McSolverEngine::ParameterMap {
@@ -1565,30 +1565,30 @@ int main()
         return 1;
     }
 
-    const std::string sampleV1021XmlPath = sourceDir + "\\fcstdDoc\\V102.1.xml";
-    const std::string sampleV1021ExpectedPath = sourceDir + "\\fcstdDoc\\V102.1.brp";
-    const std::string sampleV1021ActualPath = sourceDir + "\\fcstdDoc\\V102.1.solver.brp";
+    const std::string sampleV1021XmlPath = sourceDir + "/fcstdDoc/V102.1.xml";
+    const std::string sampleV1021ExpectedPath = sourceDir + "/fcstdDoc/V102.1.brp";
+    const std::string sampleV1021ActualPath = sourceDir + "/fcstdDoc/V102.1.solver.brp";
     if (!verifySampleRegression(
             sampleV1021XmlPath,
             "Sketch",
             sampleV1021ExpectedPath,
             sampleV1021ActualPath,
-            "fcstdDoc\\V102.1.xml / Sketch",
+            "fcstdDoc/V102.1.xml / Sketch",
             false,
             false,
             noParameters)) {
         return 1;
     }
 
-    const std::string sampleV1025XmlPath = sourceDir + "\\fcstdDoc\\V102.5.xml";
-    const std::string sampleV1025ExpectedPath = sourceDir + "\\fcstdDoc\\V102.5.brp";
-    const std::string sampleV1025ActualPath = sourceDir + "\\fcstdDoc\\V102.5.solver.brp";
+    const std::string sampleV1025XmlPath = sourceDir + "/fcstdDoc/V102.5.xml";
+    const std::string sampleV1025ExpectedPath = sourceDir + "/fcstdDoc/V102.5.brp";
+    const std::string sampleV1025ActualPath = sourceDir + "/fcstdDoc/V102.5.solver.brp";
     if (!verifySampleRegression(
             sampleV1025XmlPath,
             "Sketch",
             sampleV1025ExpectedPath,
             sampleV1025ActualPath,
-            "fcstdDoc\\V102.5.xml / Sketch",
+            "fcstdDoc/V102.5.xml / Sketch",
             true,
             false,
             noParameters)) {
@@ -1596,26 +1596,26 @@ int main()
     }
 
     const std::array<std::tuple<std::string, std::string, std::string>, 3> sampleV1022Cases {{
-        {"Sketch", sourceDir + "\\fcstdDoc\\V102.2.Sketch.Shape.brp", sourceDir + "\\fcstdDoc\\V102.2.Sketch.solver.brp"},
+        {"Sketch", sourceDir + "/fcstdDoc/V102.2.Sketch.Shape.brp", sourceDir + "/fcstdDoc/V102.2.Sketch.solver.brp"},
         {
             "Sketch001",
-            sourceDir + "\\fcstdDoc\\V102.2.Sketch001.Shape.brp",
-            sourceDir + "\\fcstdDoc\\V102.2.Sketch001.solver.brp"
+            sourceDir + "/fcstdDoc/V102.2.Sketch001.Shape.brp",
+            sourceDir + "/fcstdDoc/V102.2.Sketch001.solver.brp"
         },
         {
             "Sketch002",
-            sourceDir + "\\fcstdDoc\\V102.2.Sketch002.Shape.brp",
-            sourceDir + "\\fcstdDoc\\V102.2.Sketch002.solver.brp"
+            sourceDir + "/fcstdDoc/V102.2.Sketch002.Shape.brp",
+            sourceDir + "/fcstdDoc/V102.2.Sketch002.solver.brp"
         },
     }};
-    const std::string sampleV1022XmlPath = sourceDir + "\\fcstdDoc\\V102.2.xml";
+    const std::string sampleV1022XmlPath = sourceDir + "/fcstdDoc/V102.2.xml";
     for (const auto& [sketchName, expectedPath, actualPath] : sampleV1022Cases) {
         if (!verifySampleRegression(
                 sampleV1022XmlPath,
                 sketchName,
                 expectedPath,
                 actualPath,
-                "fcstdDoc\\V102.2.xml / " + sketchName,
+                "fcstdDoc/V102.2.xml / " + sketchName,
                 false,
                 false,
                 noParameters)) {
@@ -1623,8 +1623,8 @@ int main()
         }
     }
 #else
-    const std::string sampleXmlPath = sourceDir + "\\fcstdDoc\\1.xml";
-    const std::string sampleSolverBrpPath = sourceDir + "\\fcstdDoc\\1.solver.brp";
+    const std::string sampleXmlPath = sourceDir + "/fcstdDoc/1.xml";
+    const std::string sampleSolverBrpPath = sourceDir + "/fcstdDoc/1.solver.brp";
     auto importedSample = McSolverEngine::DocumentXml::importSketchFromDocumentXmlFile(sampleXmlPath, "Sketch");
     if (!importedSample.imported() || !McSolverEngine::Compat::solveSketch(importedSample.model).solved()) {
         std::cerr << "Expected sample sketch to import and solve without OCCT.\n";
@@ -1643,17 +1643,17 @@ int main()
         {"Sketch002", false},
     }};
 
-    const std::string sample2XmlPath = sourceDir + "\\fcstdDoc\\2.xml";
+    const std::string sample2XmlPath = sourceDir + "/fcstdDoc/2.xml";
     for (const auto& [sketchName, expectIdentityLocation] : sample2Cases) {
-        const std::string expectedPath = sourceDir + "\\fcstdDoc\\2." + sketchName + ".Shape.brp";
-        const std::string actualPath = sourceDir + "\\fcstdDoc\\2." + sketchName + ".solver.brp";
+        const std::string expectedPath = sourceDir + "/fcstdDoc/2." + sketchName + ".Shape.brp";
+        const std::string actualPath = sourceDir + "/fcstdDoc/2." + sketchName + ".solver.brp";
 #if MCSOLVERENGINE_WITH_OCCT
         if (!verifySampleRegression(
                 sample2XmlPath,
                 sketchName,
                 expectedPath,
                 actualPath,
-                "fcstdDoc\\2.xml / " + sketchName,
+                "fcstdDoc/2.xml / " + sketchName,
                 expectIdentityLocation,
                 false,
                 noParameters)) {
@@ -1713,9 +1713,9 @@ int main()
 #endif
     }
 
-    const std::string sample3XmlPath = sourceDir + "\\fcstdDoc\\3.xml";
-    const std::string sample3ExpectedPath = sourceDir + "\\fcstdDoc\\3.Sketch.Shape.brp";
-    const std::string sample3ActualPath = sourceDir + "\\fcstdDoc\\3.Sketch.solver.brp";
+    const std::string sample3XmlPath = sourceDir + "/fcstdDoc/3.xml";
+    const std::string sample3ExpectedPath = sourceDir + "/fcstdDoc/3.Sketch.Shape.brp";
+    const std::string sample3ActualPath = sourceDir + "/fcstdDoc/3.Sketch.solver.brp";
 
 #if MCSOLVERENGINE_WITH_OCCT
     if (!verifySampleRegression(
@@ -1723,7 +1723,7 @@ int main()
             "Sketch",
             sample3ExpectedPath,
             sample3ActualPath,
-            "fcstdDoc\\3.xml / Sketch",
+            "fcstdDoc/3.xml / Sketch",
             true,
             false,
             noParameters)) {
@@ -1733,7 +1733,7 @@ int main()
 
     auto importedSample3 = McSolverEngine::DocumentXml::importSketchFromDocumentXmlFile(sample3XmlPath, "Sketch");
     if (!importedSample3.imported() || !McSolverEngine::Compat::solveSketch(importedSample3.model).solved()) {
-        std::cerr << "Expected sample sketch fcstdDoc\\3.xml / Sketch to import and solve successfully.\n";
+        std::cerr << "Expected sample sketch fcstdDoc/3.xml / Sketch to import and solve successfully.\n";
         return 1;
     }
 

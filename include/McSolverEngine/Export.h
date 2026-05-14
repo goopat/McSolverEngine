@@ -8,6 +8,8 @@
 #    else
 #        define MCSOLVERENGINE_EXPORT __declspec(dllimport)
 #    endif
+#elif defined(__GNUC__) || defined(__clang__)
+#    define MCSOLVERENGINE_EXPORT __attribute__((visibility("default")))
 #else
 #    define MCSOLVERENGINE_EXPORT
 #endif

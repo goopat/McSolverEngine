@@ -1,6 +1,7 @@
 using System.IO;
 using System.Linq;
 using System.Globalization;
+using System.Runtime.InteropServices;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using McSolverEngine.Wrapper;
 
@@ -823,22 +824,39 @@ public class WrapperRegressionTests
             return null;
         }
 
-        if (File.Exists(value) && string.Equals(Path.GetFileName(value), "TKBRep.dll", StringComparison.OrdinalIgnoreCase)) {
+        if (File.Exists(value) && string.Equals(Path.GetFileName(value), OcctRuntimeFileName, StringComparison.OrdinalIgnoreCase)) {
             return Path.GetDirectoryName(value);
         }
 
         return HasOcctRuntime(value) ? value : null;
     }
 
+#if NET6_0_OR_GREATER
+    private static string NativeLibraryFileName =>
+        RuntimeInformation.IsOSPlatform(OSPlatform.Windows) ? "mcsolverengine_native.dll"
+        : RuntimeInformation.IsOSPlatform(OSPlatform.Linux) ? "libmcsolverengine_native.so"
+        : RuntimeInformation.IsOSPlatform(OSPlatform.OSX) ? "libmcsolverengine_native.dylib"
+        : "mcsolverengine_native";
+
+    private static string OcctRuntimeFileName =>
+        RuntimeInformation.IsOSPlatform(OSPlatform.Windows) ? "TKBRep.dll"
+        : RuntimeInformation.IsOSPlatform(OSPlatform.Linux) ? "libTKBRep.so"
+        : RuntimeInformation.IsOSPlatform(OSPlatform.OSX) ? "libTKBRep.dylib"
+        : "TKBRep";
+#else
+    private const string NativeLibraryFileName = "mcsolverengine_native.dll";
+    private const string OcctRuntimeFileName = "TKBRep.dll";
+#endif
+
     private static bool HasNativeLibrary(string? directory)
     {
         return !string.IsNullOrWhiteSpace(directory)
-            && File.Exists(Path.Combine(directory, "mcsolverengine_native.dll"));
+            && File.Exists(Path.Combine(directory, NativeLibraryFileName));
     }
 
     private static bool HasOcctRuntime(string? directory)
     {
         return !string.IsNullOrWhiteSpace(directory)
-            && File.Exists(Path.Combine(directory, "TKBRep.dll"));
+            && File.Exists(Path.Combine(directory, OcctRuntimeFileName));
     }
 }
