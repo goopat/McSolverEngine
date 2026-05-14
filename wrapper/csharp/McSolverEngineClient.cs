@@ -225,20 +225,6 @@ public static class McSolverEngineClient
         }
     }
 
-    private static string ReadAndFreeNativeString(IntPtr pointer)
-    {
-        if (pointer == IntPtr.Zero) {
-            return string.Empty;
-        }
-
-        try {
-            return ReadNativeUtf8String(pointer);
-        }
-        finally {
-            McSolverEngine_FreeString(pointer);
-        }
-    }
-
     private static void EnsureNativeLibraryLoaded()
     {
         if (_loadedNativeLibraryHandle != IntPtr.Zero) {
@@ -771,7 +757,4 @@ public static class McSolverEngineClient
 
     [DllImport(NativeLibraryName, CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
     private static extern void McSolverEngine_FreeBRepResult(IntPtr value);
-
-    [DllImport(NativeLibraryName, CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
-    private static extern void McSolverEngine_FreeString(IntPtr value);
 }

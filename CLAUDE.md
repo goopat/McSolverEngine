@@ -49,7 +49,7 @@ Test data lives in `fcstdDoc/` (FreeCAD Document.xml + reference BREP files). Sm
 
 The engine is a stand-alone extraction of FreeCAD Sketcher's GCS constraint solver, rebuilt to be independent of FreeCAD's App/Gui/Document runtime. Layers (top to bottom):
 
-1. **C ABI** (`src/CApi.cpp`, `include/McSolverEngine/CApi.h`) — stable C interface for cross-language interop. Allocates results that callers must free (`McSolverEngine_FreeGeometryResult`, `McSolverEngine_FreeString`).
+1. **C ABI** (`src/CApi.cpp`, `include/McSolverEngine/CApi.h`) — stable C interface for cross-language interop. Allocates geometry/BREP result structs that callers must free (`McSolverEngine_FreeGeometryResult`, `McSolverEngine_FreeBRepResult`).
 
 2. **Compat Model** (`include/McSolverEngine/CompatModel.h`, `src/CompatModel.cpp`) — replaces FreeCAD's `Sketch.cpp` assembly layer. Defines `SketchModel` (geometry + constraints + placement storage) and all geometry/constraint types as plain `std::variant`-based structs. No FreeCAD runtime types.
 

@@ -176,8 +176,6 @@ MCSOLVERENGINE_CAPI_EXPORT void McSolverEngine_FreeGeometryResult(McSolverEngine
 
 MCSOLVERENGINE_CAPI_EXPORT void McSolverEngine_FreeBRepResult(McSolverEngineBRepResult* value);
 
-MCSOLVERENGINE_CAPI_EXPORT void McSolverEngine_FreeString(char* value);
-
 #ifdef __cplusplus
 }
 #endif

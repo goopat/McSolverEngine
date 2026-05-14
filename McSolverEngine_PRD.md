@@ -376,7 +376,6 @@ FreeCAD 中真正把“草图数据”翻译成 GCS 参数和约束的是：
 - `McSolverEngine_SolveToBRepWithParameters(...)`
 - `McSolverEngine_FreeGeometryResult(...)`
 - `McSolverEngine_FreeBRepResult(...)`
-- `McSolverEngine_FreeString(...)`
 
 当前跨语言边界采用 **Geometry 与 BREP 均返回结构化结果** 的设计：
 
@@ -384,7 +383,6 @@ FreeCAD 中真正把“草图数据”翻译成 GCS 参数和约束的是：
 - 参数化路径当前通过 `const char*[] keys + const char*[] values + count` 跨 ABI 传递参数表，供 `Document.xml + sketchName + parameters` 一起求解；其中值必须是纯数值字符串
 - Geometry 结果由原生层分配，调用方必须通过 `McSolverEngine_FreeGeometryResult(...)` 释放
 - BRep 结果由原生层分配，调用方必须通过 `McSolverEngine_FreeBRepResult(...)` 释放
-- UTF-8 字符串结果由原生层分配，调用方必须通过 `McSolverEngine_FreeString(...)` 释放
 
 `wrapper\csharp` 当前提供：
 
@@ -591,7 +589,7 @@ FreeCAD 中真正把“草图数据”翻译成 GCS 参数和约束的是：
    - `McSolverEngine_SolveToGeometry(...)` / `McSolverEngine_SolveToBRep(...)`
    - 均返回携带完整过程状态的结构化结果（导入/求解/导出元数据 + placement）
    - Geometry 结果附加 `geometryCount + geometries`，BRep 结果附加 `brepUtf8`
-   - 释放接口：`McSolverEngine_FreeGeometryResult` / `McSolverEngine_FreeBRepResult` / `McSolverEngine_FreeString`
+   - 释放接口：`McSolverEngine_FreeGeometryResult` / `McSolverEngine_FreeBRepResult`
    - `wrapper\csharp\McSolverEngineClient` 多目标构建 net48 + net6.0
 
 当前建议：

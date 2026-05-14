@@ -831,9 +831,4 @@ void McSolverEngine_FreeBRepResult(McSolverEngineBRepResult* value)
     freeBRepResult(value);
 }
 
-void McSolverEngine_FreeString(char* value)
-{
-    delete[] value;
-}
-
 }  // extern "C"
