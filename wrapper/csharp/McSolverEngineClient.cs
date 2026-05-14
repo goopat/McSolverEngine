@@ -113,10 +113,7 @@ public static class McSolverEngineClient
             sketchNameHandle.Pointer,
             out var resultPointer
         );
-        return new BRepSolveResponse {
-            NativeStatus = nativeStatus,
-            Brep = ReadAndFreeNativeString(resultPointer)
-        };
+        return ParseBRepResponse(nativeStatus, resultPointer);
     }
 
     public static BRepSolveResponse SolveBRepFromDocumentXml(
@@ -143,10 +140,7 @@ public static class McSolverEngineClient
             parameterMapHandle.Count,
             out var resultPointer
         );
-        return new BRepSolveResponse {
-            NativeStatus = nativeStatus,
-            Brep = ReadAndFreeNativeString(resultPointer)
-        };
+        return ParseBRepResponse(nativeStatus, resultPointer);
     }
 
     private static StructuredGeometrySolveResponse ParseStructuredGeometryResponse(
@@ -187,6 +181,47 @@ public static class McSolverEngineClient
         }
         finally {
             McSolverEngine_FreeGeometryResult(resultPointer);
+        }
+    }
+
+    private static BRepSolveResponse ParseBRepResponse(
+        McSolverEngineNativeStatus nativeStatus,
+        IntPtr resultPointer
+    )
+    {
+        var response = new BRepSolveResponse {
+            NativeStatus = nativeStatus
+        };
+
+        if (resultPointer == IntPtr.Zero) {
+            return response;
+        }
+
+        try {
+            var nativeResult = (NativeBRepResult)Marshal.PtrToStructure(
+                resultPointer,
+                typeof(NativeBRepResult)
+            )!;
+            response.SketchName = ReadNativeUtf8String(nativeResult.SketchName);
+            response.ImportStatus = ReadNativeUtf8String(nativeResult.ImportStatus);
+            response.SkippedConstraints = nativeResult.SkippedConstraints;
+            response.Messages = ReadStringArray(nativeResult.Messages, nativeResult.MessageCount);
+            response.SolveStatus = ReadNativeUtf8String(nativeResult.SolveStatus);
+            response.DegreesOfFreedom = nativeResult.DegreesOfFreedom;
+            response.Conflicting = ReadIntArray(nativeResult.Conflicting, nativeResult.ConflictingCount);
+            response.Redundant = ReadIntArray(nativeResult.Redundant, nativeResult.RedundantCount);
+            response.PartiallyRedundant = ReadIntArray(
+                nativeResult.PartiallyRedundant,
+                nativeResult.PartiallyRedundantCount
+            );
+            response.ExportKind = ReadNativeUtf8String(nativeResult.ExportKind);
+            response.ExportStatus = ReadNativeUtf8String(nativeResult.ExportStatus);
+            response.Placement = ToPlacementDto(nativeResult.Placement);
+            response.Brep = ReadNativeUtf8String(nativeResult.BrepUtf8);
+            return response;
+        }
+        finally {
+            McSolverEngine_FreeBRepResult(resultPointer);
         }
     }
 
@@ -664,6 +699,28 @@ public static class McSolverEngineClient
         public IntPtr Geometries;
     }
 
+    [StructLayout(LayoutKind.Sequential)]
+    private struct NativeBRepResult
+    {
+        public IntPtr SketchName;
+        public IntPtr ImportStatus;
+        public int SkippedConstraints;
+        public int MessageCount;
+        public IntPtr Messages;
+        public IntPtr SolveStatus;
+        public int DegreesOfFreedom;
+        public int ConflictingCount;
+        public IntPtr Conflicting;
+        public int RedundantCount;
+        public IntPtr Redundant;
+        public int PartiallyRedundantCount;
+        public IntPtr PartiallyRedundant;
+        public IntPtr ExportKind;
+        public IntPtr ExportStatus;
+        public NativePlacement Placement;
+        public IntPtr BrepUtf8;
+    }
+
     [DllImport(NativeLibraryName, CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
     private static extern IntPtr McSolverEngine_GetVersion();
 
@@ -696,7 +753,7 @@ public static class McSolverEngineClient
     private static extern McSolverEngineNativeStatus McSolverEngine_SolveToBRep(
         IntPtr documentXmlUtf8,
         IntPtr sketchNameUtf8,
-        out IntPtr brepUtf8
+        out IntPtr result
     );
 
     [DllImport(NativeLibraryName, CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
@@ -706,11 +763,14 @@ public static class McSolverEngineClient
         IntPtr parameterKeysUtf8,
         IntPtr parameterValuesUtf8,
         int parameterCount,
-        out IntPtr brepUtf8
+        out IntPtr result
     );
 
     [DllImport(NativeLibraryName, CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
     private static extern void McSolverEngine_FreeGeometryResult(IntPtr value);
+
+    [DllImport(NativeLibraryName, CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    private static extern void McSolverEngine_FreeBRepResult(IntPtr value);
 
     [DllImport(NativeLibraryName, CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
     private static extern void McSolverEngine_FreeString(IntPtr value);

@@ -143,10 +143,10 @@ int main()
     }
     McSolverEngine_FreeGeometryResult(structuredGeometry);
 
-    char* brepUtf8 = nullptr;
-    const auto brepCode = McSolverEngine_SolveToBRep(documentXml.c_str(), "Sketch", &brepUtf8);
-    const std::string brepPayload = brepUtf8 != nullptr ? brepUtf8 : "";
-    McSolverEngine_FreeString(brepUtf8);
+    McSolverEngineBRepResult* brepResult = nullptr;
+    const auto brepCode = McSolverEngine_SolveToBRep(documentXml.c_str(), "Sketch", &brepResult);
+    const std::string brepPayload = brepResult && brepResult->brepUtf8 ? brepResult->brepUtf8 : "";
+    McSolverEngine_FreeBRepResult(brepResult);
 
 #if MCSOLVERENGINE_WITH_OCCT
     if (!expect(brepCode == MCSOLVERENGINE_RESULT_SUCCESS, "Expected BRep C API call to succeed.")) {
@@ -253,17 +253,17 @@ int main()
     }
     McSolverEngine_FreeGeometryResult(parameterizedGeometry);
 
-    char* parameterizedBrepUtf8 = nullptr;
+    McSolverEngineBRepResult* parameterizedBrepResult = nullptr;
     const auto parameterizedBrepCode = McSolverEngine_SolveToBRepWithParameters(
         parameterizedDocumentXml.data(),
         "Sketch",
         parameterKeys,
         parameterValues,
         1,
-        &parameterizedBrepUtf8
+        &parameterizedBrepResult
     );
-    const std::string parameterizedBrepPayload = parameterizedBrepUtf8 != nullptr ? parameterizedBrepUtf8 : "";
-    McSolverEngine_FreeString(parameterizedBrepUtf8);
+    const std::string parameterizedBrepPayload = parameterizedBrepResult && parameterizedBrepResult->brepUtf8 ? parameterizedBrepResult->brepUtf8 : "";
+    McSolverEngine_FreeBRepResult(parameterizedBrepResult);
 
 #if MCSOLVERENGINE_WITH_OCCT
     if (!expect(

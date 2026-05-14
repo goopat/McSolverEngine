@@ -119,6 +119,27 @@ typedef struct McSolverEngineGeometryResult
     const McSolverEngineGeometryRecord* geometries;
 } McSolverEngineGeometryResult;
 
+typedef struct McSolverEngineBRepResult
+{
+    const char* sketchName;
+    const char* importStatus;
+    int skippedConstraints;
+    int messageCount;
+    char** messages;
+    const char* solveStatus;
+    int degreesOfFreedom;
+    int conflictingCount;
+    const int* conflicting;
+    int redundantCount;
+    const int* redundant;
+    int partiallyRedundantCount;
+    const int* partiallyRedundant;
+    const char* exportKind;
+    const char* exportStatus;
+    McSolverEnginePlacement placement;
+    const char* brepUtf8;
+} McSolverEngineBRepResult;
+
 MCSOLVERENGINE_CAPI_EXPORT const char* McSolverEngine_GetVersion(void);
 
 MCSOLVERENGINE_CAPI_EXPORT McSolverEngineResultCode McSolverEngine_SolveToGeometry(
@@ -139,7 +160,7 @@ MCSOLVERENGINE_CAPI_EXPORT McSolverEngineResultCode McSolverEngine_SolveToGeomet
 MCSOLVERENGINE_CAPI_EXPORT McSolverEngineResultCode McSolverEngine_SolveToBRep(
     const char* documentXmlUtf8,
     const char* sketchNameUtf8,
-    char** brepUtf8
+    McSolverEngineBRepResult** result
 );
 
 MCSOLVERENGINE_CAPI_EXPORT McSolverEngineResultCode McSolverEngine_SolveToBRepWithParameters(
@@ -148,10 +169,12 @@ MCSOLVERENGINE_CAPI_EXPORT McSolverEngineResultCode McSolverEngine_SolveToBRepWi
     const char* const* parameterKeysUtf8,
     const char* const* parameterValuesUtf8,
     int parameterCount,
-    char** brepUtf8
+    McSolverEngineBRepResult** result
 );
 
 MCSOLVERENGINE_CAPI_EXPORT void McSolverEngine_FreeGeometryResult(McSolverEngineGeometryResult* value);
+
+MCSOLVERENGINE_CAPI_EXPORT void McSolverEngine_FreeBRepResult(McSolverEngineBRepResult* value);
 
 MCSOLVERENGINE_CAPI_EXPORT void McSolverEngine_FreeString(char* value);
 

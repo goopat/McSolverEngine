@@ -14,6 +14,17 @@ public sealed class PlacementDto
 public sealed class BRepSolveResponse
 {
     public McSolverEngineNativeStatus NativeStatus { get; set; }
-
+    public string SketchName { get; set; } = string.Empty;
+    public string ImportStatus { get; set; } = string.Empty;
+    public int SkippedConstraints { get; set; }
+    public List<string> Messages { get; set; } = [];
+    public string SolveStatus { get; set; } = string.Empty;
+    public int DegreesOfFreedom { get; set; }
+    public List<int> Conflicting { get; set; } = [];
+    public List<int> Redundant { get; set; } = [];
+    public List<int> PartiallyRedundant { get; set; } = [];
+    public string ExportKind { get; set; } = string.Empty;
+    public string ExportStatus { get; set; } = string.Empty;
+    public PlacementDto Placement { get; set; } = new();
     public string? Brep { get; set; }
 }

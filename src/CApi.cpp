@@ -106,6 +106,19 @@ using McSolverEngine::Compat::Point2;
     return "Failed";
 }
 
+[[nodiscard]] std::string_view toString(McSolverEngine::BRep::ExportStatus status)
+{
+    switch (status) {
+        case McSolverEngine::BRep::ExportStatus::Success:
+            return "Success";
+        case McSolverEngine::BRep::ExportStatus::Failed:
+            return "Failed";
+        case McSolverEngine::BRep::ExportStatus::OpenCascadeUnavailable:
+            return "OpenCascadeUnavailable";
+    }
+    return "Failed";
+}
+
 [[nodiscard]] bool assignOutputString(std::string_view value, char** out)
 {
     if (!out) {
@@ -144,6 +157,13 @@ void resetOutput(char** out)
 }
 
 void resetOutput(McSolverEngineGeometryResult** out)
+{
+    if (out) {
+        *out = nullptr;
+    }
+}
+
+void resetOutput(McSolverEngineBRepResult** out)
 {
     if (out) {
         *out = nullptr;
@@ -226,6 +246,31 @@ void freeGeometryResult(McSolverEngineGeometryResult* value) noexcept
     delete value;
 }
 
+void freeBRepResult(McSolverEngineBRepResult* value) noexcept
+{
+    if (!value) {
+        return;
+    }
+
+    delete[] value->sketchName;
+    delete[] value->importStatus;
+    auto* messages = value->messages;
+    if (messages) {
+        for (int i = 0; i < value->messageCount; ++i) {
+            delete[] messages[i];
+        }
+        delete[] messages;
+    }
+    delete[] value->solveStatus;
+    delete[] value->conflicting;
+    delete[] value->redundant;
+    delete[] value->partiallyRedundant;
+    delete[] value->exportKind;
+    delete[] value->exportStatus;
+    delete[] value->brepUtf8;
+    delete value;
+}
+
 [[nodiscard]] bool assignStringArray(
     const std::vector<std::string>& values,
     int* count,
@@ -290,12 +335,13 @@ void freeGeometryResult(McSolverEngineGeometryResult* value) noexcept
     return true;
 }
 
-template<typename ImportResultT, typename SolveResultT>
-[[nodiscard]] bool fillStructuredGeometryMetadata(
-    McSolverEngineGeometryResult& target,
+template<typename ResultT, typename ImportResultT, typename SolveResultT>
+[[nodiscard]] bool fillSolveMetadata(
+    ResultT& target,
     const ImportResultT& imported,
     const SolveResultT* solveResult,
     const std::vector<std::string>& messages,
+    std::string_view exportKind,
     std::string_view exportStatus
 )
 {
@@ -330,7 +376,7 @@ template<typename ImportResultT, typename SolveResultT>
         }
     }
 
-    if (!assignOwnedString("Geometry", &target.exportKind)) {
+    if (!assignOwnedString(exportKind, &target.exportKind)) {
         return false;
     }
     if (!assignOwnedString(exportStatus, &target.exportStatus)) {
@@ -494,11 +540,12 @@ McSolverEngineResultCode runStructuredGeometryPipeline(ImportFn&& importFn, McSo
     *result = nativeResult;
 
     if (!imported.imported()) {
-        if (!fillStructuredGeometryMetadata<decltype(imported), McSolverEngine::Compat::SolveResult>(
+        if (!fillSolveMetadata<McSolverEngineGeometryResult, decltype(imported), McSolverEngine::Compat::SolveResult>(
                 *nativeResult,
                 imported,
                 nullptr,
                 imported.messages,
+                "Geometry",
                 "Skipped"
             )) {
             freeGeometryResult(nativeResult);
@@ -511,7 +558,7 @@ McSolverEngineResultCode runStructuredGeometryPipeline(ImportFn&& importFn, McSo
     const auto solveResult = McSolverEngine::Compat::solveSketch(imported.model);
     nativeResult->placement = toCApiPlacement(imported.model.placement());
     if (!solveResult.solved()) {
-        if (!fillStructuredGeometryMetadata(*nativeResult, imported, &solveResult, imported.messages, "Skipped")) {
+        if (!fillSolveMetadata(*nativeResult, imported, &solveResult, imported.messages, "Geometry", "Skipped")) {
             freeGeometryResult(nativeResult);
             *result = nullptr;
             return MCSOLVERENGINE_RESULT_OUT_OF_MEMORY;
@@ -525,7 +572,7 @@ McSolverEngineResultCode runStructuredGeometryPipeline(ImportFn&& importFn, McSo
     if (!geometryResult.exported()) {
         std::vector<std::string> messages = imported.messages;
         messages.insert(messages.end(), geometryResult.messages.begin(), geometryResult.messages.end());
-        if (!fillStructuredGeometryMetadata(*nativeResult, imported, &solveResult, messages, toString(geometryResult.status))) {
+        if (!fillSolveMetadata(*nativeResult, imported, &solveResult, messages, "Geometry", toString(geometryResult.status))) {
             freeGeometryResult(nativeResult);
             *result = nullptr;
             return MCSOLVERENGINE_RESULT_OUT_OF_MEMORY;
@@ -540,7 +587,7 @@ McSolverEngineResultCode runStructuredGeometryPipeline(ImportFn&& importFn, McSo
 
     std::vector<std::string> messages = imported.messages;
     messages.insert(messages.end(), geometryResult.messages.begin(), geometryResult.messages.end());
-    if (!fillStructuredGeometryMetadata(*nativeResult, imported, &solveResult, messages, toString(geometryResult.status))) {
+    if (!fillSolveMetadata(*nativeResult, imported, &solveResult, messages, "Geometry", toString(geometryResult.status))) {
         freeGeometryResult(nativeResult);
         *result = nullptr;
         return MCSOLVERENGINE_RESULT_OUT_OF_MEMORY;
@@ -571,16 +618,37 @@ McSolverEngineResultCode runStructuredGeometryPipeline(ImportFn&& importFn, McSo
 }
 
 template<typename ImportFn>
-McSolverEngineResultCode runBRepPipeline(ImportFn&& importFn, char** brepUtf8)
+McSolverEngineResultCode runBRepPipeline(ImportFn&& importFn, McSolverEngineBRepResult** result)
 {
-    resetOutput(brepUtf8);
+    resetOutput(result);
     auto imported = importFn();
+
+    auto* nativeResult = new (std::nothrow) McSolverEngineBRepResult {};
+    if (!nativeResult) {
+        return MCSOLVERENGINE_RESULT_OUT_OF_MEMORY;
+    }
+
+    nativeResult->placement = toCApiPlacement(imported.model.placement());
+    *result = nativeResult;
+
     if (!imported.imported()) {
+        if (!fillSolveMetadata<McSolverEngineBRepResult, decltype(imported), McSolverEngine::Compat::SolveResult>(
+                *nativeResult, imported, nullptr, imported.messages, "BRep", "Skipped")) {
+            freeBRepResult(nativeResult);
+            *result = nullptr;
+            return MCSOLVERENGINE_RESULT_OUT_OF_MEMORY;
+        }
         return MCSOLVERENGINE_RESULT_IMPORT_FAILED;
     }
 
     const auto solveResult = McSolverEngine::Compat::solveSketch(imported.model);
+    nativeResult->placement = toCApiPlacement(imported.model.placement());
     if (!solveResult.solved()) {
+        if (!fillSolveMetadata(*nativeResult, imported, &solveResult, imported.messages, "BRep", "Skipped")) {
+            freeBRepResult(nativeResult);
+            *result = nullptr;
+            return MCSOLVERENGINE_RESULT_OUT_OF_MEMORY;
+        }
         return solveResult.status == McSolverEngine::Compat::SolveStatus::Unsupported
             ? MCSOLVERENGINE_RESULT_UNSUPPORTED
             : MCSOLVERENGINE_RESULT_SOLVE_FAILED;
@@ -588,16 +656,43 @@ McSolverEngineResultCode runBRepPipeline(ImportFn&& importFn, char** brepUtf8)
 
     const auto brepResult = McSolverEngine::BRep::exportSketchToBRep(imported.model);
 
+    std::vector<std::string> messages = imported.messages;
+    messages.insert(messages.end(), brepResult.messages.begin(), brepResult.messages.end());
+
     if (brepResult.status == McSolverEngine::BRep::ExportStatus::OpenCascadeUnavailable) {
+        if (!fillSolveMetadata(*nativeResult, imported, &solveResult, messages, "BRep", toString(brepResult.status))) {
+            freeBRepResult(nativeResult);
+            *result = nullptr;
+            return MCSOLVERENGINE_RESULT_OUT_OF_MEMORY;
+        }
         return MCSOLVERENGINE_RESULT_OPEN_CASCADE_UNAVAILABLE;
     }
     if (!brepResult.exported()) {
+        if (!fillSolveMetadata(*nativeResult, imported, &solveResult, messages, "BRep", toString(brepResult.status))) {
+            freeBRepResult(nativeResult);
+            *result = nullptr;
+            return MCSOLVERENGINE_RESULT_OUT_OF_MEMORY;
+        }
         return MCSOLVERENGINE_RESULT_BREP_EXPORT_FAILED;
     }
     if (!brepResult.brep.has_value()) {
+        if (!fillSolveMetadata(*nativeResult, imported, &solveResult, messages, "BRep", toString(brepResult.status))) {
+            freeBRepResult(nativeResult);
+            *result = nullptr;
+            return MCSOLVERENGINE_RESULT_OUT_OF_MEMORY;
+        }
         return MCSOLVERENGINE_RESULT_BREP_EXPORT_FAILED;
     }
-    if (!assignOutputString(*brepResult.brep, brepUtf8)) {
+
+    if (!fillSolveMetadata(*nativeResult, imported, &solveResult, messages, "BRep", toString(brepResult.status))) {
+        freeBRepResult(nativeResult);
+        *result = nullptr;
+        return MCSOLVERENGINE_RESULT_OUT_OF_MEMORY;
+    }
+
+    if (!assignOwnedString(*brepResult.brep, &nativeResult->brepUtf8)) {
+        freeBRepResult(nativeResult);
+        *result = nullptr;
         return MCSOLVERENGINE_RESULT_OUT_OF_MEMORY;
     }
     return MCSOLVERENGINE_RESULT_SUCCESS;
@@ -673,12 +768,12 @@ McSolverEngineResultCode McSolverEngine_SolveToGeometryWithParameters(
 McSolverEngineResultCode McSolverEngine_SolveToBRep(
     const char* documentXmlUtf8,
     const char* sketchNameUtf8,
-    char** brepUtf8
+    McSolverEngineBRepResult** result
 )
 {
     McSolverEngine::Detail::configureWindowsAssertMode();
-    if (!documentXmlUtf8 || !brepUtf8) {
-        resetOutput(brepUtf8);
+    if (!documentXmlUtf8 || !result) {
+        resetOutput(result);
         return MCSOLVERENGINE_RESULT_INVALID_ARGUMENT;
     }
 
@@ -689,7 +784,7 @@ McSolverEngineResultCode McSolverEngine_SolveToBRep(
                 safeStringView(sketchNameUtf8)
             );
         },
-        brepUtf8
+        result
     );
 }
 
@@ -699,18 +794,18 @@ McSolverEngineResultCode McSolverEngine_SolveToBRepWithParameters(
     const char* const* parameterKeysUtf8,
     const char* const* parameterValuesUtf8,
     int parameterCount,
-    char** brepUtf8
+    McSolverEngineBRepResult** result
 )
 {
     McSolverEngine::Detail::configureWindowsAssertMode();
-    if (!documentXmlUtf8 || !brepUtf8) {
-        resetOutput(brepUtf8);
+    if (!documentXmlUtf8 || !result) {
+        resetOutput(result);
         return MCSOLVERENGINE_RESULT_INVALID_ARGUMENT;
     }
 
     McSolverEngine::ParameterMap parameters;
     if (!buildParameterMap(parameterKeysUtf8, parameterValuesUtf8, parameterCount, parameters)) {
-        resetOutput(brepUtf8);
+        resetOutput(result);
         return MCSOLVERENGINE_RESULT_INVALID_ARGUMENT;
     }
 
@@ -722,13 +817,18 @@ McSolverEngineResultCode McSolverEngine_SolveToBRepWithParameters(
                 safeStringView(sketchNameUtf8)
             );
         },
-        brepUtf8
+        result
     );
 }
 
 void McSolverEngine_FreeGeometryResult(McSolverEngineGeometryResult* value)
 {
     freeGeometryResult(value);
+}
+
+void McSolverEngine_FreeBRepResult(McSolverEngineBRepResult* value)
+{
+    freeBRepResult(value);
 }
 
 void McSolverEngine_FreeString(char* value)
