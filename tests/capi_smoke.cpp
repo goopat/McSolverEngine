@@ -1,5 +1,6 @@
 #include <cstdlib>
 #include <cmath>
+#include <chrono>
 #include <fstream>
 #include <iostream>
 #include <iterator>
@@ -56,119 +57,156 @@ std::string readTextFile(const std::string& path)
     return std::string(std::istreambuf_iterator<char>(stream), std::istreambuf_iterator<char>());
 }
 
+class ScopedTestTimer
+{
+public:
+    explicit ScopedTestTimer(const char* testName)
+        : name(testName)
+        , startedAt(std::chrono::steady_clock::now())
+    {
+    }
+
+    ~ScopedTestTimer()
+    {
+        const auto elapsed =
+            std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - startedAt).count();
+        std::cout << "[capi_smoke] " << name << ": " << elapsed << " ms\n";
+    }
+
+private:
+    const char* name;
+    std::chrono::steady_clock::time_point startedAt;
+};
+
 }  // namespace
 
 int main()
 {
     McSolverEngine::Detail::configureWindowsAssertMode();
 
-    if (!expect(McSolverEngine_GetVersion() != nullptr, "Expected version pointer to be valid.")) {
-        return EXIT_FAILURE;
-    }
-    if (!expect(std::string(McSolverEngine_GetVersion()).empty() == false, "Expected non-empty version string.")) {
-        return EXIT_FAILURE;
-    }
-
-    const std::string documentXml = readTextFile(samplePath());
-    if (!expect(!documentXml.empty(), "Expected sample Document.xml content to load.")) {
-        return EXIT_FAILURE;
+    {
+        ScopedTestTimer timer("GetVersion");
+        if (!expect(McSolverEngine_GetVersion() != nullptr, "Expected version pointer to be valid.")) {
+            return EXIT_FAILURE;
+        }
+        if (!expect(std::string(McSolverEngine_GetVersion()).empty() == false, "Expected non-empty version string.")) {
+            return EXIT_FAILURE;
+        }
     }
 
-    McSolverEngineGeometryResult* structuredGeometry = nullptr;
-    const auto structuredGeometryCode =
-        McSolverEngine_SolveToGeometry(documentXml.c_str(), "Sketch", &structuredGeometry);
-    if (!expect(
-            structuredGeometryCode == MCSOLVERENGINE_RESULT_SUCCESS,
-            "Expected structured geometry C API call to succeed."
-        )) {
-        return EXIT_FAILURE;
-    }
-    if (!expect(structuredGeometry != nullptr, "Expected structured geometry result pointer.")) {
-        return EXIT_FAILURE;
-    }
-    if (!expect(
-            structuredGeometry->sketchName != nullptr && std::string(structuredGeometry->sketchName) == "Sketch",
-            "Expected structured geometry result to expose sketch name."
-        )) {
-        McSolverEngine_FreeGeometryResult(structuredGeometry);
-        return EXIT_FAILURE;
-    }
-    if (!expect(
-            structuredGeometry->importStatus != nullptr && std::string(structuredGeometry->importStatus) == "Success",
-            "Expected structured geometry result to expose import status."
-        )) {
-        McSolverEngine_FreeGeometryResult(structuredGeometry);
-        return EXIT_FAILURE;
-    }
-    if (!expect(
-            structuredGeometry->solveStatus != nullptr && std::string(structuredGeometry->solveStatus) == "Success",
-            "Expected structured geometry result to expose solve status."
-        )) {
-        McSolverEngine_FreeGeometryResult(structuredGeometry);
-        return EXIT_FAILURE;
-    }
-    if (!expect(
-            structuredGeometry->exportKind != nullptr && std::string(structuredGeometry->exportKind) == "Geometry",
-            "Expected structured geometry result to expose export kind."
-        )) {
-        McSolverEngine_FreeGeometryResult(structuredGeometry);
-        return EXIT_FAILURE;
-    }
-    if (!expect(
-            structuredGeometry->exportStatus != nullptr && std::string(structuredGeometry->exportStatus) == "Success",
-            "Expected structured geometry result to expose export status."
-        )) {
-        McSolverEngine_FreeGeometryResult(structuredGeometry);
-        return EXIT_FAILURE;
-    }
-    if (!expect(structuredGeometry->geometryCount == 8, "Expected structured geometry result to contain 8 geometries.")) {
-        McSolverEngine_FreeGeometryResult(structuredGeometry);
-        return EXIT_FAILURE;
+    std::string documentXml;
+    {
+        ScopedTestTimer timer("Load sample Document.xml");
+        documentXml = readTextFile(samplePath());
+        if (!expect(!documentXml.empty(), "Expected sample Document.xml content to load.")) {
+            return EXIT_FAILURE;
+        }
     }
 
-    bool hasLine = false;
-    bool hasArc = false;
-    for (int i = 0; i < structuredGeometry->geometryCount; ++i) {
-        const auto& record = structuredGeometry->geometries[i];
-        hasLine = hasLine || record.kind == MCSOLVERENGINE_GEOMETRY_LINE_SEGMENT;
-        hasArc = hasArc || record.kind == MCSOLVERENGINE_GEOMETRY_ARC;
-    }
-    if (!expect(hasLine, "Expected structured geometry result to contain a line segment.")) {
-        McSolverEngine_FreeGeometryResult(structuredGeometry);
-        return EXIT_FAILURE;
-    }
-    if (!expect(hasArc, "Expected structured geometry result to contain an arc.")) {
-        McSolverEngine_FreeGeometryResult(structuredGeometry);
-        return EXIT_FAILURE;
-    }
-    McSolverEngine_FreeGeometryResult(structuredGeometry);
+    {
+        ScopedTestTimer timer("SolveToGeometry");
+        McSolverEngineGeometryResult* structuredGeometry = nullptr;
+        const auto structuredGeometryCode =
+            McSolverEngine_SolveToGeometry(documentXml.c_str(), "Sketch", &structuredGeometry);
+        if (!expect(
+                structuredGeometryCode == MCSOLVERENGINE_RESULT_SUCCESS,
+                "Expected structured geometry C API call to succeed."
+            )) {
+            return EXIT_FAILURE;
+        }
+        if (!expect(structuredGeometry != nullptr, "Expected structured geometry result pointer.")) {
+            return EXIT_FAILURE;
+        }
+        if (!expect(
+                structuredGeometry->sketchName != nullptr && std::string(structuredGeometry->sketchName) == "Sketch",
+                "Expected structured geometry result to expose sketch name."
+            )) {
+            McSolverEngine_FreeGeometryResult(structuredGeometry);
+            return EXIT_FAILURE;
+        }
+        if (!expect(
+                structuredGeometry->importStatus != nullptr && std::string(structuredGeometry->importStatus) == "Success",
+                "Expected structured geometry result to expose import status."
+            )) {
+            McSolverEngine_FreeGeometryResult(structuredGeometry);
+            return EXIT_FAILURE;
+        }
+        if (!expect(
+                structuredGeometry->solveStatus != nullptr && std::string(structuredGeometry->solveStatus) == "Success",
+                "Expected structured geometry result to expose solve status."
+            )) {
+            McSolverEngine_FreeGeometryResult(structuredGeometry);
+            return EXIT_FAILURE;
+        }
+        if (!expect(
+                structuredGeometry->exportKind != nullptr && std::string(structuredGeometry->exportKind) == "Geometry",
+                "Expected structured geometry result to expose export kind."
+            )) {
+            McSolverEngine_FreeGeometryResult(structuredGeometry);
+            return EXIT_FAILURE;
+        }
+        if (!expect(
+                structuredGeometry->exportStatus != nullptr && std::string(structuredGeometry->exportStatus) == "Success",
+                "Expected structured geometry result to expose export status."
+            )) {
+            McSolverEngine_FreeGeometryResult(structuredGeometry);
+            return EXIT_FAILURE;
+        }
+        if (!expect(
+                structuredGeometry->geometryCount == 8,
+                "Expected structured geometry result to contain 8 geometries."
+            )) {
+            McSolverEngine_FreeGeometryResult(structuredGeometry);
+            return EXIT_FAILURE;
+        }
 
-    McSolverEngineBRepResult* brepResult = nullptr;
-    const auto brepCode = McSolverEngine_SolveToBRep(documentXml.c_str(), "Sketch", &brepResult);
-    const std::string brepPayload = brepResult && brepResult->brepUtf8 ? brepResult->brepUtf8 : "";
-    McSolverEngine_FreeBRepResult(brepResult);
+        bool hasLine = false;
+        bool hasArc = false;
+        for (int i = 0; i < structuredGeometry->geometryCount; ++i) {
+            const auto& record = structuredGeometry->geometries[i];
+            hasLine = hasLine || record.kind == MCSOLVERENGINE_GEOMETRY_LINE_SEGMENT;
+            hasArc = hasArc || record.kind == MCSOLVERENGINE_GEOMETRY_ARC;
+        }
+        if (!expect(hasLine, "Expected structured geometry result to contain a line segment.")) {
+            McSolverEngine_FreeGeometryResult(structuredGeometry);
+            return EXIT_FAILURE;
+        }
+        if (!expect(hasArc, "Expected structured geometry result to contain an arc.")) {
+            McSolverEngine_FreeGeometryResult(structuredGeometry);
+            return EXIT_FAILURE;
+        }
+        McSolverEngine_FreeGeometryResult(structuredGeometry);
+    }
+
+    {
+        ScopedTestTimer timer("SolveToBRep");
+        McSolverEngineBRepResult* brepResult = nullptr;
+        const auto brepCode = McSolverEngine_SolveToBRep(documentXml.c_str(), "Sketch", &brepResult);
+        const std::string brepPayload = brepResult && brepResult->brepUtf8 ? brepResult->brepUtf8 : "";
+        McSolverEngine_FreeBRepResult(brepResult);
 
 #if MCSOLVERENGINE_WITH_OCCT
-    if (!expect(brepCode == MCSOLVERENGINE_RESULT_SUCCESS, "Expected BRep C API call to succeed.")) {
-        return EXIT_FAILURE;
-    }
-    if (!expect(
-            contains(brepPayload, "CASCADE Topology V1"),
-            "Expected BRep payload to contain serialized BREP text."
-        )) {
-        return EXIT_FAILURE;
-    }
+        if (!expect(brepCode == MCSOLVERENGINE_RESULT_SUCCESS, "Expected BRep C API call to succeed.")) {
+            return EXIT_FAILURE;
+        }
+        if (!expect(
+                contains(brepPayload, "CASCADE Topology V1"),
+                "Expected BRep payload to contain serialized BREP text."
+            )) {
+            return EXIT_FAILURE;
+        }
 #else
-    if (!expect(
-            brepCode == MCSOLVERENGINE_RESULT_OPEN_CASCADE_UNAVAILABLE,
-            "Expected BRep C API call to report missing OpenCascade."
-        )) {
-        return EXIT_FAILURE;
-    }
-    if (!expect(brepPayload.empty(), "Expected no-OCCT BRep payload to be empty.")) {
-        return EXIT_FAILURE;
-    }
+        if (!expect(
+                brepCode == MCSOLVERENGINE_RESULT_OPEN_CASCADE_UNAVAILABLE,
+                "Expected BRep C API call to report missing OpenCascade."
+            )) {
+            return EXIT_FAILURE;
+        }
+        if (!expect(brepPayload.empty(), "Expected no-OCCT BRep payload to be empty.")) {
+            return EXIT_FAILURE;
+        }
 #endif
+    }
 
     constexpr std::string_view parameterizedDocumentXml = R"(<?xml version="1.0" encoding="UTF-8"?>
 <Document>
@@ -215,80 +253,87 @@ int main()
 
     const char* parameterKeys[] = {"VarSet.Width"};
     const char* parameterValues[] = {"8.5"};
-    McSolverEngineGeometryResult* parameterizedGeometry = nullptr;
-    const auto parameterizedGeometryCode = McSolverEngine_SolveToGeometryWithParameters(
-        parameterizedDocumentXml.data(),
-        "Sketch",
-        parameterKeys,
-        parameterValues,
-        1,
-        &parameterizedGeometry
-    );
-    if (!expect(
-            parameterizedGeometryCode == MCSOLVERENGINE_RESULT_SUCCESS,
-            "Expected parameterized Geometry C API call to succeed."
-        )) {
-        return EXIT_FAILURE;
-    }
-    if (!expect(
-            parameterizedGeometry != nullptr && parameterizedGeometry->geometryCount == 1,
-            "Expected parameterized Geometry result to contain one line."
-        )) {
+    {
+        ScopedTestTimer timer("SolveToGeometryWithParameters");
+        McSolverEngineGeometryResult* parameterizedGeometry = nullptr;
+        const auto parameterizedGeometryCode = McSolverEngine_SolveToGeometryWithParameters(
+            parameterizedDocumentXml.data(),
+            "Sketch",
+            parameterKeys,
+            parameterValues,
+            1,
+            &parameterizedGeometry
+        );
+        if (!expect(
+                parameterizedGeometryCode == MCSOLVERENGINE_RESULT_SUCCESS,
+                "Expected parameterized Geometry C API call to succeed."
+            )) {
+            return EXIT_FAILURE;
+        }
+        if (!expect(
+                parameterizedGeometry != nullptr && parameterizedGeometry->geometryCount == 1,
+                "Expected parameterized Geometry result to contain one line."
+            )) {
+            McSolverEngine_FreeGeometryResult(parameterizedGeometry);
+            return EXIT_FAILURE;
+        }
+        if (!expect(
+                parameterizedGeometry->geometries[0].kind == MCSOLVERENGINE_GEOMETRY_LINE_SEGMENT,
+                "Expected parameterized Geometry result to expose a line segment."
+            )) {
+            McSolverEngine_FreeGeometryResult(parameterizedGeometry);
+            return EXIT_FAILURE;
+        }
+        if (!expect(
+                std::abs(lineLength(parameterizedGeometry->geometries[0]) - 8.5) <= 1e-9,
+                "Expected parameterized Geometry result to apply the overridden length."
+            )) {
+            McSolverEngine_FreeGeometryResult(parameterizedGeometry);
+            return EXIT_FAILURE;
+        }
         McSolverEngine_FreeGeometryResult(parameterizedGeometry);
-        return EXIT_FAILURE;
     }
-    if (!expect(
-            parameterizedGeometry->geometries[0].kind == MCSOLVERENGINE_GEOMETRY_LINE_SEGMENT,
-            "Expected parameterized Geometry result to expose a line segment."
-        )) {
-        McSolverEngine_FreeGeometryResult(parameterizedGeometry);
-        return EXIT_FAILURE;
-    }
-    if (!expect(
-            std::abs(lineLength(parameterizedGeometry->geometries[0]) - 8.5) <= 1e-9,
-            "Expected parameterized Geometry result to apply the overridden length."
-        )) {
-        McSolverEngine_FreeGeometryResult(parameterizedGeometry);
-        return EXIT_FAILURE;
-    }
-    McSolverEngine_FreeGeometryResult(parameterizedGeometry);
 
-    McSolverEngineBRepResult* parameterizedBrepResult = nullptr;
-    const auto parameterizedBrepCode = McSolverEngine_SolveToBRepWithParameters(
-        parameterizedDocumentXml.data(),
-        "Sketch",
-        parameterKeys,
-        parameterValues,
-        1,
-        &parameterizedBrepResult
-    );
-    const std::string parameterizedBrepPayload = parameterizedBrepResult && parameterizedBrepResult->brepUtf8 ? parameterizedBrepResult->brepUtf8 : "";
-    McSolverEngine_FreeBRepResult(parameterizedBrepResult);
+    {
+        ScopedTestTimer timer("SolveToBRepWithParameters");
+        McSolverEngineBRepResult* parameterizedBrepResult = nullptr;
+        const auto parameterizedBrepCode = McSolverEngine_SolveToBRepWithParameters(
+            parameterizedDocumentXml.data(),
+            "Sketch",
+            parameterKeys,
+            parameterValues,
+            1,
+            &parameterizedBrepResult
+        );
+        const std::string parameterizedBrepPayload =
+            parameterizedBrepResult && parameterizedBrepResult->brepUtf8 ? parameterizedBrepResult->brepUtf8 : "";
+        McSolverEngine_FreeBRepResult(parameterizedBrepResult);
 
 #if MCSOLVERENGINE_WITH_OCCT
-    if (!expect(
-            parameterizedBrepCode == MCSOLVERENGINE_RESULT_SUCCESS,
-            "Expected parameterized BRep C API call to succeed."
-        )) {
-        return EXIT_FAILURE;
-    }
-    if (!expect(
-            contains(parameterizedBrepPayload, "CASCADE Topology V1"),
-            "Expected parameterized BRep payload to contain serialized BREP text."
-        )) {
-        return EXIT_FAILURE;
-    }
+        if (!expect(
+                parameterizedBrepCode == MCSOLVERENGINE_RESULT_SUCCESS,
+                "Expected parameterized BRep C API call to succeed."
+            )) {
+            return EXIT_FAILURE;
+        }
+        if (!expect(
+                contains(parameterizedBrepPayload, "CASCADE Topology V1"),
+                "Expected parameterized BRep payload to contain serialized BREP text."
+            )) {
+            return EXIT_FAILURE;
+        }
 #else
-    if (!expect(
-            parameterizedBrepCode == MCSOLVERENGINE_RESULT_OPEN_CASCADE_UNAVAILABLE,
-            "Expected parameterized BRep C API call to report missing OpenCascade."
-        )) {
-        return EXIT_FAILURE;
-    }
-    if (!expect(parameterizedBrepPayload.empty(), "Expected no-OCCT parameterized BRep payload to be empty.")) {
-        return EXIT_FAILURE;
-    }
+        if (!expect(
+                parameterizedBrepCode == MCSOLVERENGINE_RESULT_OPEN_CASCADE_UNAVAILABLE,
+                "Expected parameterized BRep C API call to report missing OpenCascade."
+            )) {
+            return EXIT_FAILURE;
+        }
+        if (!expect(parameterizedBrepPayload.empty(), "Expected no-OCCT parameterized BRep payload to be empty.")) {
+            return EXIT_FAILURE;
+        }
 #endif
+    }
 
     constexpr std::string_view parameterizedAngleDocumentXml = R"(<?xml version="1.0" encoding="UTF-8"?>
 <Document>
@@ -335,86 +380,95 @@ int main()
     </ObjectData>
 </Document>)";
 
-    McSolverEngineGeometryResult* defaultAngleGeometry = nullptr;
-    const auto defaultAngleGeometryCode =
-        McSolverEngine_SolveToGeometry(parameterizedAngleDocumentXml.data(), "Sketch", &defaultAngleGeometry);
-    if (!expect(
-            defaultAngleGeometryCode == MCSOLVERENGINE_RESULT_SUCCESS,
-            "Expected default angle Geometry C API call to succeed."
-        )) {
-        return EXIT_FAILURE;
-    }
-    if (!expect(
-            defaultAngleGeometry != nullptr && defaultAngleGeometry->geometryCount == 1,
-            "Expected default angle Geometry result to contain one line."
-        )) {
+    {
+        ScopedTestTimer timer("SolveToGeometry angle default");
+        McSolverEngineGeometryResult* defaultAngleGeometry = nullptr;
+        const auto defaultAngleGeometryCode =
+            McSolverEngine_SolveToGeometry(parameterizedAngleDocumentXml.data(), "Sketch", &defaultAngleGeometry);
+        if (!expect(
+                defaultAngleGeometryCode == MCSOLVERENGINE_RESULT_SUCCESS,
+                "Expected default angle Geometry C API call to succeed."
+            )) {
+            return EXIT_FAILURE;
+        }
+        if (!expect(
+                defaultAngleGeometry != nullptr && defaultAngleGeometry->geometryCount == 1,
+                "Expected default angle Geometry result to contain one line."
+            )) {
+            McSolverEngine_FreeGeometryResult(defaultAngleGeometry);
+            return EXIT_FAILURE;
+        }
+        if (!expect(
+                std::abs(lineLength(defaultAngleGeometry->geometries[0]) - 10.0) <= 1e-9
+                    && std::abs(lineAngleDegrees(defaultAngleGeometry->geometries[0]) - 90.0) <= 1e-9,
+                "Expected default angle Geometry result to convert degree parameters before solving."
+            )) {
+            McSolverEngine_FreeGeometryResult(defaultAngleGeometry);
+            return EXIT_FAILURE;
+        }
         McSolverEngine_FreeGeometryResult(defaultAngleGeometry);
-        return EXIT_FAILURE;
     }
-    if (!expect(
-            std::abs(lineLength(defaultAngleGeometry->geometries[0]) - 10.0) <= 1e-9
-                && std::abs(lineAngleDegrees(defaultAngleGeometry->geometries[0]) - 90.0) <= 1e-9,
-            "Expected default angle Geometry result to convert degree parameters before solving."
-        )) {
-        McSolverEngine_FreeGeometryResult(defaultAngleGeometry);
-        return EXIT_FAILURE;
-    }
-    McSolverEngine_FreeGeometryResult(defaultAngleGeometry);
 
     const char* angleParameterKeys[] = {"Angle"};
     const char* angleParameterValues[] = {"45"};
-    McSolverEngineGeometryResult* overriddenAngleGeometry = nullptr;
-    const auto overriddenAngleGeometryCode = McSolverEngine_SolveToGeometryWithParameters(
-        parameterizedAngleDocumentXml.data(),
-        "Sketch",
-        angleParameterKeys,
-        angleParameterValues,
-        1,
-        &overriddenAngleGeometry
-    );
-    if (!expect(
-            overriddenAngleGeometryCode == MCSOLVERENGINE_RESULT_SUCCESS,
-            "Expected overridden angle Geometry C API call to succeed."
-        )) {
-        return EXIT_FAILURE;
-    }
-    if (!expect(
-            overriddenAngleGeometry != nullptr
-                && std::abs(lineLength(overriddenAngleGeometry->geometries[0]) - 10.0) <= 1e-9
-                && std::abs(lineAngleDegrees(overriddenAngleGeometry->geometries[0]) - 45.0) <= 1e-9,
-            "Expected overridden angle Geometry result to interpret API values as degrees."
-        )) {
+    {
+        ScopedTestTimer timer("SolveToGeometryWithParameters angle override");
+        McSolverEngineGeometryResult* overriddenAngleGeometry = nullptr;
+        const auto overriddenAngleGeometryCode = McSolverEngine_SolveToGeometryWithParameters(
+            parameterizedAngleDocumentXml.data(),
+            "Sketch",
+            angleParameterKeys,
+            angleParameterValues,
+            1,
+            &overriddenAngleGeometry
+        );
+        if (!expect(
+                overriddenAngleGeometryCode == MCSOLVERENGINE_RESULT_SUCCESS,
+                "Expected overridden angle Geometry C API call to succeed."
+            )) {
+            return EXIT_FAILURE;
+        }
+        if (!expect(
+                overriddenAngleGeometry != nullptr
+                    && std::abs(lineLength(overriddenAngleGeometry->geometries[0]) - 10.0) <= 1e-9
+                    && std::abs(lineAngleDegrees(overriddenAngleGeometry->geometries[0]) - 45.0) <= 1e-9,
+                "Expected overridden angle Geometry result to interpret API values as degrees."
+            )) {
+            McSolverEngine_FreeGeometryResult(overriddenAngleGeometry);
+            return EXIT_FAILURE;
+        }
         McSolverEngine_FreeGeometryResult(overriddenAngleGeometry);
-        return EXIT_FAILURE;
     }
-    McSolverEngine_FreeGeometryResult(overriddenAngleGeometry);
 
     const char* invalidAngleParameterValues[] = {"45 deg"};
-    McSolverEngineGeometryResult* invalidAngleGeometry = nullptr;
-    const auto invalidAngleGeometryCode = McSolverEngine_SolveToGeometryWithParameters(
-        parameterizedAngleDocumentXml.data(),
-        "Sketch",
-        angleParameterKeys,
-        invalidAngleParameterValues,
-        1,
-        &invalidAngleGeometry
-    );
-    if (!expect(
-            invalidAngleGeometryCode == MCSOLVERENGINE_RESULT_IMPORT_FAILED,
-            "Expected non-numeric API parameter values to fail C API import."
-        )) {
-        return EXIT_FAILURE;
-    }
-    if (!expect(
-            invalidAngleGeometry != nullptr
-                && invalidAngleGeometry->importStatus != nullptr
-                && std::string(invalidAngleGeometry->importStatus) == "Failed",
-            "Expected invalid parameter C API result metadata to expose failed import status."
-        )) {
+    {
+        ScopedTestTimer timer("SolveToGeometryWithParameters invalid angle");
+        McSolverEngineGeometryResult* invalidAngleGeometry = nullptr;
+        const auto invalidAngleGeometryCode = McSolverEngine_SolveToGeometryWithParameters(
+            parameterizedAngleDocumentXml.data(),
+            "Sketch",
+            angleParameterKeys,
+            invalidAngleParameterValues,
+            1,
+            &invalidAngleGeometry
+        );
+        if (!expect(
+                invalidAngleGeometryCode == MCSOLVERENGINE_RESULT_IMPORT_FAILED,
+                "Expected non-numeric API parameter values to fail C API import."
+            )) {
+            return EXIT_FAILURE;
+        }
+        if (!expect(
+                invalidAngleGeometry != nullptr
+                    && invalidAngleGeometry->importStatus != nullptr
+                    && std::string(invalidAngleGeometry->importStatus) == "Failed",
+                "Expected invalid parameter C API result metadata to expose failed import status."
+            )) {
+            McSolverEngine_FreeGeometryResult(invalidAngleGeometry);
+            return EXIT_FAILURE;
+        }
         McSolverEngine_FreeGeometryResult(invalidAngleGeometry);
-        return EXIT_FAILURE;
     }
-    McSolverEngine_FreeGeometryResult(invalidAngleGeometry);
 
     return EXIT_SUCCESS;
 }

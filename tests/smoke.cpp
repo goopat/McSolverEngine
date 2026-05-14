@@ -1,6 +1,7 @@
-﻿#include <cmath>
 #include <algorithm>
 #include <array>
+#include <chrono>
+#include <cmath>
 #include <cstdlib>
 #include <fstream>
 #include <iostream>
@@ -145,6 +146,15 @@ McSolverEngine::Compat::Point2 bsplineTangentDirection(
 }
 
 #if MCSOLVERENGINE_WITH_OCCT
+
+std::string fileNameFromPath(std::string_view path)
+{
+    const std::size_t separator = path.find_last_of("/\\");
+    if (separator == std::string_view::npos) {
+        return std::string(path);
+    }
+    return std::string(path.substr(separator + 1));
+}
 
 std::string formatDouble(double value)
 {
@@ -1569,6 +1579,7 @@ int main()
                                            bool expectIdentityLocation,
                                            bool allowPartialImport,
                                            const McSolverEngine::ParameterMap& parameters) -> bool {
+        const auto startedAt = std::chrono::steady_clock::now();
         auto importedSample = McSolverEngine::DocumentXml::importSketchFromDocumentXmlFile(
             xmlPath,
             parameters,
@@ -1641,6 +1652,10 @@ int main()
             std::cerr << "Generated BREP text does not match expected validation data for " << label << ".\n";
             return false;
         }
+
+        const auto elapsed =
+            std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - startedAt).count();
+        std::cout << "[smoke] " << label << " [" << fileNameFromPath(actualPath) << "]: " << elapsed << " ms\n";
 
         return true;
     };
