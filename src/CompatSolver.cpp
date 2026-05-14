@@ -1545,7 +1545,6 @@ void addBSplineGeometry(SolveContext& context, const BSplineGeometry& geometry, 
     for (const auto& knot : geometry.knots) {
         auto* value = context.ownParameter(knot.value);
         // Knots are not solver parameters (aligned with FreeCAD).
-        // storeGeometryParameter(context, geometryIndex, value, fixed);
         knots.push_back(value);
     }
 
@@ -2600,11 +2599,6 @@ void updateSolvedGeometry(SketchModel& model, const SolveContext& context)
                 // Knot write-back disabled: knots are not solver parameters
                 // (aligned with FreeCAD, which has the same code commented out
                 // with note "when/if b-spline gets its full implementation in the solver").
-                /*for (std::size_t knotIndex = 0; knotIndex < spline.knots.size()
-                                                 && knotIndex < gcsSpline.knots.size();
-                     ++knotIndex) {
-                    spline.knots[knotIndex].value = *gcsSpline.knots[knotIndex];
-                }*/
                 break;
             }
         }
@@ -2706,19 +2700,10 @@ SolveResult solveSketch(SketchModel& model, const McSolverEngine::ParameterMap& 
         gcsStatus = context.system.solve(true, GCS::BFGS);
     }
     if (gcsStatus != GCS::Success) {
-        std::vector<double> initParameterValues;
-        initParameterValues.reserve(context.parameters.size());
         for (auto* p : context.parameters) {
-            initParameterValues.push_back(*p);
-        }
-
-        for (std::size_t i = 0; i < context.parameters.size(); ++i) {
-            double* initParam = context.ownParameter(initParameterValues[i]);
+            double* initParam = context.ownParameter(*p);
             context.system.addConstraintEqual(
-                context.parameters[i],
-                initParam,
-                GCS::DefaultTemporaryConstraint
-            );
+                p, initParam, GCS::DefaultTemporaryConstraint);
         }
 
         context.system.initSolution();

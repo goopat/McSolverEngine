@@ -75,15 +75,6 @@ namespace
     return std::sqrt(std::max(0.0, dx * dx + dy * dy - minorRadius * minorRadius));
 }
 
-[[nodiscard]] TopoDS_Edge checkedEdge(BRepBuilderAPI_MakeEdge& builder, const char* desc, std::string& error)
-{
-    if (!builder.IsDone()) {
-        error = std::string("Failed to build ") + desc + " edge.";
-        return {};
-    }
-    return builder.Edge();
-}
-
 [[nodiscard]] bool appendGeometry(
     const Compat::Geometry& geometry,
     std::list<TopoDS_Edge>& edges,
