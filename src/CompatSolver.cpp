@@ -1287,7 +1287,9 @@ void addArcGeometry(SolveContext& context, const ArcGeometry& geometry, bool fix
         .midPointId = centerPointId,
     });
 
-    context.system.addConstraintArcRules(context.arcs.back(), nextTag(context));
+    if (!fixed) {
+        context.system.addConstraintArcRules(context.arcs.back(), nextTag(context));
+    }
 }
 
 void addEllipseGeometry(SolveContext& context, const EllipseGeometry& geometry, bool fixed, int geometryIndex)
@@ -1396,7 +1398,9 @@ void addArcOfEllipseGeometry(SolveContext& context, const ArcOfEllipseGeometry& 
         .midPointId = centerPointId,
     });
 
-    context.system.addConstraintArcOfEllipseRules(context.arcOfEllipses.back(), nextTag(context));
+    if (!fixed) {
+        context.system.addConstraintArcOfEllipseRules(context.arcOfEllipses.back(), nextTag(context));
+    }
 }
 
 void addArcOfHyperbolaGeometry(SolveContext& context, const ArcOfHyperbolaGeometry& geometry, bool fixed, int geometryIndex)
@@ -1458,7 +1462,9 @@ void addArcOfHyperbolaGeometry(SolveContext& context, const ArcOfHyperbolaGeomet
         .midPointId = centerPointId,
     });
 
-    context.system.addConstraintArcOfHyperbolaRules(context.arcOfHyperbolas.back(), nextTag(context));
+    if (!fixed) {
+        context.system.addConstraintArcOfHyperbolaRules(context.arcOfHyperbolas.back(), nextTag(context));
+    }
 }
 
 void addArcOfParabolaGeometry(SolveContext& context, const ArcOfParabolaGeometry& geometry, bool fixed, int geometryIndex)
@@ -1517,7 +1523,9 @@ void addArcOfParabolaGeometry(SolveContext& context, const ArcOfParabolaGeometry
         .midPointId = vertexPointId,
     });
 
-    context.system.addConstraintArcOfParabolaRules(context.arcOfParabolas.back(), nextTag(context));
+    if (!fixed) {
+        context.system.addConstraintArcOfParabolaRules(context.arcOfParabolas.back(), nextTag(context));
+    }
 }
 
 void addBSplineGeometry(SolveContext& context, const BSplineGeometry& geometry, bool fixed, int geometryIndex)
@@ -1534,8 +1542,37 @@ void addBSplineGeometry(SolveContext& context, const BSplineGeometry& geometry, 
 
     std::vector<double*> weights;
     weights.reserve(geometry.poles.size());
+
+    // OCC weight normalization hack (mirrors FreeCAD Sketch.cpp:1437-1464).
+    // When exactly one pole weight is 1.0 and the rest differ, OCC's polynomial->rational
+    // transition resets the unconstrained pole's weight to 1.0 after the first solve, which
+    // visually collapses that pole to a 1 mm circle. Pre-perturb the lone 1.0 to (lastnotone * 0.99)
+    // so the solver sees a fully rational set.
+    std::vector<double> adjustedWeights;
+    adjustedWeights.reserve(geometry.poles.size());
     for (const auto& pole : geometry.poles) {
-        auto* weight = context.ownParameter(pole.weight);
+        adjustedWeights.push_back(pole.weight);
+    }
+    {
+        int lastOneIndex = -1;
+        int countOnes = 0;
+        double lastNotOne = 1.0;
+        for (std::size_t i = 0; i < adjustedWeights.size(); ++i) {
+            if (adjustedWeights[i] != 1.0) {
+                lastNotOne = adjustedWeights[i];
+            }
+            else {
+                lastOneIndex = static_cast<int>(i);
+                ++countOnes;
+            }
+        }
+        if (countOnes == 1 && lastOneIndex >= 0) {
+            adjustedWeights[static_cast<std::size_t>(lastOneIndex)] = lastNotOne * 0.99;
+        }
+    }
+
+    for (std::size_t i = 0; i < geometry.poles.size(); ++i) {
+        auto* weight = context.ownParameter(adjustedWeights[i]);
         storeGeometryParameter(context, geometryIndex, weight, fixed);
         weights.push_back(weight);
     }

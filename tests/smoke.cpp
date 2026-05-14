@@ -464,6 +464,70 @@ int main()
         return 1;
     }
 
+    {
+        // Regression: a fixed (external) arc must not emit ArcRules, mirroring
+        // FreeCAD Sketch.cpp:940 where addConstraintArcRules is guarded by !fixed.
+        McSolverEngine::Compat::SketchModel fixedArcSketch;
+        fixedArcSketch.addArc(
+            {0.0, 0.0},
+            1.0,
+            0.0,
+            std::numbers::pi / 2.0,
+            /*construction*/ false,
+            /*external*/ true,
+            /*blocked*/ false
+        );
+        int activeLine = fixedArcSketch.addLineSegment({2.0, 2.0}, {3.0, 2.0});
+        fixedArcSketch.addConstraint({
+            .kind = McSolverEngine::Compat::ConstraintKind::Horizontal,
+            .first = {.geometryIndex = activeLine, .role = McSolverEngine::Compat::PointRole::None},
+        });
+
+        const auto fixedArcSolve = McSolverEngine::Compat::solveSketch(fixedArcSketch);
+        if (!fixedArcSolve.solved()) {
+            std::cerr << "Expected the sketch with a fixed external arc to solve successfully.\n";
+            return 1;
+        }
+        if (!fixedArcSolve.redundant.empty() || !fixedArcSolve.conflicting.empty()) {
+            std::cerr << "Fixed external arc must not produce redundant/conflicting ArcRules constraints.\n";
+            return 1;
+        }
+    }
+
+    {
+        // Regression: replicate FreeCAD's OCC weight hack (Sketch.cpp:1437-1464). When a rational
+        // B-spline has exactly one pole weight equal to 1.0, our solver must perturb it to
+        // lastnotone * 0.99 before handing it to GCS, otherwise OCC's polynomial-to-rational
+        // transition visually collapses the unconstrained pole to a 1 mm circle.
+        McSolverEngine::Compat::SketchModel bsplineSketch;
+        std::vector<McSolverEngine::Compat::BSplinePole> poles {
+            {{0.0, 0.0}, 2.0},
+            {{1.0, 1.0}, 1.0},
+            {{2.0, 0.0}, 2.0},
+        };
+        std::vector<McSolverEngine::Compat::BSplineKnot> knots {
+            {0.0, 3},
+            {1.0, 3},
+        };
+        bsplineSketch.addBSpline(poles, knots, /*degree*/ 2, /*periodic*/ false);
+        const auto bsplineSolve = McSolverEngine::Compat::solveSketch(bsplineSketch);
+        if (!bsplineSolve.solved()) {
+            std::cerr << "Expected the rational B-spline sketch to solve successfully.\n";
+            return 1;
+        }
+        const auto& adjustedSpline = std::get<McSolverEngine::Compat::BSplineGeometry>(
+            bsplineSketch.geometries().front().data
+        );
+        if (adjustedSpline.poles.size() != 3) {
+            std::cerr << "Unexpected B-spline pole count after solve.\n";
+            return 1;
+        }
+        if (std::abs(adjustedSpline.poles[1].weight - 1.98) > 1e-9) {
+            std::cerr << "Expected the lone unit weight to be normalized to lastnotone * 0.99.\n";
+            return 1;
+        }
+    }
+
     const auto& solvedCircle =
         std::get<McSolverEngine::Compat::CircleGeometry>(circleSketch.geometries().front().data);
     if (std::abs(solvedCircle.radius - 2.5) > 1e-8) {
@@ -575,6 +639,69 @@ int main()
     if (std::abs(importedElementOnlyLine.end.y - importedElementOnlyLine.start.y) > 1e-8
         || std::abs(lineLength(importedElementOnlyLine) - 2.0) > 1e-8) {
         std::cerr << "ElementIds-only constraints did not solve to the expected line.\n";
+        return 1;
+    }
+
+    constexpr std::string_view bsplineCountMismatchDocumentXml = R"(<?xml version="1.0" encoding="UTF-8"?>
+<Document>
+    <ObjectData Count="1">
+        <Object name="Sketch">
+            <Properties Count="1" TransientCount="0">
+                <Property name="Geometry" type="Part::PropertyGeometryList">
+                    <GeometryList count="1">
+                        <Geometry type="Part::GeomBSplineCurve" id="1" migrated="1">
+                            <BSplineCurve PolesCount="9" KnotsCount="2" Degree="2" IsPeriodic="0">
+                                <Pole X="0.0" Y="0.0" Weight="1.0"/>
+                                <Pole X="1.0" Y="1.0" Weight="1.0"/>
+                                <Pole X="2.0" Y="0.0" Weight="1.0"/>
+                                <Knot Value="0.0" Mult="3"/>
+                                <Knot Value="1.0" Mult="3"/>
+                            </BSplineCurve>
+                            <Construction value="0"/>
+                        </Geometry>
+                    </GeometryList>
+                </Property>
+            </Properties>
+        </Object>
+    </ObjectData>
+</Document>)";
+
+    auto importedCountMismatch =
+        McSolverEngine::DocumentXml::importSketchFromDocumentXml(bsplineCountMismatchDocumentXml, "Sketch");
+    if (importedCountMismatch.imported()
+        || importedCountMismatch.status == McSolverEngine::DocumentXml::ImportStatus::Success) {
+        std::cerr << "Expected BSpline PolesCount/KnotsCount mismatch to fail import.\n";
+        return 1;
+    }
+
+    constexpr std::string_view paddedConstraintDocumentXml = R"(<?xml version="1.0" encoding="UTF-8"?>
+<Document>
+    <ObjectData Count="1">
+        <Object name="Sketch">
+            <Properties Count="2" TransientCount="0">
+                <Property name="Constraints" type="Sketcher::PropertyConstraintList">
+                    <ConstraintList count="1">
+                        <Constrain Name="" Type="2" Value="0.0" LabelDistance="10.0" LabelPosition="0.0" IsDriving="1" IsInVirtualSpace="0" IsActive="0" />
+                    </ConstraintList>
+                </Property>
+                <Property name="Geometry" type="Part::PropertyGeometryList">
+                    <GeometryList count="1">
+                        <Geometry type="Part::GeomLineSegment" id="1" migrated="1">
+                            <LineSegment StartX="0.0" StartY="0.0" StartZ="0.0" EndX="2.0" EndY="0.0" EndZ="0.0"/>
+                            <Construction value="0"/>
+                        </Geometry>
+                    </GeometryList>
+                </Property>
+            </Properties>
+        </Object>
+    </ObjectData>
+</Document>)";
+
+    auto importedPaddedConstraint =
+        McSolverEngine::DocumentXml::importSketchFromDocumentXml(paddedConstraintDocumentXml, "Sketch");
+    if (!importedPaddedConstraint.imported()
+        || importedPaddedConstraint.status != McSolverEngine::DocumentXml::ImportStatus::Success) {
+        std::cerr << "Expected an inactive constraint with no element attributes to import successfully (GeoUndef padding).\n";
         return 1;
     }
 

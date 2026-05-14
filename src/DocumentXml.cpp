@@ -995,6 +995,8 @@ void applyConstraintExpressionBindings(
         const auto splineHeader = geometryBlock.substr(splineTag, splineTagEnd - splineTag + 1);
         const auto degree = extractIntAttribute(splineHeader, "Degree");
         const auto isPeriodic = extractBoolAttribute(splineHeader, "IsPeriodic", false);
+        const auto declaredPolesCount = extractIntAttribute(splineHeader, "PolesCount");
+        const auto declaredKnotsCount = extractIntAttribute(splineHeader, "KnotsCount");
         if (!degree) {
             error = "BSpline geometry missing Degree attribute.";
             return false;
@@ -1049,6 +1051,17 @@ void applyConstraintExpressionBindings(
 
         if (poles.empty() || knots.empty()) {
             error = "BSpline geometry must contain poles and knots.";
+            return false;
+        }
+
+        // Mirrors FreeCAD GeomBSplineCurve::Restore (Geometry.cpp:2084-2115), which sizes
+        // arrays from PolesCount/KnotsCount. A mismatch indicates a malformed document.
+        if (declaredPolesCount && static_cast<std::size_t>(*declaredPolesCount) != poles.size()) {
+            error = "BSpline PolesCount attribute does not match the number of <Pole/> entries.";
+            return false;
+        }
+        if (declaredKnotsCount && static_cast<std::size_t>(*declaredKnotsCount) != knots.size()) {
+            error = "BSpline KnotsCount attribute does not match the number of <Knot/> entries.";
             return false;
         }
 
@@ -1226,9 +1239,11 @@ void applyConstraintExpressionBindings(
         }
     }
 
-    if (!hasParsedElements) {
-        return std::nullopt;
-    }
+    // FreeCAD's Constraint::Restore() (see Constraint.cpp:280-283) silently pads missing
+    // elements to 3 slots with GeoUndef instead of failing import. Mirror that here: the
+    // default geoIds/posIds are already initialized to GeoUndef/0, so we simply accept the
+    // constraint even when no element attributes are present.
+    (void)hasParsedElements;
 
     return RawConstraint {
         .name = name ? unescapeXmlAttribute(*name) : std::string {},
