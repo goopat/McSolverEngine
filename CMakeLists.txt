@@ -175,6 +175,7 @@ set(MCSOLVERENGINE_CORE_SOURCES
     src/DocumentXml.cpp
     src/Engine.cpp
     src/GeometryExport.cpp
+    src/VarSetExpressionEngine.cpp
     src/Version.cpp
     src/planegcs/Constraints.cpp
     src/planegcs/GCS.cpp

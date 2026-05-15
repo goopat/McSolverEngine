@@ -2325,7 +2325,7 @@ int main()
         McSolverEngine::Compat::SketchModel parabolaModel;
         parabolaModel.addArcOfParabola(
             {0.0, 0.0},  // vertex
-            {0.0, 2.0},  // focus1 → focal=2
+            {0.0, 2.0},  // focus1 -> focal=2
             -4.0,        // startAngle (u-parameter, not geometric angle)
             4.0          // endAngle (u-parameter)
         );
