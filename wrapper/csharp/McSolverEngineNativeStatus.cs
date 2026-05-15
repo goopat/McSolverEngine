@@ -10,5 +10,6 @@ public enum McSolverEngineNativeStatus
     GeometryExportFailed = 5,
     BRepExportFailed = 6,
     OpenCascadeUnavailable = 7,
-    OutOfMemory = 8
+    OutOfMemory = 8,
+    VarSetExpressionUnsupportedSubset = 9
 }
