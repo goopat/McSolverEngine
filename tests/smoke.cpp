@@ -1394,7 +1394,6 @@ int main()
 
     const std::vector<std::string_view> unsupportedUnitExpressions {
         "1 kg",
-        "(1 mm) * (2 cm)",
         "(1 mm) ^ 2",
         "sqrt(1 mm)",
         "parsequant(1)",
@@ -2047,6 +2046,9 @@ int main()
             || (allowPartialImport && importedSample.status == McSolverEngine::DocumentXml::ImportStatus::Partial);
         if (!importedSample.imported() || !importStatusAccepted) {
             std::cerr << "Expected " << label << " to import without skipped constraints.\n";
+            for (const auto& message : importedSample.messages) {
+                std::cerr << message << "\n";
+            }
             return false;
         }
 
@@ -2192,6 +2194,35 @@ int main()
             true,
             false,
             noParameters)) {
+        return 1;
+    }
+
+    const std::string sampleV1026XmlPath = fcstdDocDir + "V102.6.xml";
+    const std::string sampleV1026ExpectedPath = fcstdDocDir + "V102.6.brp";
+    const std::string sampleV1026ActualPath = fcstdDocDir + "V102.6.solver.brp";
+    if (!verifySampleRegression(
+            sampleV1026XmlPath,
+            "Sketch",
+            sampleV1026ExpectedPath,
+            sampleV1026ActualPath,
+            "fcstdDoc/V102.6.xml / Sketch",
+            true,
+            false,
+            noParameters)) {
+        return 1;
+    }
+
+    const std::string sampleV1026_400ExpectedPath = fcstdDocDir + "V102.6_400.brp";
+    const std::string sampleV1026_400ActualPath = fcstdDocDir + "V102.6_400.solver.brp";
+    if (!verifySampleRegression(
+            sampleV1026XmlPath,
+            "Sketch",
+            sampleV1026_400ExpectedPath,
+            sampleV1026_400ActualPath,
+            "fcstdDoc/V102.6.xml / Sketch with VarSet.L1=400",
+            true,
+            false,
+            McSolverEngine::ParameterMap {{"VarSet.L1", "400"}})) {
         return 1;
     }
 

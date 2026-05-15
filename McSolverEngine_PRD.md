@@ -285,7 +285,7 @@ FreeCAD 中真正把“草图数据”翻译成 GCS 参数和约束的是：
   1. 解析 `Document.xml` 中全部 `App::VarSet` 的标量属性、`Label` 与 VarSet 自身 `ExpressionEngine`
   2. 若调用方提供 `parameters`，先应用到 VarSet 数据结构
   3. 解析 VarSet 参数表达式的引用链，按依赖顺序计算全部可计算 VarSet 参数
-  4. 草图 `ExpressionEngine` 再把最终 VarSet 数值绑定到维度约束
+  4. 草图 `ExpressionEngine` 再把最终 VarSet 数值或可在 VarSet 子集中求值的表达式绑定到维度约束
 - 对**调用方显式传入的 `parameters`**，当前 API 层要求值必须是**纯数值字符串**；不接受 `mm` / `deg` 等单位后缀
 - 对 API 参数值，当前固定约定：
   - 长度类约束（`DistanceX / DistanceY / Distance / Radius / Diameter`）按 **mm**
@@ -305,7 +305,7 @@ FreeCAD 中真正把“草图数据”翻译成 GCS 参数和约束的是：
   - 长度默认按 **mm**，并支持 `mm / cm / m / km / um / nm / in / ft`
   - 角度默认按 **degree**，并支持 `deg / degree / degrees / rad / radian / radians`
 - VarSet 表达式内部使用轻量 `QuantityValue`，只区分无单位、长度、角度；长度统一换算为 mm，角度统一换算为 degree，绑定到求解器角度约束前再换成 radian
-- 仍不实现完整 FreeCAD `Quantity / Unit` 语义；包含更复杂单位运算的值（如 `mm^2`、`kg/m^3`、`2 * mm`、`1 / mm`）不属于当前稳定支持范围
+- 仍不实现完整 FreeCAD `Quantity / Unit` 语义；仅允许内部中间值出现有限面积量以支持 `Length * Length / Length` 这类尺寸链，字面量复合单位和更复杂单位运算（如 `mm^2`、`kg/m^3`、`2 * mm`、`1 / mm`）不属于当前稳定支持范围
 
 当前 VarSet 表达式数学与有限单位子集支持：
 
@@ -315,7 +315,7 @@ FreeCAD 中真正把“草图数据”翻译成 GCS 参数和约束的是：
 | 数值字面量 | `1`, `1.25`, `.5`, `1e-3`, `10 mm`, `10mm`, `30 deg`, `pi rad` | 必须是有限 `double`；单位仅限受控长度/角度集合；`pi/e` 常量后可跟单位 |
 | 括号 | `(expr)` | 用于显式分组 |
 | 一元运算 | `+expr`, `-expr` | 与 FreeCAD 一致，优先级高于 `^` |
-| 二元算术 | `+`, `-`, `*`, `/`, `%`, `^` | `^` 按 FreeCAD grammar 为左结合；除零 / 取模零报错；单位量只支持同维度加减、与无单位标量乘除、指数 1 |
+| 二元算术 | `+`, `-`, `*`, `/`, `%`, `^` | `^` 按 FreeCAD grammar 为左结合；除零 / 取模零报错；单位量支持同维度加减、与无单位标量乘除、长度相乘得到内部面积、面积除以长度还原长度、指数 1 |
 | 常量 | `pi`, `e` | 大小写敏感；`PI` / `E` 不视为常量 |
 | 三角函数 | `sin`, `cos`, `tan`, `asin`, `acos`, `atan`, `atan2` | `sin/cos/tan` 接受无单位或角度量；反三角函数返回角度量 |
 | 双曲函数 | `sinh`, `cosh`, `tanh` | 纯数学计算 |
@@ -478,7 +478,7 @@ FreeCAD 中真正把“草图数据”翻译成 GCS 参数和约束的是：
 - 导入阶段会扫描文档中的全部 `App::VarSet`
 - 导入阶段会解析 `App::VarSet` 自身的 `ExpressionEngine`，先在 VarSet 内部完成数学表达式、有限长度/角度单位和参数引用链传递
 - 若调用方提供 `std::map<std::string, std::string>` 参数表，当前会先校验每个参数值都是纯数值，并在 VarSet 表达式求值前写入 VarSet 数据结构
-- 草图导入阶段会解析 `ExpressionEngine`，识别指向 `Constraints[index]` 的约束绑定
+- 草图导入阶段会解析 `ExpressionEngine`，识别指向 `Constraints[index]` 的约束绑定；绑定表达式既可以是直接 `VarSet.Param` 引用，也可以是当前 VarSet 子集可求值的表达式（如 `VarSet.L1 * 3`）
 - 绑定成功后，内部 `Compat::Constraint` 会保留：
   - `parameterName`
   - `parameterKey`
@@ -500,7 +500,7 @@ FreeCAD 中真正把“草图数据”翻译成 GCS 参数和约束的是：
 - 同时支持短名键（如 `Width`）与全名键（如 `VarSet.Width`）的参数覆盖，其中推荐优先使用全名键
 - 对 API `parameters`，当前会拒绝 `8.5 mm`、`45 deg` 这类带单位后缀的输入，要求调用方直接传 `8.5`、`45`
 - VarSet 参数表达式链，例如 `DoubleWidth = Base * 2`、`Width = max(DoubleWidth, <<Parameters>>.MinWidth) + Offset`
-- VarSet 有限单位表达式，例如 `1 cm + 2 mm`、`hypot(3 cm, 40 mm)`、`sin(90 deg)`、`cos(pi rad)`、`30 deg + 0.5 rad`
+- VarSet 有限单位表达式，例如 `1 cm + 2 mm`、`hypot(3 cm, 40 mm)`、`sin(90 deg)`、`cos(pi rad)`、`30 deg + 0.5 rad`、`(L1 + 1 m) * (L1 + 1 m) / 1 m`
 - FreeCAD 表达式语法一致性专项用例：`1 + 2`、`sqrt(4)`、`sqrt(2 + Var)`、`2 ^ 3 ^ 2 == 64`、`-2 ^ 2 == 4`、`sin(pi / 2)`、函数名和常量大小写敏感
 - 非 VarSet 对象引用（如 `Spreadsheet.Width`）按精简子集不支持场景报专用错误码
 
@@ -588,6 +588,8 @@ FreeCAD 中真正把“草图数据”翻译成 GCS 参数和约束的是：
 9. `fcstdDoc\V102.4.xml` -> `V102.4.brp`
 10. `fcstdDoc\V102.4.xml` + 参数覆盖 -> `V102.4.plus1.brp`
 11. `fcstdDoc\V102.5.xml` -> `V102.5.brp`
+12. `fcstdDoc\V102.6.xml` -> `V102.6.brp`
+13. `fcstdDoc\V102.6.xml` + `VarSet.L1=400` -> `V102.6_400.brp`
 12. `McSolverEngineCApiSmokeTest`：
    - 结构化 Geometry C ABI（完整过程状态）
    - 结构化 BRep C ABI（完整过程状态 + BREP 文本）

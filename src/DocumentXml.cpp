@@ -603,6 +603,24 @@ void applyConstraintExpressionBindings(
                 hadFatalBindingError = true;
                 continue;
             }
+            std::string expressionError;
+            if (const auto expressionValue =
+                    VarSetExpressions::evaluateExpressionValueForBinding(binding.expression, catalog, expressionError)) {
+                if (const auto constantValue =
+                        McSolverEngine::Detail::parseDocumentParameterValue(*expressionValue, constraint.kind)) {
+                    constraint.value = *constantValue;
+                    continue;
+                }
+            }
+            else if (!expressionError.empty()) {
+                messages.push_back(expressionError);
+                if (expressionError.find(VarSetExpressions::VarSetExpressionUnsupportedSubsetCode)
+                    != std::string::npos) {
+                    hadVarSetExpressionUnsupportedSubset = true;
+                    hadFatalBindingError = true;
+                    continue;
+                }
+            }
             if (const auto constantValue =
                     McSolverEngine::Detail::parseDocumentParameterValue(binding.expression, constraint.kind)) {
                 constraint.value = *constantValue;

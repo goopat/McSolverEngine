@@ -74,6 +74,8 @@ namespace
             return "length";
         case QuantityDimension::Angle:
             return "angle";
+        case QuantityDimension::Area:
+            return "area";
     }
     return "unknown";
 }
@@ -135,6 +137,8 @@ namespace
             return formatDouble(value.value) + " mm";
         case QuantityDimension::Angle:
             return formatDouble(value.value) + " deg";
+        case QuantityDimension::Area:
+            return formatDouble(value.value) + " mm^2";
     }
     return formatDouble(value.value);
 }
@@ -802,6 +806,9 @@ private:
 
     [[nodiscard]] std::optional<QuantityValue> multiply(const QuantityValue& lhs, const QuantityValue& rhs)
     {
+        if (lhs.dimension == QuantityDimension::Length && rhs.dimension == QuantityDimension::Length) {
+            return checked(makeQuantity(lhs.value * rhs.value, QuantityDimension::Area));
+        }
         if (lhs.dimension != QuantityDimension::Dimensionless
             && rhs.dimension != QuantityDimension::Dimensionless) {
             return fail(makeVarSetExpressionUnsupportedSubsetMessage(
@@ -813,6 +820,15 @@ private:
 
     [[nodiscard]] std::optional<QuantityValue> divide(const QuantityValue& lhs, const QuantityValue& rhs)
     {
+        if (rhs.dimension == QuantityDimension::Dimensionless) {
+            return checked(makeQuantity(lhs.value / rhs.value, lhs.dimension));
+        }
+        if (lhs.dimension == QuantityDimension::Area && rhs.dimension == QuantityDimension::Length) {
+            return checked(makeQuantity(lhs.value / rhs.value, QuantityDimension::Length));
+        }
+        if (lhs.dimension == QuantityDimension::Length && rhs.dimension == QuantityDimension::Length) {
+            return checked(makeQuantity(lhs.value / rhs.value));
+        }
         if (rhs.dimension != QuantityDimension::Dimensionless) {
             return fail(makeVarSetExpressionUnsupportedSubsetMessage(
                 "division by a unit quantity would produce a derived unit, which is outside the supported subset."
@@ -1127,6 +1143,40 @@ std::optional<std::string> getVarSetValueForBinding(
     return std::nullopt;
 }
 
+std::optional<std::string> evaluateExpressionValueForBinding(
+    std::string_view expression,
+    const VarSetCatalog& catalog,
+    std::string& error
+)
+{
+    VarSetExpressionParser parser(
+        expression,
+        catalog,
+        {},
+        [&](const std::string& dependencyKey, std::string& dependencyError) -> std::optional<QuantityValue> {
+            const auto propertyIt = catalog.properties.find(dependencyKey);
+            if (propertyIt == catalog.properties.end()) {
+                dependencyError = "Expression references unknown VarSet parameter '" + dependencyKey + "'.";
+                return std::nullopt;
+            }
+            if (propertyIt->second.evaluatedValue) {
+                return *propertyIt->second.evaluatedValue;
+            }
+            if (propertyIt->second.hasRawValue) {
+                return parseRawQuantityLiteral(propertyIt->second.rawValue, dependencyError, dependencyKey);
+            }
+            dependencyError = "VarSet parameter '" + dependencyKey + "' has no value.";
+            return std::nullopt;
+        }
+    );
+
+    const auto value = parser.parse(error);
+    if (!value) {
+        return std::nullopt;
+    }
+    return formatQuantityForBinding(*value);
+}
+
 ParameterBindingParseResult parseParameterBindingExpression(
     std::string_view expression,
     const VarSetCatalog& catalog
@@ -1170,6 +1220,9 @@ ParameterBindingParseResult parseParameterBindingExpression(
                 "constraint expression references non-VarSet object '" + objectRef + "'."
             ),
         };
+    }
+    if (!isSimplePropertyPath(parameterName)) {
+        return {};
     }
 
     ParsedParameterBinding binding;

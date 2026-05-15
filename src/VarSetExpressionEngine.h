@@ -18,6 +18,7 @@ enum class QuantityDimension
     Dimensionless,
     Length,
     Angle,
+    Area,
 };
 
 struct QuantityValue
@@ -82,6 +83,12 @@ void rebuildVarSetShortNameLookup(VarSetCatalog& catalog);
 [[nodiscard]] std::optional<std::string> getVarSetValueForBinding(
     const VarSetCatalog& catalog,
     const std::string& key
+);
+
+[[nodiscard]] std::optional<std::string> evaluateExpressionValueForBinding(
+    std::string_view expression,
+    const VarSetCatalog& catalog,
+    std::string& error
 );
 
 [[nodiscard]] ParameterBindingParseResult parseParameterBindingExpression(
