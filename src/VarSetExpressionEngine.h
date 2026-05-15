@@ -13,6 +13,19 @@
 namespace McSolverEngine::DocumentXml::VarSetExpressions
 {
 
+enum class QuantityDimension
+{
+    Dimensionless,
+    Length,
+    Angle,
+};
+
+struct QuantityValue
+{
+    double value {};
+    QuantityDimension dimension {QuantityDimension::Dimensionless};
+};
+
 struct VarSetProperty
 {
     std::string objectName;
@@ -20,7 +33,7 @@ struct VarSetProperty
     std::string rawValue;
     bool hasRawValue {false};
     std::optional<std::string> expression;
-    std::optional<double> evaluatedValue;
+    std::optional<QuantityValue> evaluatedValue;
 };
 
 struct VarSetCatalog

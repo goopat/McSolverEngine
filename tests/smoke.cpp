@@ -1071,6 +1071,69 @@ int main()
         return 1;
     }
 
+    constexpr std::string_view varSetAngleExpressionDocumentXml = R"(<?xml version="1.0" encoding="UTF-8"?>
+<Document>
+    <Objects Count="2">
+        <Object type="App::VarSet" name="VarSet" id="1"/>
+        <Object type="Sketcher::SketchObject" name="Sketch" id="2"/>
+    </Objects>
+    <ObjectData Count="2">
+        <Object name="VarSet">
+            <Properties Count="2" TransientCount="0">
+                <Property name="Angle" type="App::PropertyQuantity">
+                    <Quantity value="0 deg"/>
+                </Property>
+                <Property name="ExpressionEngine" type="App::PropertyExpressionEngine">
+                    <ExpressionEngine count="1">
+                        <Expression path="Angle" expression="30 deg + 0.5 rad"/>
+                    </ExpressionEngine>
+                </Property>
+            </Properties>
+        </Object>
+        <Object name="Sketch">
+            <Properties Count="3" TransientCount="0">
+                <Property name="Constraints" type="Sketcher::PropertyConstraintList">
+                    <ConstraintList count="4">
+                        <Constrain Name="" Type="7" Value="0.0" First="0" FirstPos="1" Second="-2000" SecondPos="0" Third="-2000" ThirdPos="0" LabelDistance="10.0" LabelPosition="0.0" IsDriving="1" IsInVirtualSpace="0" IsActive="1" />
+                        <Constrain Name="" Type="8" Value="0.0" First="0" FirstPos="1" Second="-2000" SecondPos="0" Third="-2000" ThirdPos="0" LabelDistance="10.0" LabelPosition="0.0" IsDriving="1" IsInVirtualSpace="0" IsActive="1" />
+                        <Constrain Name="" Type="6" Value="10.0" First="0" FirstPos="0" Second="-2000" SecondPos="0" Third="-2000" ThirdPos="0" LabelDistance="10.0" LabelPosition="0.0" IsDriving="1" IsInVirtualSpace="0" IsActive="1" />
+                        <Constrain Name="" Type="9" Value="0.0" First="0" FirstPos="0" Second="-2000" SecondPos="0" Third="-2000" ThirdPos="0" LabelDistance="10.0" LabelPosition="0.0" IsDriving="1" IsInVirtualSpace="0" IsActive="1" />
+                    </ConstraintList>
+                </Property>
+                <Property name="ExpressionEngine" type="App::PropertyExpressionEngine">
+                    <ExpressionEngine count="1">
+                        <Expression path="Constraints[3]" expression="VarSet.Angle"/>
+                    </ExpressionEngine>
+                </Property>
+                <Property name="Geometry" type="Part::PropertyGeometryList">
+                    <GeometryList count="1">
+                        <Geometry type="Part::GeomLineSegment" id="1" migrated="1">
+                            <LineSegment StartX="1.0" StartY="2.0" StartZ="0.0" EndX="4.0" EndY="6.0" EndZ="0.0"/>
+                            <Construction value="0"/>
+                        </Geometry>
+                    </GeometryList>
+                </Property>
+            </Properties>
+        </Object>
+    </ObjectData>
+</Document>)";
+    const auto importedVarSetAngleExpression =
+        McSolverEngine::DocumentXml::importSketchFromDocumentXml(varSetAngleExpressionDocumentXml, "Sketch");
+    if (!importedVarSetAngleExpression.imported()
+        || importedVarSetAngleExpression.status != McSolverEngine::DocumentXml::ImportStatus::Success) {
+        std::cerr << "Expected VarSet angle unit expression import to succeed.\n";
+        for (const auto& message : importedVarSetAngleExpression.messages) {
+            std::cerr << message << "\n";
+        }
+        return 1;
+    }
+    if (std::abs(importedVarSetAngleExpression.model.constraints().back().value
+            - (std::numbers::pi / 6.0 + 0.5))
+        > 1e-8) {
+        std::cerr << "VarSet angle unit expression was not converted to solver radians.\n";
+        return 1;
+    }
+
     const auto invalidAngleImport = McSolverEngine::DocumentXml::importSketchFromDocumentXml(
         parameterizedAngleDocumentXml,
         McSolverEngine::ParameterMap {{"Angle", "45 deg"}},
@@ -1256,6 +1319,36 @@ int main()
         {"hypot(3, 4)", 5.0},
         {"mod(7, 3)", 1.0},
         {"average(1, 2, 3)", 2.0},
+        {"1 cm + 2 mm", 12.0},
+        {"2 * (3 cm)", 60.0},
+        {"hypot(3 cm, 40 mm)", 50.0},
+        {"sum(1 cm, 5 mm, 2)", 17.0},
+        {"sin(90 deg)", 1.0},
+        {"cos(60deg)", 0.5},
+        {"cos(pi / 2 * 1rad)", 0.0},
+        {"sin(30deg)", 0.5},
+        {"sin(pi / 6 * 1rad)", 0.5},
+        {"tan(45deg)", 1.0},
+        {"tan(pi / 4 * 1rad)", 1.0},
+        {"cos(180 deg) + 1", 0.0},
+        {"cos(pi rad) + 1", 0.0},
+        {"abs(-3mm)", 3.0},
+        {"round(3.4mm)", 3.0},
+        {"round(3.6mm)", 4.0},
+        {"round(-3.6mm)", -4.0},
+        {"trunc(3.6mm)", 3.0},
+        {"trunc(-3.6mm)", -3.0},
+        {"ceil(3.4mm)", 4.0},
+        {"ceil(-3.4mm)", -3.0},
+        {"floor(3.6mm)", 3.0},
+        {"floor(-3.4mm)", -4.0},
+        {"2mm + 3mm", 5.0},
+        {"2mm - 3mm", -1.0},
+        {"4mm / 2", 2.0},
+        {"mod(7mm, 3mm)", 1.0},
+        {"min(1mm, 2mm, 3mm)", 1.0},
+        {"max(1mm, 2mm, 3mm)", 3.0},
+        {"average(4mm, 5mm, 6mm)", 5.0},
     };
     for (const auto& testCase : freeCadExpressionCases) {
         const auto expressionXml = makeVarSetExpressionResultDocumentXml(testCase.expression);
@@ -1265,6 +1358,9 @@ int main()
             || importedExpression.status != McSolverEngine::DocumentXml::ImportStatus::Success) {
             std::cerr << "Expected FreeCAD-compatible VarSet expression to import: "
                       << testCase.expression << "\n";
+            for (const auto& message : importedExpression.messages) {
+                std::cerr << message << "\n";
+            }
             return 1;
         }
         const double actualValue = importedExpression.model.constraints().back().value;
@@ -1275,13 +1371,44 @@ int main()
         }
     }
 
-    for (const std::string_view unsupportedExpression : {"PI", "SQRT(4)", "parsequant(1)"}) {
+    const std::vector<std::string_view> unsupportedOrInvalidExpressions {
+        "PI",
+        "SQRT(4)",
+        "atan2(3mm, 3)",
+        "hypot(3mm, 4)",
+        "exp(-3mm)",
+        "log(-3mm)",
+        "pow(7mm, 4mm)",
+    };
+    for (const auto unsupportedExpression : unsupportedOrInvalidExpressions) {
         const auto expressionXml = makeVarSetExpressionResultDocumentXml(unsupportedExpression);
         const auto importedExpression =
             McSolverEngine::DocumentXml::importSketchFromDocumentXml(expressionXml, "Sketch");
         if (importedExpression.imported()
             || importedExpression.status != McSolverEngine::DocumentXml::ImportStatus::Failed) {
             std::cerr << "Expected unsupported or case-mismatched VarSet expression to fail: "
+                      << unsupportedExpression << "\n";
+            return 1;
+        }
+    }
+
+    const std::vector<std::string_view> unsupportedUnitExpressions {
+        "1 kg",
+        "(1 mm) * (2 cm)",
+        "(1 mm) ^ 2",
+        "sqrt(1 mm)",
+        "parsequant(1)",
+        "parsequant(1 mm)",
+    };
+    for (const auto unsupportedExpression : unsupportedUnitExpressions) {
+        const auto expressionXml = makeVarSetExpressionResultDocumentXml(unsupportedExpression);
+        const auto importedExpression =
+            McSolverEngine::DocumentXml::importSketchFromDocumentXml(expressionXml, "Sketch");
+        if (importedExpression.imported()
+            || importedExpression.status != McSolverEngine::DocumentXml::ImportStatus::Failed
+            || importedExpression.errorCode
+                != McSolverEngine::DocumentXml::ImportErrorCode::VarSetExpressionUnsupportedSubset) {
+            std::cerr << "Expected unsupported VarSet unit expression to fail with subset error: "
                       << unsupportedExpression << "\n";
             return 1;
         }
