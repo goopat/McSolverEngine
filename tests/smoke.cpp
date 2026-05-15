@@ -1303,6 +1303,42 @@ int main()
         return 1;
     }
 
+    auto importedUnknownOverride = McSolverEngine::DocumentXml::importSketchFromDocumentXml(
+        varSetExpressionDocumentXml,
+        McSolverEngine::ParameterMap {{"VarSet.DoesNotExist", "1.0"}},
+        "Sketch"
+    );
+    if (importedUnknownOverride.imported()
+        || importedUnknownOverride.status != McSolverEngine::DocumentXml::ImportStatus::Failed) {
+        std::cerr << "Expected unknown VarSet parameter override to fail import.\n";
+        return 1;
+    }
+    {
+        bool sawOverrideMessage = false;
+        for (const auto& message : importedUnknownOverride.messages) {
+            if (message.find("VarSet.DoesNotExist") != std::string::npos
+                && message.find("does not match") != std::string::npos) {
+                sawOverrideMessage = true;
+                break;
+            }
+        }
+        if (!sawOverrideMessage) {
+            std::cerr << "Expected diagnostic message for unknown VarSet parameter override.\n";
+            return 1;
+        }
+    }
+
+    auto importedUnknownShortOverride = McSolverEngine::DocumentXml::importSketchFromDocumentXml(
+        varSetExpressionDocumentXml,
+        McSolverEngine::ParameterMap {{"DoesNotExist", "1.0"}},
+        "Sketch"
+    );
+    if (importedUnknownShortOverride.imported()
+        || importedUnknownShortOverride.status != McSolverEngine::DocumentXml::ImportStatus::Failed) {
+        std::cerr << "Expected unknown short-name VarSet parameter override to fail import.\n";
+        return 1;
+    }
+
     struct VarSetExpressionCase
     {
         std::string_view expression;
@@ -1398,6 +1434,8 @@ int main()
         "sqrt(1 mm)",
         "parsequant(1)",
         "parsequant(1 mm)",
+        "1 m / 1 deg",
+        "(1 m * 1 m) / 1 deg",
     };
     for (const auto unsupportedExpression : unsupportedUnitExpressions) {
         const auto expressionXml = makeVarSetExpressionResultDocumentXml(unsupportedExpression);

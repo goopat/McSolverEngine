@@ -829,12 +829,9 @@ private:
         if (lhs.dimension == QuantityDimension::Length && rhs.dimension == QuantityDimension::Length) {
             return checked(makeQuantity(lhs.value / rhs.value));
         }
-        if (rhs.dimension != QuantityDimension::Dimensionless) {
-            return fail(makeVarSetExpressionUnsupportedSubsetMessage(
-                "division by a unit quantity would produce a derived unit, which is outside the supported subset."
-            ));
-        }
-        return checked(makeQuantity(lhs.value / rhs.value, lhs.dimension));
+        return fail(makeVarSetExpressionUnsupportedSubsetMessage(
+            "division by a unit quantity would produce a derived unit, which is outside the supported subset."
+        ));
     }
 
     [[nodiscard]] std::optional<QuantityValue> modulo(const QuantityValue& lhs, const QuantityValue& rhs)
@@ -1077,7 +1074,7 @@ bool applyApiParametersToVarSets(
             const auto parameterName = rawKey.substr(separator + 1);
             const auto alias = catalog.aliases.find(objectRef);
             if (alias != catalog.aliases.end() && !parameterName.empty()) {
-                applied = setVarSetRawValue(catalog, alias->second + "." + parameterName, value, true);
+                applied = setVarSetRawValue(catalog, alias->second + "." + parameterName, value, false);
             }
         }
         else {
@@ -1095,7 +1092,13 @@ bool applyApiParametersToVarSets(
             }
         }
 
-        (void)applied;
+        if (!applied) {
+            messages.push_back(
+                "Parameter override '" + rawKey
+                + "' does not match any VarSet parameter."
+            );
+            success = false;
+        }
     }
 
     rebuildVarSetShortNameLookup(catalog);
