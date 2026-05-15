@@ -470,5 +470,74 @@ int main()
         McSolverEngine_FreeGeometryResult(invalidAngleGeometry);
     }
 
+    constexpr std::string_view unsupportedVarSetExpressionDocumentXml = R"(<?xml version="1.0" encoding="UTF-8"?>
+<Document>
+    <Objects Count="2">
+        <Object type="App::VarSet" name="VarSet" id="1"/>
+        <Object type="Sketcher::SketchObject" name="Sketch" id="2"/>
+    </Objects>
+    <ObjectData Count="2">
+        <Object name="VarSet">
+            <Properties Count="2" TransientCount="0">
+                <Property name="Width" type="App::PropertyFloat">
+                    <Float value="0.0"/>
+                </Property>
+                <Property name="ExpressionEngine" type="App::PropertyExpressionEngine">
+                    <ExpressionEngine count="1">
+                        <Expression path="Width" expression="Spreadsheet.Width + 1"/>
+                    </ExpressionEngine>
+                </Property>
+            </Properties>
+        </Object>
+        <Object name="Sketch">
+            <Properties Count="2" TransientCount="0">
+                <Property name="Constraints" type="Sketcher::PropertyConstraintList">
+                    <ConstraintList count="0">
+                    </ConstraintList>
+                </Property>
+                <Property name="Geometry" type="Part::PropertyGeometryList">
+                    <GeometryList count="1">
+                        <Geometry type="Part::GeomLineSegment" id="1" migrated="1">
+                            <LineSegment StartX="0.0" StartY="0.0" StartZ="0.0" EndX="1.0" EndY="0.0" EndZ="0.0"/>
+                            <Construction value="0"/>
+                        </Geometry>
+                    </GeometryList>
+                </Property>
+            </Properties>
+        </Object>
+    </ObjectData>
+</Document>)";
+    {
+        ScopedTestTimer timer("SolveToGeometry unsupported VarSet expression subset");
+        McSolverEngineGeometryResult* unsupportedVarSetExpressionGeometry = nullptr;
+        const auto unsupportedVarSetExpressionCode = McSolverEngine_SolveToGeometry(
+            unsupportedVarSetExpressionDocumentXml.data(),
+            "Sketch",
+            &unsupportedVarSetExpressionGeometry
+        );
+        if (!expect(
+                unsupportedVarSetExpressionCode
+                    == MCSOLVERENGINE_RESULT_VARSET_EXPRESSION_UNSUPPORTED_SUBSET,
+                "Expected non-VarSet expression references to return the dedicated C API error code."
+            )) {
+            return EXIT_FAILURE;
+        }
+        if (!expect(
+                unsupportedVarSetExpressionGeometry != nullptr
+                    && unsupportedVarSetExpressionGeometry->messageCount == 1
+                    && unsupportedVarSetExpressionGeometry->messages != nullptr
+                    && unsupportedVarSetExpressionGeometry->messages[0] != nullptr
+                    && contains(
+                        unsupportedVarSetExpressionGeometry->messages[0],
+                        "MCSOLVERENGINE_IMPORT_VARSET_EXPRESSION_UNSUPPORTED_SUBSET"
+                    ),
+                "Expected unsupported VarSet expression result metadata to include the import error code."
+            )) {
+            McSolverEngine_FreeGeometryResult(unsupportedVarSetExpressionGeometry);
+            return EXIT_FAILURE;
+        }
+        McSolverEngine_FreeGeometryResult(unsupportedVarSetExpressionGeometry);
+    }
+
     return EXIT_SUCCESS;
 }

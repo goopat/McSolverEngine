@@ -95,6 +95,91 @@ double lineAngleDegrees(const McSolverEngine::Compat::LineSegmentGeometry& line)
     return std::atan2(line.end.y - line.start.y, line.end.x - line.start.x) * 180.0 / std::numbers::pi;
 }
 
+std::string escapeXmlAttributeForTest(std::string_view value)
+{
+    std::string result;
+    result.reserve(value.size());
+    for (const char ch : value) {
+        switch (ch) {
+            case '&':
+                result += "&amp;";
+                break;
+            case '<':
+                result += "&lt;";
+                break;
+            case '>':
+                result += "&gt;";
+                break;
+            case '"':
+                result += "&quot;";
+                break;
+            case '\'':
+                result += "&apos;";
+                break;
+            default:
+                result.push_back(ch);
+                break;
+        }
+    }
+    return result;
+}
+
+std::string makeVarSetExpressionResultDocumentXml(std::string_view expression)
+{
+    return std::string(R"(<?xml version="1.0" encoding="UTF-8"?>
+<Document>
+    <Objects Count="2">
+        <Object type="App::VarSet" name="VarSet" id="1"/>
+        <Object type="Sketcher::SketchObject" name="Sketch" id="2"/>
+    </Objects>
+    <ObjectData Count="2">
+        <Object name="VarSet">
+            <Properties Count="4" TransientCount="0">
+                <Property name="Label" type="App::PropertyString">
+                    <String value="Parameters"/>
+                </Property>
+                <Property name="Var" type="App::PropertyFloat">
+                    <Float value="2.0"/>
+                </Property>
+                <Property name="Result" type="App::PropertyFloat">
+                    <Float value="0.0"/>
+                </Property>
+                <Property name="ExpressionEngine" type="App::PropertyExpressionEngine">
+                    <ExpressionEngine count="1">
+                        <Expression path="Result" expression=")")
+        + escapeXmlAttributeForTest(expression)
+        + R"("/>
+                    </ExpressionEngine>
+                </Property>
+            </Properties>
+        </Object>
+        <Object name="Sketch">
+            <Properties Count="3" TransientCount="0">
+                <Property name="Constraints" type="Sketcher::PropertyConstraintList">
+                    <ConstraintList count="2">
+                        <Constrain Name="" Type="2" Value="0.0" First="0" FirstPos="0" Second="-2000" SecondPos="0" Third="-2000" ThirdPos="0" LabelDistance="10.0" LabelPosition="0.0" IsDriving="1" IsInVirtualSpace="0" IsActive="1" />
+                        <Constrain Name="" Type="6" Value="0.0" First="0" FirstPos="0" Second="-2000" SecondPos="0" Third="-2000" ThirdPos="0" LabelDistance="10.0" LabelPosition="0.0" IsDriving="1" IsInVirtualSpace="0" IsActive="1" />
+                    </ConstraintList>
+                </Property>
+                <Property name="ExpressionEngine" type="App::PropertyExpressionEngine">
+                    <ExpressionEngine count="1">
+                        <Expression path="Constraints[1]" expression="&lt;&lt;Parameters&gt;&gt;.Result"/>
+                    </ExpressionEngine>
+                </Property>
+                <Property name="Geometry" type="Part::PropertyGeometryList">
+                    <GeometryList count="1">
+                        <Geometry type="Part::GeomLineSegment" id="1" migrated="1">
+                            <LineSegment StartX="0.0" StartY="0.0" StartZ="0.0" EndX="1.0" EndY="0.0" EndZ="0.0"/>
+                            <Construction value="0"/>
+                        </Geometry>
+                    </GeometryList>
+                </Property>
+            </Properties>
+        </Object>
+    </ObjectData>
+</Document>)";
+}
+
 McSolverEngine::Compat::Point2 evaluateBSpline(
     const McSolverEngine::Compat::BSplineGeometry& splineGeometry,
     double parameter
@@ -1053,6 +1138,251 @@ int main()
     );
     if (invalidSolveTimeAngle.status != McSolverEngine::Compat::SolveStatus::Invalid) {
         std::cerr << "Expected non-numeric solve-time API angle parameter input to be rejected.\n";
+        return 1;
+    }
+
+    constexpr std::string_view varSetExpressionDocumentXml = R"(<?xml version="1.0" encoding="UTF-8"?>
+<Document>
+    <Objects Count="2">
+        <Object type="App::VarSet" name="VarSet" id="1"/>
+        <Object type="Sketcher::SketchObject" name="Sketch" id="2"/>
+    </Objects>
+    <ObjectData Count="2">
+        <Object name="VarSet">
+            <Properties Count="6" TransientCount="0">
+                <Property name="Label" type="App::PropertyString">
+                    <String value="Parameters"/>
+                </Property>
+                <Property name="Base" type="App::PropertyFloat">
+                    <Float value="4.0"/>
+                </Property>
+                <Property name="Offset" type="App::PropertyFloat">
+                    <Float value="1.0"/>
+                </Property>
+                <Property name="MinWidth" type="App::PropertyFloat">
+                    <Float value="5.0"/>
+                </Property>
+                <Property name="DoubleWidth" type="App::PropertyFloat">
+                    <Float value="0.0"/>
+                </Property>
+                <Property name="Width" type="App::PropertyFloat">
+                    <Float value="0.0"/>
+                </Property>
+                <Property name="ExpressionEngine" type="App::PropertyExpressionEngine">
+                    <ExpressionEngine count="2">
+                        <Expression path="DoubleWidth" expression="Base * 2"/>
+                        <Expression path="Width" expression="max(DoubleWidth, &lt;&lt;Parameters&gt;&gt;.MinWidth) + Offset"/>
+                    </ExpressionEngine>
+                </Property>
+            </Properties>
+        </Object>
+        <Object name="Sketch">
+            <Properties Count="3" TransientCount="0">
+                <Property name="Constraints" type="Sketcher::PropertyConstraintList">
+                    <ConstraintList count="2">
+                        <Constrain Name="" Type="2" Value="0.0" First="0" FirstPos="0" Second="-2000" SecondPos="0" Third="-2000" ThirdPos="0" LabelDistance="10.0" LabelPosition="0.0" IsDriving="1" IsInVirtualSpace="0" IsActive="1" />
+                        <Constrain Name="" Type="6" Value="0.0" First="0" FirstPos="0" Second="-2000" SecondPos="0" Third="-2000" ThirdPos="0" LabelDistance="10.0" LabelPosition="0.0" IsDriving="1" IsInVirtualSpace="0" IsActive="1" />
+                    </ConstraintList>
+                </Property>
+                <Property name="ExpressionEngine" type="App::PropertyExpressionEngine">
+                    <ExpressionEngine count="1">
+                        <Expression path="Constraints[1]" expression="&lt;&lt;Parameters&gt;&gt;.Width"/>
+                    </ExpressionEngine>
+                </Property>
+                <Property name="Geometry" type="Part::PropertyGeometryList">
+                    <GeometryList count="1">
+                        <Geometry type="Part::GeomLineSegment" id="1" migrated="1">
+                            <LineSegment StartX="0.0" StartY="0.0" StartZ="0.0" EndX="3.0" EndY="1.0" EndZ="0.0"/>
+                            <Construction value="0"/>
+                        </Geometry>
+                    </GeometryList>
+                </Property>
+            </Properties>
+        </Object>
+    </ObjectData>
+</Document>)";
+
+    auto importedVarSetExpression =
+        McSolverEngine::DocumentXml::importSketchFromDocumentXml(varSetExpressionDocumentXml, "Sketch");
+    if (!importedVarSetExpression.imported()
+        || importedVarSetExpression.status != McSolverEngine::DocumentXml::ImportStatus::Success) {
+        std::cerr << "Expected VarSet expression chain import to succeed.\n";
+        return 1;
+    }
+    if (std::abs(importedVarSetExpression.model.constraints().back().value - 9.0) > 1e-8) {
+        std::cerr << "VarSet expression chain did not produce the expected default constraint value.\n";
+        return 1;
+    }
+    const auto varSetExpressionSolve = McSolverEngine::Compat::solveSketch(importedVarSetExpression.model);
+    if (!varSetExpressionSolve.solved()) {
+        std::cerr << "Expected VarSet expression-backed sketch to solve successfully.\n";
+        return 1;
+    }
+    const auto& varSetExpressionLine =
+        std::get<McSolverEngine::Compat::LineSegmentGeometry>(importedVarSetExpression.model.geometries().front().data);
+    if (std::abs(lineLength(varSetExpressionLine) - 9.0) > 1e-8) {
+        std::cerr << "VarSet expression default did not drive the solved length.\n";
+        return 1;
+    }
+
+    auto importedVarSetExpressionOverride = McSolverEngine::DocumentXml::importSketchFromDocumentXml(
+        varSetExpressionDocumentXml,
+        McSolverEngine::ParameterMap {{"Base", "6.0"}},
+        "Sketch"
+    );
+    if (!importedVarSetExpressionOverride.imported()
+        || importedVarSetExpressionOverride.status != McSolverEngine::DocumentXml::ImportStatus::Success) {
+        std::cerr << "Expected VarSet expression override import to succeed.\n";
+        return 1;
+    }
+    if (std::abs(importedVarSetExpressionOverride.model.constraints().back().value - 13.0) > 1e-8) {
+        std::cerr << "VarSet expression override did not propagate through the dependency chain.\n";
+        return 1;
+    }
+
+    struct VarSetExpressionCase
+    {
+        std::string_view expression;
+        double expectedValue {};
+    };
+    const std::vector<VarSetExpressionCase> freeCadExpressionCases {
+        {"1 + 2", 3.0},
+        {"sqrt(4)", 2.0},
+        {"sqrt(2 + Var)", 2.0},
+        {"2 ^ 3 ^ 2", 64.0},
+        {"-2 ^ 2", 4.0},
+        {"sin(pi / 2)", 1.0},
+        {"cos(0) + e - e", 1.0},
+        {"hypot(3, 4)", 5.0},
+        {"mod(7, 3)", 1.0},
+        {"average(1, 2, 3)", 2.0},
+    };
+    for (const auto& testCase : freeCadExpressionCases) {
+        const auto expressionXml = makeVarSetExpressionResultDocumentXml(testCase.expression);
+        const auto importedExpression =
+            McSolverEngine::DocumentXml::importSketchFromDocumentXml(expressionXml, "Sketch");
+        if (!importedExpression.imported()
+            || importedExpression.status != McSolverEngine::DocumentXml::ImportStatus::Success) {
+            std::cerr << "Expected FreeCAD-compatible VarSet expression to import: "
+                      << testCase.expression << "\n";
+            return 1;
+        }
+        const double actualValue = importedExpression.model.constraints().back().value;
+        if (std::abs(actualValue - testCase.expectedValue) > 1e-12) {
+            std::cerr << "FreeCAD-compatible VarSet expression produced an unexpected value for "
+                      << testCase.expression << ": " << actualValue << "\n";
+            return 1;
+        }
+    }
+
+    for (const std::string_view unsupportedExpression : {"PI", "SQRT(4)", "parsequant(1)"}) {
+        const auto expressionXml = makeVarSetExpressionResultDocumentXml(unsupportedExpression);
+        const auto importedExpression =
+            McSolverEngine::DocumentXml::importSketchFromDocumentXml(expressionXml, "Sketch");
+        if (importedExpression.imported()
+            || importedExpression.status != McSolverEngine::DocumentXml::ImportStatus::Failed) {
+            std::cerr << "Expected unsupported or case-mismatched VarSet expression to fail: "
+                      << unsupportedExpression << "\n";
+            return 1;
+        }
+    }
+
+    constexpr std::string_view cyclicVarSetExpressionDocumentXml = R"(<?xml version="1.0" encoding="UTF-8"?>
+<Document>
+    <Objects Count="2">
+        <Object type="App::VarSet" name="VarSet" id="1"/>
+        <Object type="Sketcher::SketchObject" name="Sketch" id="2"/>
+    </Objects>
+    <ObjectData Count="2">
+        <Object name="VarSet">
+            <Properties Count="3" TransientCount="0">
+                <Property name="A" type="App::PropertyFloat">
+                    <Float value="0.0"/>
+                </Property>
+                <Property name="B" type="App::PropertyFloat">
+                    <Float value="0.0"/>
+                </Property>
+                <Property name="ExpressionEngine" type="App::PropertyExpressionEngine">
+                    <ExpressionEngine count="2">
+                        <Expression path="A" expression="B + 1"/>
+                        <Expression path="B" expression="A + 1"/>
+                    </ExpressionEngine>
+                </Property>
+            </Properties>
+        </Object>
+        <Object name="Sketch">
+            <Properties Count="2" TransientCount="0">
+                <Property name="Constraints" type="Sketcher::PropertyConstraintList">
+                    <ConstraintList count="0">
+                    </ConstraintList>
+                </Property>
+                <Property name="Geometry" type="Part::PropertyGeometryList">
+                    <GeometryList count="1">
+                        <Geometry type="Part::GeomLineSegment" id="1" migrated="1">
+                            <LineSegment StartX="0.0" StartY="0.0" StartZ="0.0" EndX="1.0" EndY="0.0" EndZ="0.0"/>
+                            <Construction value="0"/>
+                        </Geometry>
+                    </GeometryList>
+                </Property>
+            </Properties>
+        </Object>
+    </ObjectData>
+</Document>)";
+    const auto cyclicVarSetExpressionImport =
+        McSolverEngine::DocumentXml::importSketchFromDocumentXml(cyclicVarSetExpressionDocumentXml, "Sketch");
+    if (cyclicVarSetExpressionImport.imported()
+        || cyclicVarSetExpressionImport.status != McSolverEngine::DocumentXml::ImportStatus::Failed) {
+        std::cerr << "Expected cyclic VarSet expression dependency to fail import.\n";
+        return 1;
+    }
+
+    constexpr std::string_view externalVarSetExpressionDocumentXml = R"(<?xml version="1.0" encoding="UTF-8"?>
+<Document>
+    <Objects Count="2">
+        <Object type="App::VarSet" name="VarSet" id="1"/>
+        <Object type="Sketcher::SketchObject" name="Sketch" id="2"/>
+    </Objects>
+    <ObjectData Count="2">
+        <Object name="VarSet">
+            <Properties Count="2" TransientCount="0">
+                <Property name="Width" type="App::PropertyFloat">
+                    <Float value="0.0"/>
+                </Property>
+                <Property name="ExpressionEngine" type="App::PropertyExpressionEngine">
+                    <ExpressionEngine count="1">
+                        <Expression path="Width" expression="Spreadsheet.Width + 1"/>
+                    </ExpressionEngine>
+                </Property>
+            </Properties>
+        </Object>
+        <Object name="Sketch">
+            <Properties Count="2" TransientCount="0">
+                <Property name="Constraints" type="Sketcher::PropertyConstraintList">
+                    <ConstraintList count="0">
+                    </ConstraintList>
+                </Property>
+                <Property name="Geometry" type="Part::PropertyGeometryList">
+                    <GeometryList count="1">
+                        <Geometry type="Part::GeomLineSegment" id="1" migrated="1">
+                            <LineSegment StartX="0.0" StartY="0.0" StartZ="0.0" EndX="1.0" EndY="0.0" EndZ="0.0"/>
+                            <Construction value="0"/>
+                        </Geometry>
+                    </GeometryList>
+                </Property>
+            </Properties>
+        </Object>
+    </ObjectData>
+</Document>)";
+    const auto externalVarSetExpressionImport =
+        McSolverEngine::DocumentXml::importSketchFromDocumentXml(externalVarSetExpressionDocumentXml, "Sketch");
+    if (externalVarSetExpressionImport.imported()
+        || externalVarSetExpressionImport.status != McSolverEngine::DocumentXml::ImportStatus::Failed) {
+        std::cerr << "Expected non-VarSet expression reference to fail import.\n";
+        return 1;
+    }
+    if (externalVarSetExpressionImport.errorCode
+        != McSolverEngine::DocumentXml::ImportErrorCode::VarSetExpressionUnsupportedSubset) {
+        std::cerr << "Expected non-VarSet expression reference to report the reduced VarSet expression error code.\n";
         return 1;
     }
 

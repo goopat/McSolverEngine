@@ -274,12 +274,18 @@ FreeCAD 中真正把“草图数据”翻译成 GCS 参数和约束的是：
 
 - 草图对象上的 `ExpressionEngine`
 - `App::VarSet` 对象中的标量属性（当前按 `<VarSet对象名>.<属性名>` 建立参数键）
+- `App::VarSet` 对象自身的 `ExpressionEngine`，用于在导入阶段先计算 VarSet 参数链
 - 通过 `Constraints[index]` 或等价约束路径，将维度约束绑定到 `VarSet` 参数
 - C++ 层参数覆盖入口：`DocumentXml::importSketchFromDocumentXml(..., const std::map<std::string, std::string>&, ...)`、`importSketchFromDocumentXmlFile(..., const std::map<std::string, std::string>&, ...)`、`Compat::solveSketch(..., const std::map<std::string, std::string>&)`
 
 当前参数化能力的边界与限制：
 
-- 当前不实现完整 FreeCAD 表达式求值器，只支持“直接引用 `VarSet` 属性”或“可直接解析为数值的常量表达式”
+- 当前不实现完整 FreeCAD 表达式求值器；只实现 **VarSet 参数表达式的纯数学子集**
+- 导入阶段的参数链顺序为：
+  1. 解析 `Document.xml` 中全部 `App::VarSet` 的标量属性、`Label` 与 VarSet 自身 `ExpressionEngine`
+  2. 若调用方提供 `parameters`，先应用到 VarSet 数据结构
+  3. 解析 VarSet 参数表达式的引用链，按依赖顺序计算全部可计算 VarSet 参数
+  4. 草图 `ExpressionEngine` 再把最终 VarSet 数值绑定到维度约束
 - 对**调用方显式传入的 `parameters`**，当前 API 层要求值必须是**纯数值字符串**；不接受 `mm` / `deg` 等单位后缀
 - 对 API 参数值，当前固定约定：
   - 长度类约束（`DistanceX / DistanceY / Distance / Radius / Diameter`）按 **mm**
@@ -287,6 +293,7 @@ FreeCAD 中真正把“草图数据”翻译成 GCS 参数和约束的是：
   - 进入求解器前会自动换算到内部单位，其中角度会换成 **radian**
 - 多个不同名称的 `VarSet` 会分别收集，不会合并到同一命名空间
 - `<<Label>>.Param` 形式当前通过 `VarSet` 的 `Label` 映射回真实对象名
+- VarSet 表达式中也支持同样的 `<<Label>>.Param` 引用，以及 `VarSetName.Param` 引用；在同一个 VarSet 内可用短名 `Param` 引用本 VarSet 参数
 - 参数覆盖时优先匹配全名键（如 `Config.Width`），查不到时再匹配短名键（如 `Width`）
 - 因此当多个 `VarSet` 含有同名属性时，短名覆盖存在歧义；当前推荐调用方使用全名键
 - 若多个 `VarSet` 使用相同 `Label`，当前按首次出现的别名映射生效，后续同名 `Label` 不会覆盖前者
@@ -297,7 +304,42 @@ FreeCAD 中真正把“草图数据”翻译成 GCS 参数和约束的是：
 - 对来自 `Document.xml` 的 `VarSet` 默认值或常量表达式，当前支持一组受控的长度/角度单位换算：
   - 长度默认按 **mm**，并支持 `mm / cm / m / km / um / nm / in / ft`
   - 角度默认按 **degree**，并支持 `deg / rad`
-- 仍不实现完整 FreeCAD `Quantity / Unit` 语义；包含更复杂运算符或表达式的值（如 `mm^2`、`kg/m^3`、`2 * mm`）不属于当前稳定支持范围
+- VarSet 表达式求值本身只产生纯 `double` 数值；表达式依赖项也必须能解析为纯数值，不能在表达式内部携带单位
+- 仍不实现完整 FreeCAD `Quantity / Unit` 语义；包含更复杂单位运算的值（如 `mm^2`、`kg/m^3`、`2 * mm`）不属于当前稳定支持范围
+
+当前 VarSet 表达式纯数学子集支持：
+
+| 类型 | 已支持语法 / 函数 | 说明 |
+|---|---|---|
+| 表达式前缀 | `=expr` 或 `expr` | VarSet 表达式求值时允许可选的前导 `=` |
+| 数值字面量 | `1`, `1.25`, `.5`, `1e-3` | 必须是有限 `double` |
+| 括号 | `(expr)` | 用于显式分组 |
+| 一元运算 | `+expr`, `-expr` | 与 FreeCAD 一致，优先级高于 `^` |
+| 二元算术 | `+`, `-`, `*`, `/`, `%`, `^` | `^` 按 FreeCAD grammar 为左结合；除零 / 取模零报错 |
+| 常量 | `pi`, `e` | 大小写敏感；`PI` / `E` 不视为常量 |
+| 三角函数 | `sin`, `cos`, `tan`, `asin`, `acos`, `atan`, `atan2` | 参数按纯数值计算，角度不做隐式 degree 换算 |
+| 双曲函数 | `sinh`, `cosh`, `tanh` | 纯数学计算 |
+| 幂/根/距离 | `sqrt`, `cbrt`, `pow`, `hypot` | `pow(a,b)` 等价数学幂函数；`hypot(a,b)` 支持 2 参数 |
+| 指数/对数 | `exp`, `log`, `log10` | 与 C++ 标准库语义一致，非有限结果报错 |
+| 舍入 | `floor`, `ceil`, `round`, `trunc` | 纯数学计算 |
+| 聚合 | `min`, `max`, `sum`, `average`, `count` | 需要至少 1 个参数；`count` 返回参数个数 |
+| 取模函数 | `mod(a,b)` | 与 `%` 一样基于 `fmod`，除零报错 |
+| VarSet 引用 | `Param`, `VarSet.Param`, `<<Label>>.Param` | `Param` 仅解析当前 VarSet 内参数；跨 VarSet 必须用对象名或 Label |
+
+当前 VarSet 表达式子集明确不支持：
+
+- 引用非 `App::VarSet` 对象的数据，例如 `Spreadsheet.Width`、几何对象属性、草图几何属性等
+- FreeCAD 完整表达式里的 `parsequant`、`str`、`vector`、`placement`、矩阵函数、隐藏引用、逻辑函数、条件表达式、比较表达式、列表 / 字典 / 字符串表达式
+- 单位表达式或 Quantity 运算，例如 `1 mm + 2 mm`、`10 deg`、`2 * mm`
+- Spreadsheet 单元格、ObjectIdentifier 复杂路径、数组 / map / range 索引
+- 任何产生非有限值的表达式
+- VarSet 参数循环引用
+
+当表达式落入上述“FreeCAD 完整表达式能力但当前精简子集不支持”的情况时，导入失败并返回专用错误信息：
+
+- C++：`ImportResult::errorCode == ImportErrorCode::VarSetExpressionUnsupportedSubset`
+- C API：`MCSOLVERENGINE_RESULT_VARSET_EXPRESSION_UNSUPPORTED_SUBSET`
+- 诊断 message 含 `MCSOLVERENGINE_IMPORT_VARSET_EXPRESSION_UNSUPPORTED_SUBSET`
 
 不在第一阶段强求：
 
@@ -381,6 +423,7 @@ FreeCAD 中真正把“草图数据”翻译成 GCS 参数和约束的是：
 
 - `McSolverEngine_SolveToGeometry(...)` 和 `McSolverEngine_SolveToBRep(...)` 均返回结构化结果，包含 `Placement` + 导入/求解/导出诊断元数据（`sketchName`、`importStatus`、`messages`、`solveStatus`、`degreesOfFreedom`、`conflicting` / `redundant` / `partiallyRedundant`、`exportKind`、`exportStatus`）。Geometry 结果额外携带 `geometryCount + geometries`，BREP 结果额外携带 `brepUtf8` 原始 BREP 文本。
 - 参数化路径当前通过 `const char*[] keys + const char*[] values + count` 跨 ABI 传递参数表，供 `Document.xml + sketchName + parameters` 一起求解；其中值必须是纯数值字符串
+- 若 VarSet 表达式使用了当前精简子集之外的 FreeCAD 表达式能力，C API 返回 `MCSOLVERENGINE_RESULT_VARSET_EXPRESSION_UNSUPPORTED_SUBSET`，并在 `messages` 中携带 `MCSOLVERENGINE_IMPORT_VARSET_EXPRESSION_UNSUPPORTED_SUBSET`
 - Geometry 结果由原生层分配，调用方必须通过 `McSolverEngine_FreeGeometryResult(...)` 释放
 - BRep 结果由原生层分配，调用方必须通过 `McSolverEngine_FreeBRepResult(...)` 释放
 
@@ -430,9 +473,11 @@ FreeCAD 中真正把“草图数据”翻译成 GCS 参数和约束的是：
 
 ### 10.1 已落地的参数化求解能力
 
-当前已打通一条最小可用的“`VarSet` -> 维度约束 -> 参数覆盖 -> 重新求解”链路：
+当前已打通一条“`VarSet` -> VarSet 参数表达式求值 -> 维度约束 -> 参数覆盖 -> 重新求解”链路：
 
 - 导入阶段会扫描文档中的全部 `App::VarSet`
+- 导入阶段会解析 `App::VarSet` 自身的 `ExpressionEngine`，先在 VarSet 内部完成纯数学表达式求值和参数引用链传递
+- 若调用方提供 `std::map<std::string, std::string>` 参数表，当前会先校验每个参数值都是纯数值，并在 VarSet 表达式求值前写入 VarSet 数据结构
 - 草图导入阶段会解析 `ExpressionEngine`，识别指向 `Constraints[index]` 的约束绑定
 - 绑定成功后，内部 `Compat::Constraint` 会保留：
   - `parameterName`
@@ -440,7 +485,6 @@ FreeCAD 中真正把“草图数据”翻译成 GCS 参数和约束的是：
   - `parameterExpression`
   - `parameterDefaultValue`
 - 若 `VarSet` 中存在可解析的默认值，导入时会把该值传到对应维度约束
-- 若调用方提供 `std::map<std::string, std::string>` 参数表，当前会先校验每个参数值都是纯数值，再用新值覆盖对应维度约束并进入求解
 - API 参数值的固定语义当前为：
   - 长度类约束：**mm**
   - 角度类约束：**degree**
@@ -455,10 +499,13 @@ FreeCAD 中真正把“草图数据”翻译成 GCS 参数和约束的是：
 - 在求解阶段通过 `parameters` 覆盖参数值
 - 同时支持短名键（如 `Width`）与全名键（如 `VarSet.Width`）的参数覆盖，其中推荐优先使用全名键
 - 对 API `parameters`，当前会拒绝 `8.5 mm`、`45 deg` 这类带单位后缀的输入，要求调用方直接传 `8.5`、`45`
+- VarSet 参数表达式链，例如 `DoubleWidth = Base * 2`、`Width = max(DoubleWidth, <<Parameters>>.MinWidth) + Offset`
+- FreeCAD 表达式语法一致性专项用例：`1 + 2`、`sqrt(4)`、`sqrt(2 + Var)`、`2 ^ 3 ^ 2 == 64`、`-2 ^ 2 == 4`、`sin(pi / 2)`、函数名和常量大小写敏感
+- 非 VarSet 对象引用（如 `Spreadsheet.Width`）按精简子集不支持场景报专用错误码
 
 当前明确未覆盖的部分：
 
-- 任意复杂表达式组合、函数调用、跨对象算术表达式
+- 完整 FreeCAD 表达式全集、Quantity / Unit 计算、非 VarSet 对象数据引用、Spreadsheet 单元格、几何对象属性引用
 - 对 `FCStd` 压缩包本体的直接解包输入；当前跨语言接口仍以解压后的 `Document.xml` 文本为主
 
 ### 10.2 已落地的输入兼容能力
@@ -572,6 +619,11 @@ FreeCAD 中真正把“草图数据”翻译成 GCS 参数和约束的是：
 2. `VarSet` 默认值驱动维度约束求解
 3. 导入阶段参数覆盖
 4. 求解阶段参数覆盖
+5. VarSet 参数表达式链求值和参数覆盖传播
+6. FreeCAD 表达式语法一致性用例（算术、函数、常量、`^` 左结合、一元符号优先级、大小写敏感）
+7. 循环引用失败
+8. 非 VarSet 对象引用失败并返回精简子集专用错误码
+9. C API 对 `MCSOLVERENGINE_RESULT_VARSET_EXPRESSION_UNSUPPORTED_SUBSET` 的返回和 message 诊断
 
 ### 10.5 当前输出接口现状
 
@@ -682,11 +734,13 @@ McSolverEngine_{Variant}.{version}.nupkg
 
 以下项经与 FreeCAD 源码逐项对比审查后，确认为已知差异或限制，当前阶段明确不处理。
 
-### 12.1 ExpressionEngine 常量表达式 `=` 前缀解析
+### 12.1 VarSet 表达式为精简 FreeCAD 子集
 
-**现状**：`ExpressionEngine` 中形如 `=10 mm` 的常量表达式无法正确解析。`parseParameterBindingExpression` 剥离 `=` 后得到 `10 mm`，但无法匹配 VarSet/参数引用语法而返回 nullopt；回退到 `parseDocumentParameterValue` 时传入的是**含 `=` 前缀**的原始值，导致 `istringstream` 解析失败。
+**现状**：当前已支持 VarSet 自身 `ExpressionEngine` 的纯数学表达式求值，包括算术、常见数学函数、常量 `pi/e`、VarSet 参数引用链和循环检测；但它不是 FreeCAD `App::Expression` 的全集实现。
 
-**跳过原因**：当前所有测试数据中 ExpressionEngine 均为 `count="0"`（空白），无测试覆盖此路径。此移植版本明确不支持完整的 VarSet 参数表达式求值。
+**限制**：不支持非 VarSet 对象引用、Spreadsheet 单元格、几何对象属性、完整 Quantity / Unit 运算、字符串 / 列表 / 字典 / 向量 / placement / 矩阵 / 条件 / 比较 / 逻辑表达式等。若遇到这类 FreeCAD 全集表达式能力，导入返回 `ImportErrorCode::VarSetExpressionUnsupportedSubset`；C API 返回 `MCSOLVERENGINE_RESULT_VARSET_EXPRESSION_UNSUPPORTED_SUBSET`。
+
+**原因**：当前阶段目标是支持参数化尺寸驱动求解所需的稳定子集，而不是移植 FreeCAD App / Document / ObjectIdentifier / Quantity / Expression 全运行时。
 
 ### 12.2 `updateNonDrivingConstraints` 缺失
 

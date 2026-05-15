@@ -78,6 +78,19 @@ using McSolverEngine::Compat::Point2;
     return "Failed";
 }
 
+[[nodiscard]] McSolverEngineResultCode toCApiImportFailureCode(
+    McSolverEngine::DocumentXml::ImportErrorCode errorCode
+)
+{
+    switch (errorCode) {
+        case McSolverEngine::DocumentXml::ImportErrorCode::None:
+            return MCSOLVERENGINE_RESULT_IMPORT_FAILED;
+        case McSolverEngine::DocumentXml::ImportErrorCode::VarSetExpressionUnsupportedSubset:
+            return MCSOLVERENGINE_RESULT_VARSET_EXPRESSION_UNSUPPORTED_SUBSET;
+    }
+    return MCSOLVERENGINE_RESULT_IMPORT_FAILED;
+}
+
 [[nodiscard]] std::string_view toString(McSolverEngine::Compat::SolveStatus status)
 {
     switch (status) {
@@ -552,7 +565,7 @@ McSolverEngineResultCode runStructuredGeometryPipeline(ImportFn&& importFn, McSo
             *result = nullptr;
             return MCSOLVERENGINE_RESULT_OUT_OF_MEMORY;
         }
-        return MCSOLVERENGINE_RESULT_IMPORT_FAILED;
+        return toCApiImportFailureCode(imported.errorCode);
     }
 
     const auto solveResult = McSolverEngine::Compat::solveSketch(imported.model);
@@ -638,7 +651,7 @@ McSolverEngineResultCode runBRepPipeline(ImportFn&& importFn, McSolverEngineBRep
             *result = nullptr;
             return MCSOLVERENGINE_RESULT_OUT_OF_MEMORY;
         }
-        return MCSOLVERENGINE_RESULT_IMPORT_FAILED;
+        return toCApiImportFailureCode(imported.errorCode);
     }
 
     const auto solveResult = McSolverEngine::Compat::solveSketch(imported.model);

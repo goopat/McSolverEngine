@@ -18,9 +18,16 @@ enum class ImportStatus
     Failed = 2,
 };
 
+enum class ImportErrorCode
+{
+    None = 0,
+    VarSetExpressionUnsupportedSubset = 1001,
+};
+
 struct ImportResult
 {
     ImportStatus status {ImportStatus::Failed};
+    ImportErrorCode errorCode {ImportErrorCode::None};
     Compat::SketchModel model;
     std::string sketchName;
     std::vector<std::string> messages;
