@@ -1996,8 +1996,8 @@ int main()
 #endif
 
     const auto inlineGeometry = McSolverEngine::Geometry::exportSketchGeometry(imported.model);
-    if (!inlineGeometry.exported() || inlineGeometry.geometries.size() != 2) {
-        std::cerr << "Expected the inline imported sketch to export two exact geometry records.\n";
+    if (!inlineGeometry.exported() || inlineGeometry.geometries.size() != 4) {
+        std::cerr << "Expected the inline imported sketch to export four exact geometry records (including construction and external).\n";
         return 1;
     }
     bool foundSolvedGeometry = false;
@@ -2096,6 +2096,10 @@ int main()
             return false;
         }
 
+        const auto solveFinishedAt = std::chrono::steady_clock::now();
+
+        const auto brepExportStartedAt = std::chrono::steady_clock::now();
+
         if (McSolverEngine::BRep::exportSketchToBRepFile(importedSample.model, actualPath)
             != McSolverEngine::BRep::ExportStatus::Success) {
             std::cerr << "Expected solved sample sketch to export to " << actualPath << ".\n";
@@ -2150,9 +2154,37 @@ int main()
             return false;
         }
 
-        const auto elapsed =
-            std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - startedAt).count();
-        std::cout << "[smoke] " << label << " [" << fileNameFromPath(actualPath) << "]: " << elapsed << " ms\n";
+        const auto brepElapsed =
+            std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - brepExportStartedAt).count();
+
+        const auto geoExportStartedAt = std::chrono::steady_clock::now();
+
+        const auto exportedGeometry = McSolverEngine::Geometry::exportSketchGeometry(importedSample.model);
+        const auto expectedCount = static_cast<int>(importedSample.model.geometryCount());
+        if (!exportedGeometry.exported() || exportedGeometry.geometries.size() != expectedCount) {
+            std::cerr << "Expected structured geometry count " << expectedCount
+                      << " to match model geometry count, got "
+                      << exportedGeometry.geometries.size() << " for " << label << ".\n";
+            return false;
+        }
+        for (const auto& record : exportedGeometry.geometries) {
+            if (record.originalId <= -99999999) {
+                std::cerr << "Expected originalId > -99999999 for geometry at index "
+                          << record.geometryIndex << " in " << label << ", got " << record.originalId << ".\n";
+                return false;
+            }
+        }
+
+        const auto geoElapsed =
+            std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - geoExportStartedAt).count();
+
+        const auto importSolveElapsed =
+            std::chrono::duration<double, std::milli>(solveFinishedAt - startedAt).count();
+
+        std::cout << "[smoke] " << label << " [" << fileNameFromPath(actualPath) << "]:"
+                  << " import+solve=" << importSolveElapsed << " ms"
+                  << "  brep=" << brepElapsed << " ms"
+                  << "  geo=" << geoElapsed << " ms\n";
 
         return true;
     };
@@ -2304,6 +2336,22 @@ int main()
         std::cerr << "Expected file BREP export to report missing OCCT support.\n";
         return 1;
     }
+    const auto exportedSampleGeometry = McSolverEngine::Geometry::exportSketchGeometry(importedSample.model);
+    const auto expectedSampleCount = static_cast<int>(importedSample.model.geometryCount());
+    if (!exportedSampleGeometry.exported() || exportedSampleGeometry.geometries.size() != expectedSampleCount) {
+        std::cerr << "Expected structured geometry count " << expectedSampleCount
+                  << " for 1.xml / Sketch (no OCCT), got "
+                  << exportedSampleGeometry.geometries.size() << ".\n";
+        return 1;
+    }
+    for (const auto& record : exportedSampleGeometry.geometries) {
+        if (record.originalId <= -99999999) {
+            std::cerr << "Expected originalId > -99999999 for geometry at index "
+                      << record.geometryIndex << " in 1.xml / Sketch (no OCCT), got "
+                      << record.originalId << ".\n";
+            return 1;
+        }
+    }
 #endif
 
     const std::array<std::pair<std::string, bool>, 3> sample2Cases {{
@@ -2337,8 +2385,8 @@ int main()
         }
 
         const auto exportedGeometry = McSolverEngine::Geometry::exportSketchGeometry(importedSample.model);
-        if (!exportedGeometry.exported() || exportedGeometry.geometries.size() != 2) {
-            std::cerr << "Expected " << sketchName << " to export exactly two exact geometry records.\n";
+        if (!exportedGeometry.exported() || exportedGeometry.geometries.size() != 4) {
+            std::cerr << "Expected " << sketchName << " to export exactly four exact geometry records (including construction and external).\n";
             return 1;
         }
 
@@ -2457,9 +2505,15 @@ int main()
         }
 
         const auto ellipseGeometry = McSolverEngine::Geometry::exportSketchGeometry(importedEllipse.model);
-        if (!ellipseGeometry.exported() || ellipseGeometry.geometries.size() != 1
-            || ellipseGeometry.geometries.front().geometry.kind != McSolverEngine::Compat::GeometryKind::Ellipse) {
-            std::cerr << "Expected aligned ellipse sample to export as a single exact ellipse geometry record.\n";
+        bool hasEllipse = false;
+        for (const auto& record : ellipseGeometry.geometries) {
+            if (record.geometry.kind == McSolverEngine::Compat::GeometryKind::Ellipse) {
+                hasEllipse = true;
+                break;
+            }
+        }
+        if (!ellipseGeometry.exported() || !hasEllipse) {
+            std::cerr << "Expected aligned ellipse sample to export an ellipse geometry record.\n";
             return 1;
         }
 

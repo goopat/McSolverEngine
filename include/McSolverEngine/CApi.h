@@ -76,6 +76,7 @@ typedef enum McSolverEngineGeometryKind
 typedef struct McSolverEngineGeometryRecord
 {
     int geometryIndex;
+    int originalId;
     McSolverEngineGeometryKind kind;
     int construction;
     int external;

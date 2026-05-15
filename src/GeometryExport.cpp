@@ -10,12 +10,10 @@ ExportResult exportSketchGeometry(const Compat::SketchModel& model)
 
     for (std::size_t geometryIndex = 0; geometryIndex < model.geometries().size(); ++geometryIndex) {
         const auto& geometry = model.geometries()[geometryIndex];
-        if (geometry.construction || geometry.external) {
-            continue;
-        }
 
         result.geometries.push_back({
             .geometryIndex = static_cast<int>(geometryIndex),
+            .originalId = geometry.originalId,
             .geometry = geometry,
         });
     }

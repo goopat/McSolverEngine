@@ -328,6 +328,7 @@ public static class McSolverEngineClient
 
             geometries.Add(new StructuredGeometryRecord {
                 GeometryIndex = nativeRecord.GeometryIndex,
+                OriginalId = nativeRecord.OriginalId,
                 Kind = nativeRecord.Kind,
                 Construction = nativeRecord.Construction != 0,
                 External = nativeRecord.External != 0,
@@ -640,6 +641,7 @@ public static class McSolverEngineClient
     private struct NativeGeometryRecord
     {
         public int GeometryIndex;
+        public int OriginalId;
         public McSolverEngineGeometryKind Kind;
         public int Construction;
         public int External;

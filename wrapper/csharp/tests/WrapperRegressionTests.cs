@@ -2,6 +2,7 @@ using System.IO;
 using System.Linq;
 using System.Globalization;
 using System.Runtime.InteropServices;
+using System.Xml;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using McSolverEngine.Wrapper;
 
@@ -383,8 +384,8 @@ public class WrapperRegressionTests
         Assert.AreEqual("Success", result.SolveStatus);
         Assert.AreEqual("Geometry", result.ExportKind);
         Assert.AreEqual("Success", result.ExportStatus);
-        Assert.AreEqual(8, result.Geometries.Count);
-        Assert.AreEqual(7, result.Geometries.Count(record => record.Kind == McSolverEngineGeometryKind.LineSegment));
+        Assert.AreEqual(11, result.Geometries.Count);
+        Assert.AreEqual(10, result.Geometries.Count(record => record.Kind == McSolverEngineGeometryKind.LineSegment));
         Assert.AreEqual(1, result.Geometries.Count(record => record.Kind == McSolverEngineGeometryKind.Arc));
         Assert.AreEqual(0, result.Conflicting.Count);
         Assert.AreEqual(0, result.Redundant.Count);
@@ -409,6 +410,14 @@ public class WrapperRegressionTests
         StringAssert.Contains(result.Brep!, "Locations 1");
         Assert.IsFalse(result.Brep!.Contains("Locations 0"));
         AssertBrepEquivalent(expectedBrep, result.Brep!);
+
+        var geometryResult = McSolverEngineClient.SolveGeometryFromDocumentXml(documentXml, "Sketch");
+        Assert.AreEqual(McSolverEngineNativeStatus.Success, geometryResult.NativeStatus);
+        Assert.AreEqual(ParseGeometryCount(documentXml, "Sketch"), geometryResult.Geometries.Count,
+            "Geometry count mismatch for Sketch in 1.xml");
+        Assert.IsTrue(
+            geometryResult.Geometries.All(r => r.OriginalId > -99999999),
+            "Expected all geometry OriginalId > -99999999 for 1.xml");
     }
 
     [TestMethod]
@@ -425,6 +434,14 @@ public class WrapperRegressionTests
         StringAssert.Contains(result.Brep!, "Locations 1");
         Assert.IsFalse(result.Brep!.Contains("Locations 0"));
         AssertBrepEquivalent(expectedBrep, result.Brep!);
+
+        var geometryResult = McSolverEngineClient.SolveGeometryFromDocumentXml(documentXml, "Sketch");
+        Assert.AreEqual(McSolverEngineNativeStatus.Success, geometryResult.NativeStatus);
+        Assert.AreEqual(ParseGeometryCount(documentXml, "Sketch"), geometryResult.Geometries.Count,
+            "Geometry count mismatch for Sketch in V102.4.xml");
+        Assert.IsTrue(
+            geometryResult.Geometries.All(r => r.OriginalId > -99999999),
+            "Expected all geometry OriginalId > -99999999 for V102.4.xml");
     }
 
     [TestMethod]
@@ -452,6 +469,19 @@ public class WrapperRegressionTests
         StringAssert.Contains(result.Brep!, "Locations 1");
         Assert.IsFalse(result.Brep!.Contains("Locations 0"));
         AssertBrepEquivalent(expectedBrep, result.Brep!);
+
+        var geometryResult = McSolverEngineClient.SolveGeometryFromDocumentXml(
+            documentXml, "Sketch",
+            new Dictionary<string, string> {
+                ["D1"] = "61", ["L1"] = "41", ["L2"] = "61",
+                ["L3"] = "11", ["L4"] = "16", ["L5"] = "21",
+            });
+        Assert.AreEqual(McSolverEngineNativeStatus.Success, geometryResult.NativeStatus);
+        Assert.AreEqual(ParseGeometryCount(documentXml, "Sketch"), geometryResult.Geometries.Count,
+            "Geometry count mismatch for Sketch (with parameters) in V102.4.xml");
+        Assert.IsTrue(
+            geometryResult.Geometries.All(r => r.OriginalId > -99999999),
+            "Expected all geometry OriginalId > -99999999 for V102.4.xml with parameters");
     }
 
     [TestMethod]
@@ -468,6 +498,14 @@ public class WrapperRegressionTests
         StringAssert.Contains(result.Brep!, "Locations 1");
         Assert.IsFalse(result.Brep!.Contains("Locations 0"));
         AssertBrepEquivalent(expectedBrep, result.Brep!);
+
+        var geometryResult = McSolverEngineClient.SolveGeometryFromDocumentXml(documentXml, "Sketch");
+        Assert.AreEqual(McSolverEngineNativeStatus.Success, geometryResult.NativeStatus);
+        Assert.AreEqual(ParseGeometryCount(documentXml, "Sketch"), geometryResult.Geometries.Count,
+            "Geometry count mismatch for Sketch in V102.1.xml");
+        Assert.IsTrue(
+            geometryResult.Geometries.All(r => r.OriginalId > -99999999),
+            "Expected all geometry OriginalId > -99999999 for V102.1.xml");
     }
 
     [TestMethod]
@@ -685,14 +723,50 @@ public class WrapperRegressionTests
         var documentXml = File.ReadAllText(xmlPath);
         var expectedBrep = File.ReadAllText(expectedBrepPath);
 
-        var result = McSolverEngineClient.SolveBRepFromDocumentXml(documentXml, sketchName);
+        var brepResult = McSolverEngineClient.SolveBRepFromDocumentXml(documentXml, sketchName);
 
-        Assert.AreEqual(McSolverEngineNativeStatus.Success, result.NativeStatus);
-        Assert.IsFalse(string.IsNullOrEmpty(result.Brep));
-        StringAssert.Contains(result.Brep!, "CASCADE Topology V1");
-        StringAssert.Contains(result.Brep!, "Locations 1");
-        Assert.IsFalse(result.Brep!.Contains("Locations 0"));
-        AssertBrepEquivalent(expectedBrep, result.Brep!);
+        Assert.AreEqual(McSolverEngineNativeStatus.Success, brepResult.NativeStatus);
+        Assert.IsFalse(string.IsNullOrEmpty(brepResult.Brep));
+        StringAssert.Contains(brepResult.Brep!, "CASCADE Topology V1");
+        StringAssert.Contains(brepResult.Brep!, "Locations 1");
+        Assert.IsFalse(brepResult.Brep!.Contains("Locations 0"));
+        AssertBrepEquivalent(expectedBrep, brepResult.Brep!);
+
+        var geometryResult = McSolverEngineClient.SolveGeometryFromDocumentXml(documentXml, sketchName);
+        Assert.AreEqual(McSolverEngineNativeStatus.Success, geometryResult.NativeStatus);
+        var expectedCount = ParseGeometryCount(documentXml, sketchName);
+        Assert.AreEqual(expectedCount, geometryResult.Geometries.Count,
+            $"Geometry count mismatch for {sketchName} in {xmlPath}");
+        Assert.IsTrue(
+            geometryResult.Geometries.All(r => r.OriginalId > -99999999),
+            $"Expected all geometry OriginalId > -99999999 for {sketchName} in {xmlPath}");
+    }
+
+    private static int ParseGeometryCount(string documentXml, string sketchName)
+    {
+        var doc = new XmlDocument();
+        doc.LoadXml(documentXml);
+        var objectNode = doc.SelectSingleNode(
+            $"/Document/ObjectData/Object[@name=\"{sketchName}\"]");
+        if (objectNode == null) {
+            throw new InvalidOperationException($"Sketch object '{sketchName}' not found in document XML.");
+        }
+        var totalCount = 0;
+        foreach (var propertyName in new[] { "ExternalGeometry", "ExternalGeo", "Geometry" }) {
+            var geomListNode = objectNode.SelectSingleNode(
+                $"Properties/Property[@name=\"{propertyName}\"]/GeometryList");
+            if (geomListNode == null) {
+                continue;
+            }
+            var countAttr = geomListNode.Attributes?["count"];
+            if (countAttr != null && int.TryParse(countAttr.Value, out var partCount)) {
+                totalCount += partCount;
+            }
+        }
+        if (totalCount == 0) {
+            throw new InvalidOperationException($"No geometry count found for '{sketchName}'.");
+        }
+        return totalCount;
     }
 
     private static string[] TokenizeBrep(string value)

@@ -145,6 +145,7 @@ struct Geometry
     bool construction {false};
     bool external {false};
     bool blocked {false};
+    int originalId {-99999999};
 };
 
 enum class PointRole

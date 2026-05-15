@@ -12,6 +12,7 @@ namespace McSolverEngine::Geometry
 struct GeometryRecord
 {
     int geometryIndex {-1};
+    int originalId {-99999999};
     Compat::Geometry geometry {};
 };
 

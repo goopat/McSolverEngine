@@ -1110,15 +1110,19 @@ void applyConstraintExpressionBindings(
         }
 
         const auto importedIndex = static_cast<int>(beforeCount);
+        const auto geometryHeader = geometryBlock.substr(0, geometryHeaderEnd - geometryStart + 1);
+        if (const auto rawId = extractIntAttribute(geometryHeader, "id")) {
+            model.geometries()[static_cast<std::size_t>(importedIndex)].originalId = *rawId;
+        }
+
         if (external) {
-            const auto geometryHeader = geometryBlock.substr(0, geometryHeaderEnd - geometryStart + 1);
-            const auto rawId = extractIntAttribute(geometryHeader, "id");
-            if (!rawId) {
+            if (auto rawId = extractIntAttribute(geometryHeader, "id")) {
+                externalGeometryMap[*rawId] = importedIndex;
+            }
+            else {
                 error = "External geometry missing id attribute.";
                 return false;
             }
-
-            externalGeometryMap[*rawId] = importedIndex;
         }
         else {
             internalGeometryMap.push_back(importedIndex);

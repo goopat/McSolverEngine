@@ -34,6 +34,7 @@ public sealed class BSplineKnotDto
 public sealed class StructuredGeometryRecord
 {
     public int GeometryIndex { get; set; } = -1;
+    public int OriginalId { get; set; } = -99999999;
     public McSolverEngineGeometryKind Kind { get; set; }
     public bool Construction { get; set; }
     public bool External { get; set; }

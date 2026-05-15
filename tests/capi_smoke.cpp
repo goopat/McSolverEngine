@@ -153,8 +153,8 @@ int main()
             return EXIT_FAILURE;
         }
         if (!expect(
-                structuredGeometry->geometryCount == 8,
-                "Expected structured geometry result to contain 8 geometries."
+                structuredGeometry->geometryCount == 11,
+                "Expected structured geometry result to contain 11 geometries (including construction and external)."
             )) {
             McSolverEngine_FreeGeometryResult(structuredGeometry);
             return EXIT_FAILURE;
@@ -162,10 +162,16 @@ int main()
 
         bool hasLine = false;
         bool hasArc = false;
+        bool allHaveOriginalId = true;
         for (int i = 0; i < structuredGeometry->geometryCount; ++i) {
             const auto& record = structuredGeometry->geometries[i];
             hasLine = hasLine || record.kind == MCSOLVERENGINE_GEOMETRY_LINE_SEGMENT;
             hasArc = hasArc || record.kind == MCSOLVERENGINE_GEOMETRY_ARC;
+            allHaveOriginalId = allHaveOriginalId && record.originalId > -99999999;
+        }
+        if (!expect(allHaveOriginalId, "Expected all structured geometry records to have originalId > -99999999.")) {
+            McSolverEngine_FreeGeometryResult(structuredGeometry);
+            return EXIT_FAILURE;
         }
         if (!expect(hasLine, "Expected structured geometry result to contain a line segment.")) {
             McSolverEngine_FreeGeometryResult(structuredGeometry);
@@ -285,6 +291,13 @@ int main()
             return EXIT_FAILURE;
         }
         if (!expect(
+                parameterizedGeometry->geometries[0].originalId > -99999999,
+                "Expected parameterized Geometry result to have originalId > -99999999."
+            )) {
+            McSolverEngine_FreeGeometryResult(parameterizedGeometry);
+            return EXIT_FAILURE;
+        }
+        if (!expect(
                 std::abs(lineLength(parameterizedGeometry->geometries[0]) - 8.5) <= 1e-9,
                 "Expected parameterized Geometry result to apply the overridden length."
             )) {
@@ -399,6 +412,13 @@ int main()
             return EXIT_FAILURE;
         }
         if (!expect(
+                defaultAngleGeometry->geometries[0].originalId > -99999999,
+                "Expected default angle Geometry result to have originalId > -99999999."
+            )) {
+            McSolverEngine_FreeGeometryResult(defaultAngleGeometry);
+            return EXIT_FAILURE;
+        }
+        if (!expect(
                 std::abs(lineLength(defaultAngleGeometry->geometries[0]) - 10.0) <= 1e-9
                     && std::abs(lineAngleDegrees(defaultAngleGeometry->geometries[0]) - 90.0) <= 1e-9,
                 "Expected default angle Geometry result to convert degree parameters before solving."
@@ -429,8 +449,15 @@ int main()
             return EXIT_FAILURE;
         }
         if (!expect(
-                overriddenAngleGeometry != nullptr
-                    && std::abs(lineLength(overriddenAngleGeometry->geometries[0]) - 10.0) <= 1e-9
+                overriddenAngleGeometry != nullptr && overriddenAngleGeometry->geometryCount == 1
+                    && overriddenAngleGeometry->geometries[0].originalId > -99999999,
+                "Expected overridden angle Geometry result to have valid originalId."
+            )) {
+            McSolverEngine_FreeGeometryResult(overriddenAngleGeometry);
+            return EXIT_FAILURE;
+        }
+        if (!expect(
+                std::abs(lineLength(overriddenAngleGeometry->geometries[0]) - 10.0) <= 1e-9
                     && std::abs(lineAngleDegrees(overriddenAngleGeometry->geometries[0]) - 45.0) <= 1e-9,
                 "Expected overridden angle Geometry result to interpret API values as degrees."
             )) {

@@ -464,6 +464,7 @@ template<typename ResultT, typename ImportResultT, typename SolveResultT>
 )
 {
     target.geometryIndex = source.geometryIndex;
+    target.originalId = source.originalId;
     target.kind = toCApiGeometryKind(source.geometry.kind);
     target.construction = source.geometry.construction ? 1 : 0;
     target.external = source.geometry.external ? 1 : 0;
