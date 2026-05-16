@@ -9,11 +9,18 @@
 namespace McSolverEngine::Geometry
 {
 
+struct ConstraintRef
+{
+    Compat::ConstraintKind kind {Compat::ConstraintKind::Coincident};
+    std::string expression {};
+};
+
 struct GeometryRecord
 {
     int geometryIndex {-1};
     int originalId {-99999999};
     Compat::Geometry geometry {};
+    std::vector<ConstraintRef> constraints {};
 };
 
 enum class ExportStatus

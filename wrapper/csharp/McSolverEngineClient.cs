@@ -346,7 +346,8 @@ public static class McSolverEngineClient
                 Degree = nativeRecord.Degree,
                 Periodic = nativeRecord.Periodic != 0,
                 Poles = ReadBSplinePoles(nativeRecord.Poles, nativeRecord.PoleCount),
-                Knots = ReadBSplineKnots(nativeRecord.Knots, nativeRecord.KnotCount)
+                Knots = ReadBSplineKnots(nativeRecord.Knots, nativeRecord.KnotCount),
+                Constraints = ReadConstraintRefs(nativeRecord.Constraints, nativeRecord.ConstraintCount)
             });
         }
 
@@ -420,6 +421,26 @@ public static class McSolverEngineClient
         }
 
         return values;
+    }
+
+    private static List<ConstraintRefDto> ReadConstraintRefs(IntPtr pointer, int count)
+    {
+        var refs = new List<ConstraintRefDto>();
+        if (pointer == IntPtr.Zero || count <= 0) {
+            return refs;
+        }
+
+        var stride = Marshal.SizeOf(typeof(NativeConstraintRef));
+        for (var i = 0; i < count; ++i) {
+            var current = IntPtr.Add(pointer, i * stride);
+            var nativeRef = (NativeConstraintRef)Marshal.PtrToStructure(current, typeof(NativeConstraintRef))!;
+            refs.Add(new ConstraintRefDto {
+                Kind = (McSolverEngineConstraintKind)nativeRef.Kind,
+                Expression = ReadNativeUtf8String(nativeRef.Expression)
+            });
+        }
+
+        return refs;
     }
 
     private static string? GetConfiguredLibraryCandidate()
@@ -637,6 +658,36 @@ public static class McSolverEngineClient
         public int Multiplicity;
     }
 
+    private enum NativeConstraintKind
+    {
+        Coincident = 0,
+        Horizontal = 1,
+        Vertical = 2,
+        DistanceX = 3,
+        DistanceY = 4,
+        Distance = 5,
+        Parallel = 6,
+        Tangent = 7,
+        Perpendicular = 8,
+        Angle = 9,
+        Radius = 10,
+        Diameter = 11,
+        Equal = 12,
+        Symmetric = 13,
+        PointOnObject = 14,
+        InternalAlignment = 15,
+        SnellsLaw = 16,
+        Block = 17,
+        Weight = 18,
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct NativeConstraintRef
+    {
+        public NativeConstraintKind Kind;
+        public IntPtr Expression;
+    }
+
     [StructLayout(LayoutKind.Sequential)]
     private struct NativeGeometryRecord
     {
@@ -662,6 +713,8 @@ public static class McSolverEngineClient
         public IntPtr Poles;
         public int KnotCount;
         public IntPtr Knots;
+        public int ConstraintCount;
+        public IntPtr Constraints;
     }
 
     [StructLayout(LayoutKind.Sequential)]

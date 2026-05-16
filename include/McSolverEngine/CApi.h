@@ -73,6 +73,35 @@ typedef enum McSolverEngineGeometryKind
     MCSOLVERENGINE_GEOMETRY_BSPLINE = 8
 } McSolverEngineGeometryKind;
 
+typedef enum McSolverEngineConstraintKind
+{
+    MCSOLVERENGINE_CONSTRAINT_COINCIDENT = 0,
+    MCSOLVERENGINE_CONSTRAINT_HORIZONTAL = 1,
+    MCSOLVERENGINE_CONSTRAINT_VERTICAL = 2,
+    MCSOLVERENGINE_CONSTRAINT_DISTANCE_X = 3,
+    MCSOLVERENGINE_CONSTRAINT_DISTANCE_Y = 4,
+    MCSOLVERENGINE_CONSTRAINT_DISTANCE = 5,
+    MCSOLVERENGINE_CONSTRAINT_PARALLEL = 6,
+    MCSOLVERENGINE_CONSTRAINT_TANGENT = 7,
+    MCSOLVERENGINE_CONSTRAINT_PERPENDICULAR = 8,
+    MCSOLVERENGINE_CONSTRAINT_ANGLE = 9,
+    MCSOLVERENGINE_CONSTRAINT_RADIUS = 10,
+    MCSOLVERENGINE_CONSTRAINT_DIAMETER = 11,
+    MCSOLVERENGINE_CONSTRAINT_EQUAL = 12,
+    MCSOLVERENGINE_CONSTRAINT_SYMMETRIC = 13,
+    MCSOLVERENGINE_CONSTRAINT_POINT_ON_OBJECT = 14,
+    MCSOLVERENGINE_CONSTRAINT_INTERNAL_ALIGNMENT = 15,
+    MCSOLVERENGINE_CONSTRAINT_SNELLS_LAW = 16,
+    MCSOLVERENGINE_CONSTRAINT_BLOCK = 17,
+    MCSOLVERENGINE_CONSTRAINT_WEIGHT = 18
+} McSolverEngineConstraintKind;
+
+typedef struct McSolverEngineConstraintRef
+{
+    McSolverEngineConstraintKind kind;
+    const char* expression;
+} McSolverEngineConstraintRef;
+
 typedef struct McSolverEngineGeometryRecord
 {
     int geometryIndex;
@@ -97,6 +126,8 @@ typedef struct McSolverEngineGeometryRecord
     const McSolverEngineBSplinePole* poles;
     int knotCount;
     const McSolverEngineBSplineKnot* knots;
+    int constraintCount;
+    const McSolverEngineConstraintRef* constraints;
 } McSolverEngineGeometryRecord;
 
 typedef struct McSolverEngineGeometryResult

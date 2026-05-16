@@ -566,5 +566,127 @@ int main()
         McSolverEngine_FreeGeometryResult(unsupportedVarSetExpressionGeometry);
     }
 
+    {
+        ScopedTestTimer timer("SolveToGeometry constraint expression V102.6");
+        const auto v1026Xml = readTextFile(std::string(MCSOLVERENGINE_SOURCE_DIR) + "/fcstdDoc/V102.6.xml");
+        if (!expect(!v1026Xml.empty(), "Expected V102.6.xml to load.")) {
+            return EXIT_FAILURE;
+        }
+
+        McSolverEngineGeometryResult* v1026Result = nullptr;
+        const auto v1026Code = McSolverEngine_SolveToGeometry(v1026Xml.c_str(), "Sketch", &v1026Result);
+        if (!expect(v1026Code == MCSOLVERENGINE_RESULT_SUCCESS, "Expected V102.6 to succeed.")) {
+            return EXIT_FAILURE;
+        }
+        if (!expect(v1026Result != nullptr, "Expected V102.6 result pointer.")) {
+            return EXIT_FAILURE;
+        }
+
+        // V102.6 has 4 expression-driven constraint refs:
+        //   originalId=2:  Angle(kind=9) with "VarSet.R1"
+        //   originalId=2:  Distance(kind=5) with "VarSet001.V2L2"
+        //   originalId=-1: Angle(kind=9) with "VarSet.R1" (external geometry)
+        //   originalId=6:  Radius(kind=10) with "VarSet.L1 * 3"
+        int exprCount = 0;
+        bool foundAngleR1_geo2 = false;
+        bool foundDistV2L2 = false;
+        bool foundAngleR1_ext = false;
+        bool foundRadiusL1 = false;
+        for (int i = 0; i < v1026Result->geometryCount; ++i) {
+            const auto& record = v1026Result->geometries[i];
+            exprCount += record.constraintCount;
+            for (int j = 0; j < record.constraintCount; ++j) {
+                const auto& ref = record.constraints[j];
+                if (record.originalId == 2 && ref.kind == MCSOLVERENGINE_CONSTRAINT_ANGLE
+                    && ref.expression != nullptr && std::string(ref.expression) == "VarSet.R1") {
+                    foundAngleR1_geo2 = true;
+                }
+                if (record.originalId == 2 && ref.kind == MCSOLVERENGINE_CONSTRAINT_DISTANCE
+                    && ref.expression != nullptr && std::string(ref.expression) == "VarSet001.V2L2") {
+                    foundDistV2L2 = true;
+                }
+                if (record.originalId == -1 && ref.kind == MCSOLVERENGINE_CONSTRAINT_ANGLE
+                    && ref.expression != nullptr && std::string(ref.expression) == "VarSet.R1") {
+                    foundAngleR1_ext = true;
+                }
+                if (record.originalId == 6 && ref.kind == MCSOLVERENGINE_CONSTRAINT_RADIUS
+                    && ref.expression != nullptr && std::string(ref.expression) == "VarSet.L1 * 3") {
+                    foundRadiusL1 = true;
+                }
+            }
+        }
+
+        if (!expect(exprCount == 4,
+                    (std::string("V102.6: expected 4 expression refs, got ") + std::to_string(exprCount)).c_str())) {
+            McSolverEngine_FreeGeometryResult(v1026Result);
+            return EXIT_FAILURE;
+        }
+        if (!expect(foundAngleR1_geo2, "V102.6: expected originalId=2 Angle with VarSet.R1.")) {
+            McSolverEngine_FreeGeometryResult(v1026Result);
+            return EXIT_FAILURE;
+        }
+        if (!expect(foundDistV2L2, "V102.6: expected originalId=2 Distance with VarSet001.V2L2.")) {
+            McSolverEngine_FreeGeometryResult(v1026Result);
+            return EXIT_FAILURE;
+        }
+        if (!expect(foundAngleR1_ext, "V102.6: expected originalId=-1 Angle with VarSet.R1.")) {
+            McSolverEngine_FreeGeometryResult(v1026Result);
+            return EXIT_FAILURE;
+        }
+        if (!expect(foundRadiusL1, "V102.6: expected originalId=6 Radius with VarSet.L1 * 3.")) {
+            McSolverEngine_FreeGeometryResult(v1026Result);
+            return EXIT_FAILURE;
+        }
+
+        McSolverEngine_FreeGeometryResult(v1026Result);
+    }
+
+    {
+        ScopedTestTimer timer("SolveToGeometry constraint expression V102.5");
+        const auto v1025Xml = readTextFile(std::string(MCSOLVERENGINE_SOURCE_DIR) + "/fcstdDoc/V102.5.xml");
+        if (!expect(!v1025Xml.empty(), "Expected V102.5.xml to load.")) {
+            return EXIT_FAILURE;
+        }
+
+        McSolverEngineGeometryResult* v1025Result = nullptr;
+        const auto v1025Code = McSolverEngine_SolveToGeometry(v1025Xml.c_str(), "Sketch", &v1025Result);
+        if (!expect(v1025Code == MCSOLVERENGINE_RESULT_SUCCESS, "Expected V102.5 to succeed.")) {
+            return EXIT_FAILURE;
+        }
+        if (!expect(v1025Result != nullptr, "Expected V102.5 result pointer.")) {
+            return EXIT_FAILURE;
+        }
+
+        // Only expression-driven constraints are exported.
+        // V102.5 has one expression: <<VarSet>>.R1 on the Diameter constraint at originalId=17.
+        int exprCount = 0;
+        bool foundExpected = false;
+        for (int i = 0; i < v1025Result->geometryCount; ++i) {
+            const auto& record = v1025Result->geometries[i];
+            exprCount += record.constraintCount;
+            for (int j = 0; j < record.constraintCount; ++j) {
+                if (record.originalId == 17
+                    && record.constraints[j].kind == MCSOLVERENGINE_CONSTRAINT_DIAMETER
+                    && record.constraints[j].expression != nullptr
+                    && std::string(record.constraints[j].expression) == "<<VarSet>>.R1") {
+                    foundExpected = true;
+                }
+            }
+        }
+
+        if (!expect(exprCount == 1,
+                    (std::string("Expected 1 expression-driven constraint total, got ") + std::to_string(exprCount)).c_str())) {
+            McSolverEngine_FreeGeometryResult(v1025Result);
+            return EXIT_FAILURE;
+        }
+        if (!expect(foundExpected,
+                    "Expected originalId=17 to have Diameter with expression <<VarSet>>.R1.")) {
+            McSolverEngine_FreeGeometryResult(v1025Result);
+            return EXIT_FAILURE;
+        }
+
+        McSolverEngine_FreeGeometryResult(v1025Result);
+    }
+
     return EXIT_SUCCESS;
 }

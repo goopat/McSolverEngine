@@ -315,6 +315,7 @@ public class WrapperRegressionTests
     private static string _v1024Plus1ExpectedBrepPath = string.Empty;
     private static string _v1025XmlPath = string.Empty;
     private static string _v1025ExpectedBrepPath = string.Empty;
+    private static string _v1026XmlPath = string.Empty;
 
     [AssemblyInitialize]
     public static void AssemblyInitialize(TestContext _)
@@ -334,6 +335,7 @@ public class WrapperRegressionTests
         _v1024Plus1ExpectedBrepPath = Path.Combine(_projectRoot, "fcstdDoc", "V102.4.plus1.brp");
         _v1025XmlPath = Path.Combine(_projectRoot, "fcstdDoc", "V102.5.xml");
         _v1025ExpectedBrepPath = Path.Combine(_projectRoot, "fcstdDoc", "V102.5.brp");
+        _v1026XmlPath = Path.Combine(_projectRoot, "fcstdDoc", "V102.6.xml");
 
         var nativeDirectory = FindNativeLibraryDirectory();
         var occtRuntimeDirectory = FindOcctRuntimeDirectory();
@@ -355,6 +357,7 @@ public class WrapperRegressionTests
         Assert.IsTrue(File.Exists(_v1024Plus1ExpectedBrepPath));
         Assert.IsTrue(File.Exists(_v1025XmlPath));
         Assert.IsTrue(File.Exists(_v1025ExpectedBrepPath));
+        Assert.IsTrue(File.Exists(_v1026XmlPath));
         Assert.IsFalse(string.IsNullOrWhiteSpace(occtRuntimeDirectory), "Failed to locate an OCCT runtime directory.");
 
         var currentPath = Environment.GetEnvironmentVariable("PATH") ?? string.Empty;
@@ -530,6 +533,67 @@ public class WrapperRegressionTests
     public void BRepRegression_ForV1025_MatchesExpectedBrep()
     {
         AssertBrepRegression(_v1025XmlPath, "Sketch", _v1025ExpectedBrepPath);
+    }
+
+    [TestMethod]
+    public void GeometryRegression_V1025_ExpressionDrivenConstraint()
+    {
+        var documentXml = File.ReadAllText(_v1025XmlPath);
+
+        var result = McSolverEngineClient.SolveGeometryFromDocumentXml(documentXml, "Sketch");
+        Assert.AreEqual(McSolverEngineNativeStatus.Success, result.NativeStatus);
+
+        // Only expression-driven constraints are exported.
+        // V102.5 has one: <<VarSet>>.R1 on the Diameter constraint at originalId=17.
+        var totalExprRefs = result.Geometries.Sum(r => r.Constraints.Count);
+        Assert.AreEqual(1, totalExprRefs,
+            $"Expected exactly 1 expression-driven constraint ref, got {totalExprRefs}.");
+
+        var geo17 = result.Geometries.First(r => r.OriginalId == 17);
+        Assert.IsTrue(
+            geo17.Constraints.Any(c => c.Kind == McSolverEngineConstraintKind.Diameter
+                                       && c.Expression == "<<VarSet>>.R1"),
+            "Expected originalId=17 to have Diameter with expression <<VarSet>>.R1.");
+    }
+
+    [TestMethod]
+    public void GeometryRegression_V1026_ExpressionDrivenConstraints()
+    {
+        var documentXml = File.ReadAllText(_v1026XmlPath);
+
+        var result = McSolverEngineClient.SolveGeometryFromDocumentXml(documentXml, "Sketch");
+        Assert.AreEqual(McSolverEngineNativeStatus.Success, result.NativeStatus);
+
+        // V102.6 has 4 expression-driven constraint refs:
+        //   originalId=2:  Angle with "VarSet.R1"
+        //   originalId=2:  Distance with "VarSet001.V2L2"
+        //   originalId=-1: Angle with "VarSet.R1" (external geometry)
+        //   originalId=6:  Radius with "VarSet.L1 * 3"
+        var totalExprRefs = result.Geometries.Sum(r => r.Constraints.Count);
+        Assert.AreEqual(4, totalExprRefs,
+            $"V102.6: expected 4 expression refs, got {totalExprRefs}.");
+
+        var geo2 = result.Geometries.First(r => r.OriginalId == 2);
+        Assert.IsTrue(
+            geo2.Constraints.Any(c => c.Kind == McSolverEngineConstraintKind.Angle
+                                      && c.Expression == "VarSet.R1"),
+            "V102.6: expected originalId=2 Angle with VarSet.R1.");
+        Assert.IsTrue(
+            geo2.Constraints.Any(c => c.Kind == McSolverEngineConstraintKind.Distance
+                                      && c.Expression == "VarSet001.V2L2"),
+            "V102.6: expected originalId=2 Distance with VarSet001.V2L2.");
+
+        var geoExt = result.Geometries.First(r => r.OriginalId == -1);
+        Assert.IsTrue(
+            geoExt.Constraints.Any(c => c.Kind == McSolverEngineConstraintKind.Angle
+                                        && c.Expression == "VarSet.R1"),
+            "V102.6: expected external geometry originalId=-1 Angle with VarSet.R1.");
+
+        var geo6 = result.Geometries.First(r => r.OriginalId == 6);
+        Assert.IsTrue(
+            geo6.Constraints.Any(c => c.Kind == McSolverEngineConstraintKind.Radius
+                                      && c.Expression == "VarSet.L1 * 3"),
+            "V102.6: expected originalId=6 Radius with VarSet.L1 * 3.");
     }
 
     [TestMethod]

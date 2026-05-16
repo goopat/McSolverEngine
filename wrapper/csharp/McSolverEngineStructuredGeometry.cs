@@ -13,6 +13,35 @@ public enum McSolverEngineGeometryKind
     BSpline = 8
 }
 
+public enum McSolverEngineConstraintKind
+{
+    Coincident = 0,
+    Horizontal = 1,
+    Vertical = 2,
+    DistanceX = 3,
+    DistanceY = 4,
+    Distance = 5,
+    Parallel = 6,
+    Tangent = 7,
+    Perpendicular = 8,
+    Angle = 9,
+    Radius = 10,
+    Diameter = 11,
+    Equal = 12,
+    Symmetric = 13,
+    PointOnObject = 14,
+    InternalAlignment = 15,
+    SnellsLaw = 16,
+    Block = 17,
+    Weight = 18
+}
+
+public sealed class ConstraintRefDto
+{
+    public McSolverEngineConstraintKind Kind { get; set; }
+    public string? Expression { get; set; }
+}
+
 public sealed class Point2Dto
 {
     public double X { get; set; }
@@ -53,6 +82,7 @@ public sealed class StructuredGeometryRecord
     public bool Periodic { get; set; }
     public List<BSplinePoleDto> Poles { get; set; } = [];
     public List<BSplineKnotDto> Knots { get; set; } = [];
+    public List<ConstraintRefDto> Constraints { get; set; } = [];
 }
 
 public sealed class StructuredGeometrySolveResponse

@@ -253,6 +253,12 @@ void freeGeometryResult(McSolverEngineGeometryResult* value) noexcept
         for (int i = 0; i < value->geometryCount; ++i) {
             delete[] geometries[i].poles;
             delete[] geometries[i].knots;
+            if (auto* refs = geometries[i].constraints) {
+                for (int j = 0; j < geometries[i].constraintCount; ++j) {
+                    delete[] refs[j].expression;
+                }
+                delete[] refs;
+            }
         }
         delete[] geometries;
     }
@@ -458,6 +464,43 @@ template<typename ResultT, typename ImportResultT, typename SolveResultT>
     return true;
 }
 
+[[nodiscard]] McSolverEngineConstraintKind toCApiConstraintKind(McSolverEngine::Compat::ConstraintKind kind)
+{
+    return static_cast<McSolverEngineConstraintKind>(kind);
+}
+
+[[nodiscard]] bool copyConstraintRefs(
+    const std::vector<McSolverEngine::Geometry::ConstraintRef>& source,
+    McSolverEngineGeometryRecord& target
+)
+{
+    target.constraintCount = static_cast<int>(source.size());
+    if (source.empty()) {
+        target.constraints = nullptr;
+        return true;
+    }
+    auto* refs = new (std::nothrow) McSolverEngineConstraintRef[source.size()];
+    if (!refs) {
+        return false;
+    }
+    for (std::size_t i = 0; i < source.size(); ++i) {
+        refs[i].kind = toCApiConstraintKind(source[i].kind);
+        if (source[i].expression.empty()) {
+            refs[i].expression = nullptr;
+        }
+        else {
+            char* buf = nullptr;
+            if (!assignOutputString(source[i].expression, &buf)) {
+                delete[] refs;
+                return false;
+            }
+            refs[i].expression = buf;
+        }
+    }
+    target.constraints = refs;
+    return true;
+}
+
 [[nodiscard]] bool fillGeometryRecord(
     const McSolverEngine::Geometry::GeometryRecord& source,
     McSolverEngineGeometryRecord& target
@@ -470,23 +513,27 @@ template<typename ResultT, typename ImportResultT, typename SolveResultT>
     target.external = source.geometry.external ? 1 : 0;
     target.blocked = source.geometry.blocked ? 1 : 0;
 
+    bool ok = false;
     switch (source.geometry.kind) {
         case GeometryKind::Point: {
             const auto& point = std::get<PointGeometry>(source.geometry.data);
             target.point = toCApiPoint2(point.point);
-            return true;
+            ok = true;
+            break;
         }
         case GeometryKind::LineSegment: {
             const auto& segment = std::get<LineSegmentGeometry>(source.geometry.data);
             target.start = toCApiPoint2(segment.start);
             target.end = toCApiPoint2(segment.end);
-            return true;
+            ok = true;
+            break;
         }
         case GeometryKind::Circle: {
             const auto& circle = std::get<CircleGeometry>(source.geometry.data);
             target.center = toCApiPoint2(circle.center);
             target.radius = circle.radius;
-            return true;
+            ok = true;
+            break;
         }
         case GeometryKind::Arc: {
             const auto& arc = std::get<ArcGeometry>(source.geometry.data);
@@ -494,14 +541,16 @@ template<typename ResultT, typename ImportResultT, typename SolveResultT>
             target.radius = arc.radius;
             target.startAngle = arc.startAngle;
             target.endAngle = arc.endAngle;
-            return true;
+            ok = true;
+            break;
         }
         case GeometryKind::Ellipse: {
             const auto& ellipse = std::get<EllipseGeometry>(source.geometry.data);
             target.center = toCApiPoint2(ellipse.center);
             target.focus1 = toCApiPoint2(ellipse.focus1);
             target.minorRadius = ellipse.minorRadius;
-            return true;
+            ok = true;
+            break;
         }
         case GeometryKind::ArcOfEllipse: {
             const auto& arc = std::get<ArcOfEllipseGeometry>(source.geometry.data);
@@ -510,7 +559,8 @@ template<typename ResultT, typename ImportResultT, typename SolveResultT>
             target.minorRadius = arc.minorRadius;
             target.startAngle = arc.startAngle;
             target.endAngle = arc.endAngle;
-            return true;
+            ok = true;
+            break;
         }
         case GeometryKind::ArcOfHyperbola: {
             const auto& arc = std::get<ArcOfHyperbolaGeometry>(source.geometry.data);
@@ -519,7 +569,8 @@ template<typename ResultT, typename ImportResultT, typename SolveResultT>
             target.minorRadius = arc.minorRadius;
             target.startAngle = arc.startAngle;
             target.endAngle = arc.endAngle;
-            return true;
+            ok = true;
+            break;
         }
         case GeometryKind::ArcOfParabola: {
             const auto& arc = std::get<ArcOfParabolaGeometry>(source.geometry.data);
@@ -527,16 +578,21 @@ template<typename ResultT, typename ImportResultT, typename SolveResultT>
             target.focus1 = toCApiPoint2(arc.focus1);
             target.startAngle = arc.startAngle;
             target.endAngle = arc.endAngle;
-            return true;
+            ok = true;
+            break;
         }
         case GeometryKind::BSpline: {
             const auto& spline = std::get<BSplineGeometry>(source.geometry.data);
             target.degree = spline.degree;
             target.periodic = spline.periodic ? 1 : 0;
-            return copyBSplinePoles(spline.poles, target) && copyBSplineKnots(spline.knots, target);
+            ok = copyBSplinePoles(spline.poles, target) && copyBSplineKnots(spline.knots, target);
+            break;
         }
     }
-    return false;
+    if (!ok) {
+        return false;
+    }
+    return copyConstraintRefs(source.constraints, target);
 }
 
 template<typename ImportFn>
