@@ -27,17 +27,31 @@ Without OCCT: core solving, Document.xml import, and geometry export still build
 ## Testing
 
 ```
-cmake --build build --target McSolverEngineSmokeTest && ctest --test-dir build
+cmake --build build --config Release
+ctest --test-dir build -C Release
 ```
 
-Or run individual test executables directly (they need OCCT DLLs on `PATH`):
+This builds and runs all tests including C# wrapper tests. C# Debug/Release builds
+automatically depend on the matching C++ `McSolverEngineNative` DLL — no stale binaries.
+
+Run individual test executables directly (they need OCCT DLLs on `PATH`):
 
 ```
 build\Release\McSolverEngineSmokeTest.exe
 build\Release\McSolverEngineCApiSmokeTest.exe
 ```
 
-C# wrapper tests (`.NET Framework 4.8`):
+Run only C++ tests:
+```
+ctest --test-dir build -C Release -E csharp
+```
+
+Run only C# wrapper tests (both net48 and net6.0):
+```
+ctest --test-dir build -C Release -L csharp
+```
+
+C# wrapper tests can also run via `dotnet test`:
 
 ```
 dotnet test wrapper\csharp\tests\McSolverEngine.Wrapper.Tests.csproj

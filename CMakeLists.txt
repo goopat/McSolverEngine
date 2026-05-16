@@ -381,6 +381,59 @@ if(MCSOLVERENGINE_BUILD_TESTS)
                     $<TARGET_FILE:McSolverEngineCApiSmokeTest>
             )
         endif()
+
+        # ── C# wrapper integration ───────────────────────────────────
+        if(WIN32)
+            find_program(DOTNET_EXECUTABLE dotnet)
+            if(DOTNET_EXECUTABLE)
+                set(_csharp_wrapper_proj "${CMAKE_CURRENT_SOURCE_DIR}/wrapper/csharp/McSolverEngine.Wrapper.csproj")
+                set(_csharp_tests_proj "${CMAKE_CURRENT_SOURCE_DIR}/wrapper/csharp/tests/McSolverEngine.Wrapper.Tests.csproj")
+
+                add_custom_target(McSolverEngineCSharpWrapper ALL
+                    COMMAND ${CMAKE_COMMAND} -E env DOTNET_CLI_UI_LANGUAGE=en
+                        ${DOTNET_EXECUTABLE} build "${_csharp_wrapper_proj}"
+                        --configuration $<CONFIG>
+                    DEPENDS McSolverEngineNative
+                    WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+                    COMMENT "Building C# wrapper ($<CONFIG>)"
+                )
+
+                add_custom_target(McSolverEngineCSharpTests ALL
+                    COMMAND ${CMAKE_COMMAND} -E env DOTNET_CLI_UI_LANGUAGE=en
+                        ${DOTNET_EXECUTABLE} build "${_csharp_tests_proj}"
+                        --configuration $<CONFIG>
+                    DEPENDS McSolverEngineCSharpWrapper
+                    WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+                    COMMENT "Building C# tests ($<CONFIG>)"
+                )
+
+                add_test(
+                    NAME McSolverEngineCSharpWrapperTests_net48
+                    COMMAND
+                        ${CMAKE_COMMAND} -E env
+                        "${MCSOLVERENGINE_LIB_PATH_VAR}=$<TARGET_FILE_DIR:McSolverEngineNative>${MCSOLVERENGINE_PATH_SEP}${MCSOLVERENGINE_RUNTIME_PATH}${MCSOLVERENGINE_PATH_SEP}$ENV{${MCSOLVERENGINE_LIB_PATH_VAR}}"
+                        "${CMAKE_CURRENT_SOURCE_DIR}/wrapper/csharp/tests/bin/$<CONFIG>/net48/McSolverEngine.Wrapper.Tests.exe"
+                )
+                set_tests_properties(McSolverEngineCSharpWrapperTests_net48 PROPERTIES
+                    LABELS "csharp"
+                )
+
+                add_test(
+                    NAME McSolverEngineCSharpWrapperTests_net60
+                    COMMAND
+                        ${CMAKE_COMMAND} -E env
+                        DOTNET_CLI_UI_LANGUAGE=en
+                        "${MCSOLVERENGINE_LIB_PATH_VAR}=$<TARGET_FILE_DIR:McSolverEngineNative>${MCSOLVERENGINE_PATH_SEP}${MCSOLVERENGINE_RUNTIME_PATH}${MCSOLVERENGINE_PATH_SEP}$ENV{${MCSOLVERENGINE_LIB_PATH_VAR}}"
+                        ${DOTNET_EXECUTABLE} test "${_csharp_tests_proj}"
+                        --configuration $<CONFIG>
+                        --framework net6.0
+                        --no-build
+                )
+                set_tests_properties(McSolverEngineCSharpWrapperTests_net60 PROPERTIES
+                    LABELS "csharp"
+                )
+            endif()
+        endif()
     endif()
 endif()
 
