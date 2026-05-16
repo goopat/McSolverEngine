@@ -39,6 +39,7 @@ public enum McSolverEngineConstraintKind
 public sealed class ConstraintRefDto
 {
     public McSolverEngineConstraintKind Kind { get; set; }
+    public int OriginalIndex { get; set; } = -99999999;
     public string? Expression { get; set; }
 }
 

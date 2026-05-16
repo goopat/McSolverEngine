@@ -39,6 +39,7 @@ ExportResult exportSketchGeometry(const Compat::SketchModel& model)
             }
             result.geometries[static_cast<std::size_t>(geoIdx)].constraints.push_back({
                 .kind = constraint.kind,
+                .originalIndex = constraint.originalIndex,
                 .expression = constraint.parameterExpression,
             });
         }

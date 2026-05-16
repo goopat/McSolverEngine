@@ -205,6 +205,7 @@ enum class ConstraintKind
 struct Constraint
 {
     ConstraintKind kind {ConstraintKind::Coincident};
+    int originalIndex {-99999999};
     ElementRef first {};
     ElementRef second {};
     ElementRef third {};

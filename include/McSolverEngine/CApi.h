@@ -99,6 +99,7 @@ typedef enum McSolverEngineConstraintKind
 typedef struct McSolverEngineConstraintRef
 {
     McSolverEngineConstraintKind kind;
+    int originalIndex;
     const char* expression;
 } McSolverEngineConstraintRef;
 

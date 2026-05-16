@@ -436,6 +436,7 @@ public static class McSolverEngineClient
             var nativeRef = (NativeConstraintRef)Marshal.PtrToStructure(current, typeof(NativeConstraintRef))!;
             refs.Add(new ConstraintRefDto {
                 Kind = (McSolverEngineConstraintKind)nativeRef.Kind,
+                OriginalIndex = nativeRef.OriginalIndex,
                 Expression = ReadNativeUtf8String(nativeRef.Expression)
             });
         }
@@ -685,6 +686,7 @@ public static class McSolverEngineClient
     private struct NativeConstraintRef
     {
         public NativeConstraintKind Kind;
+        public int OriginalIndex;
         public IntPtr Expression;
     }
 

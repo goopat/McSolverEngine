@@ -565,10 +565,10 @@ public class WrapperRegressionTests
         Assert.AreEqual(McSolverEngineNativeStatus.Success, result.NativeStatus);
 
         // V102.6 has 4 expression-driven constraint refs:
-        //   originalId=2:  Angle with "VarSet.R1"
-        //   originalId=2:  Distance with "VarSet001.V2L2"
-        //   originalId=-1: Angle with "VarSet.R1" (external geometry)
-        //   originalId=6:  Radius with "VarSet.L1 * 3"
+        //   originalId=2:  Constraint[2] Angle with "VarSet.R1"
+        //   originalId=2:  Constraint[11] Distance with "VarSet001.V2L2"
+        //   originalId=-1: Constraint[2] Angle with "VarSet.R1" (external geometry)
+        //   originalId=6:  Constraint[15] Radius with "VarSet.L1 * 3"
         var totalExprRefs = result.Geometries.Sum(r => r.Constraints.Count);
         Assert.AreEqual(4, totalExprRefs,
             $"V102.6: expected 4 expression refs, got {totalExprRefs}.");
@@ -576,24 +576,28 @@ public class WrapperRegressionTests
         var geo2 = result.Geometries.First(r => r.OriginalId == 2);
         Assert.IsTrue(
             geo2.Constraints.Any(c => c.Kind == McSolverEngineConstraintKind.Angle
+                                      && c.OriginalIndex == 2
                                       && c.Expression == "VarSet.R1"),
-            "V102.6: expected originalId=2 Angle with VarSet.R1.");
+            "V102.6: expected originalId=2 Constraint[2] Angle with VarSet.R1.");
         Assert.IsTrue(
             geo2.Constraints.Any(c => c.Kind == McSolverEngineConstraintKind.Distance
+                                      && c.OriginalIndex == 11
                                       && c.Expression == "VarSet001.V2L2"),
-            "V102.6: expected originalId=2 Distance with VarSet001.V2L2.");
+            "V102.6: expected originalId=2 Constraint[11] Distance with VarSet001.V2L2.");
 
         var geoExt = result.Geometries.First(r => r.OriginalId == -1);
         Assert.IsTrue(
             geoExt.Constraints.Any(c => c.Kind == McSolverEngineConstraintKind.Angle
+                                        && c.OriginalIndex == 2
                                         && c.Expression == "VarSet.R1"),
-            "V102.6: expected external geometry originalId=-1 Angle with VarSet.R1.");
+            "V102.6: expected external geometry originalId=-1 Constraint[2] Angle with VarSet.R1.");
 
         var geo6 = result.Geometries.First(r => r.OriginalId == 6);
         Assert.IsTrue(
             geo6.Constraints.Any(c => c.Kind == McSolverEngineConstraintKind.Radius
+                                      && c.OriginalIndex == 15
                                       && c.Expression == "VarSet.L1 * 3"),
-            "V102.6: expected originalId=6 Radius with VarSet.L1 * 3.");
+            "V102.6: expected originalId=6 Constraint[15] Radius with VarSet.L1 * 3.");
     }
 
     [TestMethod]

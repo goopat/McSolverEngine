@@ -229,7 +229,7 @@ FreeCAD 中真正把“草图数据”翻译成 GCS 参数和约束的是：
 - 此时 `BRep::exportSketchToBRep(...)` 返回 `brep = null`，`status = OpenCascadeUnavailable`
 - 此时 `BRep::exportSketchToBRepFile(...)` 返回 `OpenCascadeUnavailable`
 - 当前 `Document.xml` 兼容层未引入额外第三方 XML 库，而是使用 McSolverEngine 内部的轻量解析实现
-- 当前原生回归仍以自定义 smoke test 可执行文件 + `CTest` 为主；另有 `wrapper\csharp\tests` 下的 net48 MSTest 项目，通过 `dotnet test` 回归托管包装层
+- 当前原生回归仍以自定义 smoke test 可执行文件 + `CTest` 为主；另有 `wrapper\csharp\tests` 下的 net48 + net6.0 MSTest 项目，通过 `dotnet test` 回归托管包装层
 - 当前目标划分为：`McSolverEngineCore`（静态库）、`McSolverEngineNative`（共享库）、`McSolverEngineCli`（CLI 可执行文件）
 
 第一阶段不依赖：
@@ -249,9 +249,9 @@ FreeCAD 中真正把“草图数据”翻译成 GCS 参数和约束的是：
 
 ### 8.1 输入来源
 
-第一阶段支持两类输入：
+第一阶段支持两类 `Document.xml` 输入：
 
-1. `FCStd` 包中的 `Document.xml`
+1. 从 `FCStd` 包中解压出的 `Document.xml`
 2. 独立的 `Document.xml`
 
 ### 8.2 兼容原则
@@ -378,7 +378,8 @@ FreeCAD 中真正把“草图数据”翻译成 GCS 参数和约束的是：
 
 当前接口输出结构：
 
-- `GeometryRecord { geometryIndex, geometry }`
+- `GeometryRecord { geometryIndex, originalId, geometry, constraints }`
+- `ConstraintRef { kind, originalIndex, expression }`
 - `ExportResult { placement, geometries, messages, status }`
 
 当前精确导出规则：
@@ -386,7 +387,9 @@ FreeCAD 中真正把“草图数据”翻译成 GCS 参数和约束的是：
 - 保留解析几何本体，不做离散采样
 - 导出结果携带草图级 `Placement`
 - 导出几何保留 `geometryIndex`，便于与原 `Compat::SketchModel` 对应
-- 过滤 `construction` / `external` 几何，与 BREP 导出范围保持一致
+- 导出几何保留来自 `Document.xml` 的几何 `originalId`，同时保留 `construction` / `external` / `blocked` 标志
+- 结构化 Geometry 当前返回完整几何记录，不再过滤 `construction` / `external` 几何；这与 BREP 输出的可成形范围不同，目的是让下游可消费完整草图结构
+- 对表达式驱动的维度约束，相关几何记录会附带 `ConstraintRef`；其中 `originalIndex` 是该约束在 `Document.xml` `ConstraintList` 中的原始索引，`expression` 保留草图 `ExpressionEngine` 中的绑定表达式
 
 ### 9.4 BREP 文本保真策略
 
@@ -422,6 +425,8 @@ FreeCAD 中真正把“草图数据”翻译成 GCS 参数和约束的是：
 当前跨语言边界采用 **Geometry 与 BREP 均返回结构化结果** 的设计：
 
 - `McSolverEngine_SolveToGeometry(...)` 和 `McSolverEngine_SolveToBRep(...)` 均返回结构化结果，包含 `Placement` + 导入/求解/导出诊断元数据（`sketchName`、`importStatus`、`messages`、`solveStatus`、`degreesOfFreedom`、`conflicting` / `redundant` / `partiallyRedundant`、`exportKind`、`exportStatus`）。Geometry 结果额外携带 `geometryCount + geometries`，BREP 结果额外携带 `brepUtf8` 原始 BREP 文本。
+- Geometry C ABI 中每条 `McSolverEngineGeometryRecord` 携带 `geometryIndex`、`originalId`、几何本体字段、`construction` / `external` / `blocked` 标志，以及表达式驱动约束引用数组 `constraintCount + constraints`
+- 每条 `McSolverEngineConstraintRef` 携带 `kind`、`originalIndex` 与 `expression`；`originalIndex` 对应 `Document.xml` 中 `<ConstraintList>` 的原始约束序号
 - 参数化路径当前通过 `const char*[] keys + const char*[] values + count` 跨 ABI 传递参数表，供 `Document.xml + sketchName + parameters` 一起求解；其中值必须是纯数值字符串
 - 若 VarSet 表达式使用了当前精简子集之外的 FreeCAD 表达式能力，C API 返回 `MCSOLVERENGINE_RESULT_VARSET_EXPRESSION_UNSUPPORTED_SUBSET`，并在 `messages` 中携带 `MCSOLVERENGINE_IMPORT_VARSET_EXPRESSION_UNSUPPORTED_SUBSET`
 - Geometry 结果由原生层分配，调用方必须通过 `McSolverEngine_FreeGeometryResult(...)` 释放
@@ -438,6 +443,7 @@ FreeCAD 中真正把“草图数据”翻译成 GCS 参数和约束的是：
 - .NET Framework 上通过 `kernel32.dll` 显式 `LoadLibrary` 加载原生库；.NET 6+ 通过 `NativeLibrary.Load` 加载，并按 OS 选择文件名（`mcsolverengine_native.dll` / `libmcsolverengine_native.so` / `libmcsolverengine_native.dylib`）
 - 当前包装层会缓存已加载的原生库句柄，因此同一进程内不支持切换到另一套原生构建产物
 - `StructuredGeometrySolveResponse` / `BRepSolveResponse`：托管 DTO，均包含完整的 `sketchName`/`importStatus`/`solveStatus`/`conflicting`/`redundant`/`placement` 等过程状态
+- `StructuredGeometryRecord` 会透传原生 geometry `OriginalId` 与表达式约束引用；`ConstraintRefDto` 会透传 `Kind`、`OriginalIndex` 与 `Expression`
 - `McSolverEngineNativeStatus`：与原生结果码对齐的枚举
 - `wrapper\csharp\tests\McSolverEngine.Wrapper.Tests.csproj`：net48 + net6.0 MSTest 回归项目，当前覆盖 `fcstdDoc\1.xml` 及 `V102.*` 样本的 Geometry / BREP 包装层回归
 
@@ -480,6 +486,7 @@ FreeCAD 中真正把“草图数据”翻译成 GCS 参数和约束的是：
 - 若调用方提供 `std::map<std::string, std::string>` 参数表，当前会先校验每个参数值都是纯数值，并在 VarSet 表达式求值前写入 VarSet 数据结构
 - 草图导入阶段会解析 `ExpressionEngine`，识别指向 `Constraints[index]` 的约束绑定；绑定表达式既可以是直接 `VarSet.Param` 引用，也可以是当前 VarSet 子集可求值的表达式（如 `VarSet.L1 * 3`）
 - 绑定成功后，内部 `Compat::Constraint` 会保留：
+  - `originalIndex`
   - `parameterName`
   - `parameterKey`
   - `parameterExpression`
@@ -590,15 +597,16 @@ FreeCAD 中真正把“草图数据”翻译成 GCS 参数和约束的是：
 11. `fcstdDoc\V102.5.xml` -> `V102.5.brp`
 12. `fcstdDoc\V102.6.xml` -> `V102.6.brp`
 13. `fcstdDoc\V102.6.xml` + `VarSet.L1=400` -> `V102.6_400.brp`
-12. `McSolverEngineCApiSmokeTest`：
+14. `McSolverEngineCApiSmokeTest`：
    - 结构化 Geometry C ABI（完整过程状态）
    - 结构化 BRep C ABI（完整过程状态 + BREP 文本）
    - OCCT / no-OCCT 两种构建路径下的导出状态
-13. 固定（external）弧线不产生冗余 ArcRules
-14. OCC BSpline 权重归一化 hack 回归
-15. BSpline PolesCount / KnotsCount 不匹配拒绝导入
-16. 空元素约束自动 GeoUndef 补齐导入
-17. ArcOfParabola BREP 导出回归
+   - `V102.5.xml` / `V102.6.xml` 表达式驱动约束引用导出，包括约束 `kind`、`expression` 与 `originalIndex`
+15. 固定（external）弧线不产生冗余 ArcRules
+16. OCC BSpline 权重归一化 hack 回归
+17. BSpline PolesCount / KnotsCount 不匹配拒绝导入
+18. 空元素约束自动 GeoUndef 补齐导入
+19. ArcOfParabola BREP 导出回归
 
 当前托管包装层回归已覆盖：
 
@@ -608,7 +616,8 @@ FreeCAD 中真正把“草图数据”翻译成 GCS 参数和约束的是：
 4. 参数化 Geometry 包装接口回归
 5. 参数化 BREP 包装接口回归
 6. `V102.5.xml` 的 BREP 包装接口回归
-7. BREP 对照采用 token 级比较 + 数值容差，避免 OCCT 末位浮点抖动带来误报
+7. `V102.5.xml` / `V102.6.xml` 的 Geometry 包装接口表达式约束引用回归，包括 `OriginalIndex`
+8. BREP 对照采用 token 级比较 + 数值容差，避免 OCCT 末位浮点抖动带来误报
 
 其中 `2.xml` 的三张草图分别位于不同平面，已用于验证：
 
@@ -639,11 +648,12 @@ FreeCAD 中真正把“草图数据”翻译成 GCS 参数和约束的是：
 
 2. **精确几何输出**
    - `Geometry::exportSketchGeometry(...)`
+   - 返回完整 geometry 记录，包含 `originalId`、`construction` / `external` / `blocked` 标志，以及表达式驱动约束引用 `ConstraintRef { kind, originalIndex, expression }`
 
 3. **跨语言包装接口**
    - `McSolverEngine_SolveToGeometry(...)` / `McSolverEngine_SolveToBRep(...)`
    - 均返回携带完整过程状态的结构化结果（导入/求解/导出元数据 + placement）
-   - Geometry 结果附加 `geometryCount + geometries`，BRep 结果附加 `brepUtf8`
+   - Geometry 结果附加 `geometryCount + geometries`，每条 geometry 可附带 `constraintCount + constraints`；BRep 结果附加 `brepUtf8`
    - 释放接口：`McSolverEngine_FreeGeometryResult` / `McSolverEngine_FreeBRepResult`
    - `wrapper\csharp\McSolverEngineClient` 多目标构建 net48 + net6.0
 

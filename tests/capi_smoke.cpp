@@ -583,10 +583,10 @@ int main()
         }
 
         // V102.6 has 4 expression-driven constraint refs:
-        //   originalId=2:  Angle(kind=9) with "VarSet.R1"
-        //   originalId=2:  Distance(kind=5) with "VarSet001.V2L2"
-        //   originalId=-1: Angle(kind=9) with "VarSet.R1" (external geometry)
-        //   originalId=6:  Radius(kind=10) with "VarSet.L1 * 3"
+        //   originalId=2:  Constraint[2] Angle(kind=9) with "VarSet.R1"
+        //   originalId=2:  Constraint[11] Distance(kind=5) with "VarSet001.V2L2"
+        //   originalId=-1: Constraint[2] Angle(kind=9) with "VarSet.R1" (external geometry)
+        //   originalId=6:  Constraint[15] Radius(kind=10) with "VarSet.L1 * 3"
         int exprCount = 0;
         bool foundAngleR1_geo2 = false;
         bool foundDistV2L2 = false;
@@ -598,19 +598,19 @@ int main()
             for (int j = 0; j < record.constraintCount; ++j) {
                 const auto& ref = record.constraints[j];
                 if (record.originalId == 2 && ref.kind == MCSOLVERENGINE_CONSTRAINT_ANGLE
-                    && ref.expression != nullptr && std::string(ref.expression) == "VarSet.R1") {
+                    && ref.originalIndex == 2 && ref.expression != nullptr && std::string(ref.expression) == "VarSet.R1") {
                     foundAngleR1_geo2 = true;
                 }
                 if (record.originalId == 2 && ref.kind == MCSOLVERENGINE_CONSTRAINT_DISTANCE
-                    && ref.expression != nullptr && std::string(ref.expression) == "VarSet001.V2L2") {
+                    && ref.originalIndex == 11 && ref.expression != nullptr && std::string(ref.expression) == "VarSet001.V2L2") {
                     foundDistV2L2 = true;
                 }
                 if (record.originalId == -1 && ref.kind == MCSOLVERENGINE_CONSTRAINT_ANGLE
-                    && ref.expression != nullptr && std::string(ref.expression) == "VarSet.R1") {
+                    && ref.originalIndex == 2 && ref.expression != nullptr && std::string(ref.expression) == "VarSet.R1") {
                     foundAngleR1_ext = true;
                 }
                 if (record.originalId == 6 && ref.kind == MCSOLVERENGINE_CONSTRAINT_RADIUS
-                    && ref.expression != nullptr && std::string(ref.expression) == "VarSet.L1 * 3") {
+                    && ref.originalIndex == 15 && ref.expression != nullptr && std::string(ref.expression) == "VarSet.L1 * 3") {
                     foundRadiusL1 = true;
                 }
             }
@@ -621,19 +621,19 @@ int main()
             McSolverEngine_FreeGeometryResult(v1026Result);
             return EXIT_FAILURE;
         }
-        if (!expect(foundAngleR1_geo2, "V102.6: expected originalId=2 Angle with VarSet.R1.")) {
+        if (!expect(foundAngleR1_geo2, "V102.6: expected originalId=2 Constraint[2] Angle with VarSet.R1.")) {
             McSolverEngine_FreeGeometryResult(v1026Result);
             return EXIT_FAILURE;
         }
-        if (!expect(foundDistV2L2, "V102.6: expected originalId=2 Distance with VarSet001.V2L2.")) {
+        if (!expect(foundDistV2L2, "V102.6: expected originalId=2 Constraint[11] Distance with VarSet001.V2L2.")) {
             McSolverEngine_FreeGeometryResult(v1026Result);
             return EXIT_FAILURE;
         }
-        if (!expect(foundAngleR1_ext, "V102.6: expected originalId=-1 Angle with VarSet.R1.")) {
+        if (!expect(foundAngleR1_ext, "V102.6: expected originalId=-1 Constraint[2] Angle with VarSet.R1.")) {
             McSolverEngine_FreeGeometryResult(v1026Result);
             return EXIT_FAILURE;
         }
-        if (!expect(foundRadiusL1, "V102.6: expected originalId=6 Radius with VarSet.L1 * 3.")) {
+        if (!expect(foundRadiusL1, "V102.6: expected originalId=6 Constraint[15] Radius with VarSet.L1 * 3.")) {
             McSolverEngine_FreeGeometryResult(v1026Result);
             return EXIT_FAILURE;
         }

@@ -1288,6 +1288,7 @@ void applyConstraintExpressionBindings(
     }
 
     Compat::Constraint constraint;
+    constraint.originalIndex = rawIndex;
     constraint.first = first;
     constraint.second = second;
     constraint.third = third;

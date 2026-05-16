@@ -12,6 +12,7 @@ namespace McSolverEngine::Geometry
 struct ConstraintRef
 {
     Compat::ConstraintKind kind {Compat::ConstraintKind::Coincident};
+    int originalIndex {-99999999};
     std::string expression {};
 };
 

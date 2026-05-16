@@ -485,12 +485,16 @@ template<typename ResultT, typename ImportResultT, typename SolveResultT>
     }
     for (std::size_t i = 0; i < source.size(); ++i) {
         refs[i].kind = toCApiConstraintKind(source[i].kind);
+        refs[i].originalIndex = source[i].originalIndex;
         if (source[i].expression.empty()) {
             refs[i].expression = nullptr;
         }
         else {
             char* buf = nullptr;
             if (!assignOutputString(source[i].expression, &buf)) {
+                for (std::size_t j = 0; j < i; ++j) {
+                    delete[] refs[j].expression;
+                }
                 delete[] refs;
                 return false;
             }
