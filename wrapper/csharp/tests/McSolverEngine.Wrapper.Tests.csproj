@@ -14,5 +14,6 @@
 
   <ItemGroup>
     <PackageReference Include="MSTest.TestFramework" Version="3.6.4" />
+    <PackageReference Include="Rhino3dm" Version="8.*" />
   </ItemGroup>
 </Project>

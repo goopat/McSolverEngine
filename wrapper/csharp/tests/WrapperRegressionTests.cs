@@ -2,9 +2,11 @@ using System.IO;
 using System.Linq;
 using System.Globalization;
 using System.Runtime.InteropServices;
+using System.Text;
 using System.Xml;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using McSolverEngine.Wrapper;
+using Rhino.Geometry;
 
 namespace McSolverEngine.Wrapper.Tests;
 
@@ -554,6 +556,26 @@ public class WrapperRegressionTests
             geo17.Constraints.Any(c => c.Kind == McSolverEngineConstraintKind.Diameter
                                        && c.Expression == "<<VarSet>>.R1"),
             "Expected originalId=17 to have Diameter with expression <<VarSet>>.R1.");
+
+        var svgPath = Path.Combine(Path.GetDirectoryName(_v1025XmlPath)!, "V102.5.svg");
+        Assert.IsTrue(
+            result.Geometries.Any(record => record.External || record.Construction),
+            "Expected V102.5.svg generation to exercise external/construction geometry filtering."
+        );
+        Assert.IsTrue(
+            result.Geometries.Any(record =>
+                !record.External && !record.Construction && record.Kind == McSolverEngineGeometryKind.BSpline),
+            "Expected V102.5.svg generation to include visible B-Spline geometry."
+        );
+        Assert.IsTrue(
+            result.Geometries.Any(record =>
+                !record.External && !record.Construction
+                && (record.Kind == McSolverEngineGeometryKind.ArcOfHyperbola
+                    || record.Kind == McSolverEngineGeometryKind.ArcOfParabola)),
+            "Expected V102.5.svg generation to include visible hyperbola/parabola geometry."
+        );
+        WriteVisibleGeometrySvg(result.Geometries, svgPath);
+        Assert.IsTrue(File.Exists(svgPath), $"Expected SVG output at '{svgPath}'.");
     }
 
     [TestMethod]
@@ -861,6 +883,397 @@ public class WrapperRegressionTests
         var dx = record.End.X - record.Start.X;
         var dy = record.End.Y - record.Start.Y;
         return Math.Atan2(dy, dx) * 180.0 / Math.PI;
+    }
+
+    private static void WriteVisibleGeometrySvg(IEnumerable<StructuredGeometryRecord> geometries, string svgPath)
+    {
+        var curves = new List<List<SvgPoint>>();
+        var points = new List<SvgPoint>();
+        foreach (var record in geometries.Where(record => !record.External && !record.Construction)) {
+            var sampled = SampleGeometry(record);
+            if (sampled.Count == 0) {
+                continue;
+            }
+            if (record.Kind == McSolverEngineGeometryKind.Point) {
+                points.Add(sampled[0]);
+            }
+            else {
+                curves.Add(sampled);
+            }
+        }
+
+        var boundsPoints = curves.SelectMany(curve => curve).Concat(points).ToList();
+        if (boundsPoints.Count == 0) {
+            throw new InvalidOperationException("No visible geometry was available for SVG export.");
+        }
+
+        var minX = boundsPoints.Min(point => point.X);
+        var maxX = boundsPoints.Max(point => point.X);
+        var minY = boundsPoints.Min(point => point.Y);
+        var maxY = boundsPoints.Max(point => point.Y);
+        var modelWidth = Math.Max(maxX - minX, 1.0);
+        var modelHeight = Math.Max(maxY - minY, 1.0);
+        var padding = Math.Max(Math.Max(modelWidth, modelHeight) * 0.04, 10.0);
+        var viewWidth = modelWidth + padding * 2.0;
+        var viewHeight = modelHeight + padding * 2.0;
+        var strokeWidth = Math.Max(Math.Max(modelWidth, modelHeight) / 600.0, 1.0);
+        var pointRadius = strokeWidth * 2.0;
+
+        SvgPoint ToSvgPoint(SvgPoint point)
+        {
+            return new SvgPoint(point.X - minX + padding, maxY - point.Y + padding);
+        }
+
+        var builder = new StringBuilder();
+        builder.AppendLine("""<?xml version="1.0" encoding="UTF-8"?>""");
+        builder.AppendLine(
+            $"""<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="{FormatInvariant(1200.0 * viewHeight / viewWidth)}" viewBox="0 0 {FormatInvariant(viewWidth)} {FormatInvariant(viewHeight)}">"""
+        );
+        builder.AppendLine("  <!-- Generated from structured geometry; external and construction geometry are omitted. -->");
+        builder.AppendLine("""  <rect width="100%" height="100%" fill="white"/>""");
+        builder.AppendLine(
+            $"""  <g fill="none" stroke="#111827" stroke-width="{FormatInvariant(strokeWidth)}" stroke-linecap="round" stroke-linejoin="round">"""
+        );
+        foreach (var curve in curves) {
+            var pointsAttribute = string.Join(" ", curve.Select(ToSvgPoint).Select(FormatSvgPoint));
+            builder.AppendLine($"""    <polyline points="{pointsAttribute}"/>""");
+        }
+        builder.AppendLine("  </g>");
+        builder.AppendLine($"""  <g fill="#dc2626" stroke="none">""");
+        foreach (var point in points.Select(ToSvgPoint)) {
+            builder.AppendLine(
+                $"""    <circle cx="{FormatInvariant(point.X)}" cy="{FormatInvariant(point.Y)}" r="{FormatInvariant(pointRadius)}"/>"""
+            );
+        }
+        builder.AppendLine("  </g>");
+        builder.AppendLine("</svg>");
+
+        File.WriteAllText(svgPath, builder.ToString(), new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
+    }
+
+    private static List<SvgPoint> SampleGeometry(StructuredGeometryRecord record)
+    {
+        return record.Kind switch {
+            McSolverEngineGeometryKind.Point => [ToSvgPoint(record.Point)],
+            McSolverEngineGeometryKind.LineSegment => [ToSvgPoint(record.Start), ToSvgPoint(record.End)],
+            McSolverEngineGeometryKind.Circle => SampleCircle(record.Center, record.Radius),
+            McSolverEngineGeometryKind.Arc => SampleCircularArc(record.Center, record.Radius, record.StartAngle, record.EndAngle),
+            McSolverEngineGeometryKind.Ellipse => SampleEllipse(record.Center, record.Focus1, record.MinorRadius, 0.0, Math.PI * 2.0),
+            McSolverEngineGeometryKind.ArcOfEllipse => SampleEllipse(
+                record.Center,
+                record.Focus1,
+                record.MinorRadius,
+                record.StartAngle,
+                record.EndAngle
+            ),
+            McSolverEngineGeometryKind.ArcOfHyperbola => SampleHyperbola(record),
+            McSolverEngineGeometryKind.ArcOfParabola => SampleParabola(record),
+            McSolverEngineGeometryKind.BSpline => SampleBSpline(record),
+            _ => [],
+        };
+    }
+
+    private static List<SvgPoint> SampleCircle(Point2Dto center, double radius)
+    {
+        var points = new List<SvgPoint>();
+        if (radius <= 0.0) {
+            return points;
+        }
+        const int segmentCount = 96;
+        for (var i = 0; i <= segmentCount; ++i) {
+            var angle = Math.PI * 2.0 * i / segmentCount;
+            points.Add(new SvgPoint(center.X + radius * Math.Cos(angle), center.Y + radius * Math.Sin(angle)));
+        }
+        return points;
+    }
+
+    private static List<SvgPoint> SampleCircularArc(Point2Dto center, double radius, double startAngle, double endAngle)
+    {
+        var points = new List<SvgPoint>();
+        if (radius <= 0.0) {
+            return points;
+        }
+        var sweep = PositiveSweep(startAngle, endAngle);
+        var segmentCount = Math.Max(8, (int)Math.Ceiling(64.0 * sweep / (Math.PI * 2.0)));
+        for (var i = 0; i <= segmentCount; ++i) {
+            var angle = startAngle + sweep * i / segmentCount;
+            points.Add(new SvgPoint(center.X + radius * Math.Cos(angle), center.Y + radius * Math.Sin(angle)));
+        }
+        return points;
+    }
+
+    private static List<SvgPoint> SampleEllipse(
+        Point2Dto center,
+        Point2Dto focus1,
+        double minorRadius,
+        double startAngle,
+        double endAngle
+    )
+    {
+        var points = new List<SvgPoint>();
+        if (minorRadius <= 0.0) {
+            return points;
+        }
+        var focusVector = new SvgPoint(focus1.X - center.X, focus1.Y - center.Y);
+        var focusDistance = Math.Sqrt(focusVector.X * focusVector.X + focusVector.Y * focusVector.Y);
+        var axisX = focusDistance > 1e-12 ? new SvgPoint(focusVector.X / focusDistance, focusVector.Y / focusDistance) : new SvgPoint(1.0, 0.0);
+        var axisY = new SvgPoint(-axisX.Y, axisX.X);
+        var majorRadius = Math.Sqrt(minorRadius * minorRadius + focusDistance * focusDistance);
+        var sweep = PositiveSweep(startAngle, endAngle);
+        var segmentCount = Math.Max(24, (int)Math.Ceiling(96.0 * sweep / (Math.PI * 2.0)));
+        for (var i = 0; i <= segmentCount; ++i) {
+            var angle = startAngle + sweep * i / segmentCount;
+            var x = center.X + majorRadius * Math.Cos(angle) * axisX.X + minorRadius * Math.Sin(angle) * axisY.X;
+            var y = center.Y + majorRadius * Math.Cos(angle) * axisX.Y + minorRadius * Math.Sin(angle) * axisY.Y;
+            points.Add(new SvgPoint(x, y));
+        }
+        return points;
+    }
+
+    private static List<SvgPoint> SampleHyperbola(StructuredGeometryRecord record)
+    {
+        var points = new List<SvgPoint>();
+        var focusVector = new SvgPoint(record.Focus1.X - record.Center.X, record.Focus1.Y - record.Center.Y);
+        var focusDistance = Math.Sqrt(focusVector.X * focusVector.X + focusVector.Y * focusVector.Y);
+        if (focusDistance <= 1e-12 || record.MinorRadius <= 0.0) {
+            return points;
+        }
+
+        var axisX = new SvgPoint(focusVector.X / focusDistance, focusVector.Y / focusDistance);
+        var axisY = new SvgPoint(-axisX.Y, axisX.X);
+        var majorRadius = Math.Sqrt(Math.Max(focusDistance * focusDistance - record.MinorRadius * record.MinorRadius, 0.0));
+        var sweep = record.EndAngle - record.StartAngle;
+        var segmentCount = Math.Max(24, (int)Math.Ceiling(48.0 * Math.Abs(sweep) / Math.PI));
+        for (var i = 0; i <= segmentCount; ++i) {
+            var parameter = record.StartAngle + sweep * i / segmentCount;
+            var x = record.Center.X + majorRadius * Math.Cosh(parameter) * axisX.X
+                + record.MinorRadius * Math.Sinh(parameter) * axisY.X;
+            var y = record.Center.Y + majorRadius * Math.Cosh(parameter) * axisX.Y
+                + record.MinorRadius * Math.Sinh(parameter) * axisY.Y;
+            points.Add(new SvgPoint(x, y));
+        }
+        return points;
+    }
+
+    private static List<SvgPoint> SampleParabola(StructuredGeometryRecord record)
+    {
+        var points = new List<SvgPoint>();
+        var focusVector = new SvgPoint(record.Focus1.X - record.Vertex.X, record.Focus1.Y - record.Vertex.Y);
+        var focal = Math.Sqrt(focusVector.X * focusVector.X + focusVector.Y * focusVector.Y);
+        if (focal <= 1e-12) {
+            return points;
+        }
+
+        var axisX = new SvgPoint(focusVector.X / focal, focusVector.Y / focal);
+        var axisY = new SvgPoint(-axisX.Y, axisX.X);
+        var sweep = record.EndAngle - record.StartAngle;
+        var segmentCount = Math.Max(24, (int)Math.Ceiling(32.0 * Math.Abs(sweep)));
+        for (var i = 0; i <= segmentCount; ++i) {
+            var parameter = record.StartAngle + sweep * i / segmentCount;
+            var localX = parameter * parameter / (4.0 * focal);
+            var localY = parameter;
+            points.Add(new SvgPoint(
+                record.Vertex.X + localX * axisX.X + localY * axisY.X,
+                record.Vertex.Y + localX * axisX.Y + localY * axisY.Y
+            ));
+        }
+        return points;
+    }
+
+    private static List<SvgPoint> SampleBSpline(StructuredGeometryRecord record)
+    {
+        if (record.Poles.Count == 0) {
+            return [];
+        }
+        if (record.Periodic) {
+            return SamplePeriodicBSpline(record);
+        }
+
+        var knots = ExpandKnots(record.Knots);
+        if (record.Degree < 1 || knots.Count < record.Poles.Count + record.Degree + 1) {
+            return record.Poles.Select(pole => ToSvgPoint(pole.Point)).ToList();
+        }
+
+        var start = knots[record.Degree];
+        var end = knots[knots.Count - record.Degree - 1];
+        if (end <= start) {
+            return record.Poles.Select(pole => ToSvgPoint(pole.Point)).ToList();
+        }
+
+        return SampleRhinoNurbs(ToWeightedPoints(record.Poles), record.Degree, knots, start, end, 128, close: false);
+    }
+
+    private static List<SvgPoint> SamplePeriodicBSpline(StructuredGeometryRecord record)
+    {
+        var knots = ExpandKnots(record.Knots);
+        if (record.Degree < 1 || knots.Count < 2) {
+            return SampleClosedControlPolygon(record.Poles);
+        }
+
+        var period = knots[knots.Count - 1] - knots[0];
+        if (period <= 0.0) {
+            return SampleClosedControlPolygon(record.Poles);
+        }
+
+        var firstMultiplicity = record.Knots[0].Multiplicity;
+        var lastMultiplicity = record.Knots[record.Knots.Count - 1].Multiplicity;
+        var continuity = record.Degree + 1 - firstMultiplicity;
+        var firstFinalKnotIndex = knots.Count - lastMultiplicity;
+        if (continuity <= 0
+            || firstFinalKnotIndex - continuity < 0
+            || firstMultiplicity + continuity > knots.Count
+            || record.Poles.Count < continuity) {
+            return SampleClosedControlPolygon(record.Poles);
+        }
+
+        var periodicKnots = new List<double>();
+        // Mirrors OCCT's periodic KnotSequence(): add the continuity-count knots
+        // before the final periodic knot and after the initial periodic knot.
+        for (var i = firstFinalKnotIndex - continuity; i < firstFinalKnotIndex; ++i) {
+            periodicKnots.Add(knots[i] - period);
+        }
+        periodicKnots.AddRange(knots);
+        for (var i = firstMultiplicity; i < firstMultiplicity + continuity; ++i) {
+            periodicKnots.Add(knots[i] + period);
+        }
+
+        var controls = ToWeightedPoints(record.Poles);
+        // Rhino/OpenNURBS represents the periodic span by appending the leading poles.
+        for (var i = 0; i < continuity; ++i) {
+            controls.Add(new WeightedPoint(ToSvgPoint(record.Poles[i].Point), record.Poles[i].Weight));
+        }
+
+        var start = periodicKnots[record.Degree];
+        var end = start + period;
+        return SampleRhinoNurbs(controls, record.Degree, periodicKnots, start, end, 256, close: true);
+    }
+
+    private static List<SvgPoint> SampleClosedControlPolygon(IReadOnlyList<BSplinePoleDto> poles)
+    {
+        var points = poles.Select(pole => ToSvgPoint(pole.Point)).ToList();
+        if (points.Count > 0) {
+            points.Add(points[0]);
+        }
+        return points;
+    }
+
+    private static List<double> ExpandKnots(IEnumerable<BSplineKnotDto> knots)
+    {
+        var expanded = new List<double>();
+        foreach (var knot in knots) {
+            for (var i = 0; i < knot.Multiplicity; ++i) {
+                expanded.Add(knot.Value);
+            }
+        }
+        return expanded;
+    }
+
+    private static List<WeightedPoint> ToWeightedPoints(IEnumerable<BSplinePoleDto> poles)
+    {
+        return poles.Select(pole => new WeightedPoint(ToSvgPoint(pole.Point), pole.Weight)).ToList();
+    }
+
+    private static List<SvgPoint> SampleRhinoNurbs(
+        IReadOnlyList<WeightedPoint> controls,
+        int degree,
+        IReadOnlyList<double> knots,
+        double start,
+        double end,
+        int sampleCount,
+        bool close
+    )
+    {
+        var rhinoKnots = ToRhinoKnots(knots);
+        var spline = new NurbsCurve(
+            3,
+            controls.Any(control => Math.Abs(control.Weight - 1.0) > 1e-12),
+            degree + 1,
+            controls.Count
+        );
+        if (spline.Knots.Count != rhinoKnots.Count) {
+            return controls.Select(control => control.Point).ToList();
+        }
+        for (var i = 0; i < controls.Count; ++i) {
+            spline.Points.SetPoint(i, controls[i].Point.X, controls[i].Point.Y, 0.0, controls[i].Weight);
+        }
+        for (var i = 0; i < rhinoKnots.Count; ++i) {
+            spline.Knots[i] = rhinoKnots[i];
+        }
+        if (!spline.IsValid) {
+            return controls.Select(control => control.Point).ToList();
+        }
+
+        var points = new List<SvgPoint>();
+        var lastIndex = close ? sampleCount - 1 : sampleCount;
+        for (var i = 0; i <= lastIndex; ++i) {
+            var u = close
+                ? start + (end - start) * i / sampleCount
+                : i == sampleCount ? end : start + (end - start) * i / sampleCount;
+            var point = spline.PointAt(u);
+            points.Add(new SvgPoint(point.X, point.Y));
+        }
+
+        if (close && points.Count > 0) {
+            points.Add(points[0]);
+        }
+
+        return points;
+    }
+
+    private static List<double> ToRhinoKnots(IReadOnlyList<double> knots)
+    {
+        if (knots.Count <= 2) {
+            return [];
+        }
+        return knots.Skip(1).Take(knots.Count - 2).ToList();
+    }
+
+    private static SvgPoint ToSvgPoint(Point2Dto point)
+    {
+        return new SvgPoint(point.X, point.Y);
+    }
+
+    private static double PositiveSweep(double startAngle, double endAngle)
+    {
+        var sweep = endAngle - startAngle;
+        while (sweep <= 0.0) {
+            sweep += Math.PI * 2.0;
+        }
+        return sweep;
+    }
+
+    private static string FormatSvgPoint(SvgPoint point)
+    {
+        return $"{FormatInvariant(point.X)},{FormatInvariant(point.Y)}";
+    }
+
+    private static string FormatInvariant(double value)
+    {
+        return value.ToString("0.######", CultureInfo.InvariantCulture);
+    }
+
+    private readonly struct SvgPoint
+    {
+        public SvgPoint(double x, double y)
+        {
+            X = x;
+            Y = y;
+        }
+
+        public double X { get; }
+        public double Y { get; }
+    }
+
+    private readonly struct WeightedPoint
+    {
+        public WeightedPoint(SvgPoint point, double weight)
+        {
+            Point = point;
+            Weight = weight;
+        }
+
+        public SvgPoint Point { get; }
+        public double Weight { get; }
     }
 
     private static string FindProjectRoot()
