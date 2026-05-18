@@ -32,6 +32,8 @@ Write-Host "============================================" -ForegroundColor Cyan
 
 # --- CMake configure ---
 $cmakeArgs = @(
+    "-G", "Visual Studio 17 2022",
+    "-A", "x64",
     "-B", $buildDir,
     "-S", $repoRoot,
     "-DMCSOLVERENGINE_WITH_OCCT=$(if ($buildWithOcct) { 'ON' } else { 'OFF' })"
