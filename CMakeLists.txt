@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.22)
 
-option(MCSOLVERENGINE_WITH_OCCT "Build OCCT-backed BREP export when OpenCASCADE is available" ON)
+option(MCSOLVERENGINE_WITH_OCCT "Build OCCT-backed BREP export when OpenCASCADE is available" OFF)
 
 set(MCSOLVERENGINE_HAS_OCCT OFF)
 
@@ -11,7 +11,7 @@ if(CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
     if(NOT EIGEN3_INCLUDE_DIR)
         set(_mcsolverengine_eigen_candidates
             "${CMAKE_CURRENT_SOURCE_DIR}/../.pixi/envs/default/Library/include/eigen3"
-            "C:/work/bim-common-client/Common/CppThird/Eigen"
+            "$ENV{USERPROFILE}/.nuget/packages/opencascade.7.9-native/1.0.0/lib/3rdparty/vtk-9.4.1-x64/include/vtk-9.4/vtkeigen/eigen"
         )
         foreach(_mcsolverengine_eigen_candidate IN LISTS _mcsolverengine_eigen_candidates)
             if(EXISTS "${_mcsolverengine_eigen_candidate}/Eigen/Core")
@@ -35,7 +35,7 @@ if(CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
     if(NOT BOOST_INCLUDEDIR)
         set(_mcsolverengine_boost_candidates
             "${CMAKE_CURRENT_SOURCE_DIR}/../.pixi/envs/default/Library/include"
-            "C:/work/bim-common-client/packages/boost.1.81.0-native.1.0.3/lib/native/inc"
+            "$ENV{USERPROFILE}/.nuget/packages/boost.1.81.0-native/1.0.3/lib/native/inc"
         )
         foreach(_mcsolverengine_boost_candidate IN LISTS _mcsolverengine_boost_candidates)
             if(EXISTS "${_mcsolverengine_boost_candidate}/boost/graph/graph_concepts.hpp")
@@ -48,7 +48,7 @@ if(CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
     if(MCSOLVERENGINE_WITH_OCCT AND NOT OpenCASCADE_DIR AND NOT OCC_INCLUDE_DIR)
         set(_mcsolverengine_occt_config_candidates
             "${CMAKE_CURRENT_SOURCE_DIR}/../.pixi/envs/default/Library/lib/cmake/opencascade"
-            "C:/work/bim-common-client/packages/opencascade.7.9-native.1.0.0/lib/cmake/opencascade"
+            "$ENV{USERPROFILE}/.nuget/packages/opencascade.7.9-native/1.0.0/lib/cmake/opencascade"
         )
         foreach(_mcsolverengine_occt_config_candidate IN LISTS _mcsolverengine_occt_config_candidates)
             if(EXISTS "${_mcsolverengine_occt_config_candidate}/OpenCASCADEConfig.cmake")
@@ -60,8 +60,8 @@ if(CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
 
     if(MCSOLVERENGINE_WITH_OCCT AND NOT OpenCASCADE_DIR AND NOT OCC_INCLUDE_DIR)
         set(_mcsolverengine_occt_roots
-            "C:/work/bim-common-client/packages/opencascade.7.9-native.1.0.0/lib"
-            "C:/work/bim-common-client/packages/opencascade.7.9-native.1.0.0"
+            "$ENV{USERPROFILE}/.nuget/packages/opencascade.7.9-native/1.0.0/lib"
+            "$ENV{USERPROFILE}/.nuget/packages/opencascade.7.9-native/1.0.0"
         )
         foreach(_mcsolverengine_occt_root IN LISTS _mcsolverengine_occt_roots)
             if(WIN32)
@@ -191,6 +191,8 @@ if(MCSOLVERENGINE_HAS_OCCT)
 endif()
 
 add_library(McSolverEngineCore STATIC ${MCSOLVERENGINE_CORE_SOURCES})
+
+set_source_files_properties(src/CompatSolver.cpp PROPERTIES COMPILE_FLAGS "/permissive /Od")
 
 add_library(McSolverEngine::Core ALIAS McSolverEngineCore)
 
@@ -419,17 +421,17 @@ if(MCSOLVERENGINE_BUILD_TESTS)
                 )
 
                 add_test(
-                    NAME McSolverEngineCSharpWrapperTests_net60
+                    NAME McSolverEngineCSharpWrapperTests_net80
                     COMMAND
                         ${CMAKE_COMMAND} -E env
                         DOTNET_CLI_UI_LANGUAGE=en
                         "${MCSOLVERENGINE_LIB_PATH_VAR}=$<TARGET_FILE_DIR:McSolverEngineNative>${MCSOLVERENGINE_PATH_SEP}${MCSOLVERENGINE_RUNTIME_PATH}${MCSOLVERENGINE_PATH_SEP}$ENV{${MCSOLVERENGINE_LIB_PATH_VAR}}"
                         ${DOTNET_EXECUTABLE} test "${_csharp_tests_proj}"
                         --configuration $<CONFIG>
-                        --framework net6.0
+                        --framework net8.0
                         --no-build
                 )
-                set_tests_properties(McSolverEngineCSharpWrapperTests_net60 PROPERTIES
+                set_tests_properties(McSolverEngineCSharpWrapperTests_net80 PROPERTIES
                     LABELS "csharp"
                 )
             endif()

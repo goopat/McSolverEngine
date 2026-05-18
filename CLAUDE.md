@@ -46,7 +46,7 @@ Run only C++ tests:
 ctest --test-dir build -C Release -E csharp
 ```
 
-Run only C# wrapper tests (both net48 and net6.0):
+Run only C# wrapper tests (both net48 and net8.0):
 ```
 ctest --test-dir build -C Release -L csharp
 ```
