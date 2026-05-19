@@ -2589,5 +2589,168 @@ int main()
 #endif
     }
 
+    {
+        // B-Spline + Arc tangency via AngleViaPointAndParam (ported from FreeCAD
+        // tests/src/Mod/Sketcher/App/planegcs/Constraints.cpp).
+        // Verifies the combined constraint chain:
+        //   PointOnArc + PointOnBSpline + AngleViaPointAndParam
+
+        double pointX = 3.5, arcStartX = 5.0, arcEndX = 0.0, arcCenterX = 0.0;
+        double pointY = 3.5, arcStartY = 0.0, arcEndY = 5.0, arcCenterY = 0.0;
+        GCS::Point point, arcStart, arcEnd, arcCenter;
+        point.x = &pointX;
+        point.y = &pointY;
+        arcStart.x = &arcStartX;
+        arcStart.y = &arcStartY;
+        arcEnd.x = &arcEndX;
+        arcEnd.y = &arcEndY;
+        arcCenter.x = &arcCenterX;
+        arcCenter.y = &arcCenterY;
+
+        double arcRadius = 5.0, arcStartAngle = 0.0, arcEndAngle = std::numbers::pi / 2;
+        double desiredAngle = std::numbers::pi;
+
+        double bSplineStartX = 0.0, bSplineEndX = 16.0;
+        double bSplineStartY = 10.0, bSplineEndY = -10.0;
+        GCS::Point bSplineStart, bSplineEnd;
+        bSplineStart.x = &bSplineStartX;
+        bSplineStart.y = &bSplineStartY;
+        bSplineEnd.x = &bSplineEndX;
+        bSplineEnd.y = &bSplineEndY;
+
+        std::vector<double> bSplineControlPointsX(5);
+        std::vector<double> bSplineControlPointsY(5);
+        bSplineControlPointsX[0] = 0.0;
+        bSplineControlPointsY[0] = 10.0;
+        bSplineControlPointsX[1] = 0.0;
+        bSplineControlPointsY[1] = 6.0;
+        bSplineControlPointsX[2] = 6.0;
+        bSplineControlPointsY[2] = 0.5;
+        bSplineControlPointsX[3] = 16.0;
+        bSplineControlPointsY[3] = 0.5;
+        bSplineControlPointsX[4] = 16.0;
+        bSplineControlPointsY[4] = -10.0;
+
+        std::vector<GCS::Point> bSplineControlPoints(5);
+        for (size_t i = 0; i < bSplineControlPoints.size(); ++i) {
+            bSplineControlPoints[i].x = &bSplineControlPointsX[i];
+            bSplineControlPoints[i].y = &bSplineControlPointsY[i];
+        }
+
+        std::vector<double> weights(bSplineControlPoints.size(), 1.0);
+        std::vector<double*> weightsAsPtr;
+        const size_t knotCount = bSplineControlPoints.size() - 2;  // nPoles - 2 for cubic
+        std::vector<double> knots(knotCount);
+        std::vector<double*> knotsAsPtr;
+        std::vector<int> mult(knotCount, 1);
+        mult.front() = 4;  // degree + 1 for clamped cubic
+        mult.back() = 4;
+
+        for (size_t i = 0; i < bSplineControlPoints.size(); ++i) {
+            weightsAsPtr.push_back(&weights[i]);
+        }
+        for (size_t i = 0; i < knots.size(); ++i) {
+            knots[i] = static_cast<double>(i);
+            knotsAsPtr.push_back(&knots[i]);
+        }
+
+        GCS::Arc arc;
+        arc.start = arcStart;
+        arc.end = arcEnd;
+        arc.center = arcCenter;
+        arc.rad = &arcRadius;
+        arc.startAngle = &arcStartAngle;
+        arc.endAngle = &arcEndAngle;
+
+        GCS::BSpline bspline;
+        bspline.start = bSplineStart;
+        bspline.end = bSplineEnd;
+        bspline.poles = bSplineControlPoints;
+        bspline.weights = weightsAsPtr;
+        bspline.knots = knotsAsPtr;
+        bspline.mult = mult;
+        bspline.degree = 3;
+        bspline.periodic = false;
+        bspline.setupFlattenedKnots();
+        double bsplineParam = 0.35;
+
+        std::vector<double*> params = {
+            point.x,
+            point.y,
+            arcStart.x,
+            arcStart.y,
+            arcEnd.x,
+            arcEnd.y,
+            arcCenter.x,
+            arcCenter.y,
+            &arcRadius,
+            bSplineStart.x,
+            bSplineStart.y,
+            bSplineEnd.x,
+            bSplineEnd.y,
+            &bSplineControlPointsX[0],
+            &bSplineControlPointsY[0],
+            &bSplineControlPointsX[1],
+            &bSplineControlPointsY[1],
+            &bSplineControlPointsX[2],
+            &bSplineControlPointsY[2],
+            &bSplineControlPointsX[3],
+            &bSplineControlPointsY[3],
+            &bSplineControlPointsX[4],
+            &bSplineControlPointsY[4],
+            &desiredAngle,
+            &bsplineParam,
+        };
+        params.insert(params.end(), weightsAsPtr.begin(), weightsAsPtr.end());
+        params.insert(params.end(), knotsAsPtr.begin(), knotsAsPtr.end());
+
+        GCS::System system;
+        system.addConstraintArcRules(arc);
+        system.addConstraintPointOnArc(point, arc, 0, true);
+        system.addConstraintPointOnBSpline(point, bspline, &bsplineParam, 0, true);
+        system.addConstraintAngleViaPointAndParam(
+            bspline, arc, point, &bsplineParam, &desiredAngle, 0, true);
+
+        const int solveResult = system.solve(params);
+        if (solveResult != GCS::Success) {
+            std::cerr << "BSpline+Arc tangency via AngleViaPointAndParam: solver did not converge ("
+                      << solveResult << ").\n";
+            return 1;
+        }
+        system.applySolution();
+
+        const double distToCenterSq =
+            (pointX - arcCenterX) * (pointX - arcCenterX)
+            + (pointY - arcCenterY) * (pointY - arcCenterY);
+        if (std::abs(distToCenterSq - arcRadius * arcRadius) > 1e-12) {
+            std::cerr << "BSpline+Arc tangency: point not on arc after solve.\n";
+            return 1;
+        }
+
+        const GCS::DeriVector2 pointAtBSplineParam = bspline.Value(bsplineParam, 1.0);
+        if (std::abs(pointAtBSplineParam.x - pointX) > 1e-12
+            || std::abs(pointAtBSplineParam.y - pointY) > 1e-12) {
+            std::cerr << "BSpline+Arc tangency: point not on BSpline after solve.\n";
+            return 1;
+        }
+
+        // |cross(centerToPoint, bsplineTangent)| / (|centerToPoint| * |bsplineTangent|) should be ≈ 1.0
+        // meaning the BSpline tangent is perpendicular to the arc radius (tangency condition).
+        const GCS::DeriVector2 centerToPoint(pointX - arcCenterX, pointY - arcCenterY);
+        const GCS::DeriVector2 tangentBSplineAtPoint(
+            pointAtBSplineParam.dx,
+            pointAtBSplineParam.dy);
+        double dprd;
+        const double normalizedCross =
+            std::abs(centerToPoint.crossProdZ(tangentBSplineAtPoint, dprd))
+            / (centerToPoint.length() * tangentBSplineAtPoint.length());
+
+        if (std::abs(normalizedCross - 1.0) > 0.005) {
+            std::cerr << "BSpline+Arc tangency: angle condition not satisfied (normalizedCross = "
+                      << normalizedCross << ").\n";
+            return 1;
+        }
+    }
+
     return 0;
 }
