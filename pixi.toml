@@ -1,0 +1,8 @@
+[workspace]
+name = "mcsolverengine"
+channels = ["conda-forge"]
+platforms = ["win-64"]
+
+[dependencies]
+eigen = ">=3.3,<5"
+libboost-devel = "*"

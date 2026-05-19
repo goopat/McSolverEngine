@@ -10,8 +10,7 @@ if(CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
     include(CTest)
     if(NOT EIGEN3_INCLUDE_DIR)
         set(_mcsolverengine_eigen_candidates
-            "${CMAKE_CURRENT_SOURCE_DIR}/../.pixi/envs/default/Library/include/eigen3"
-            "$ENV{USERPROFILE}/.nuget/packages/opencascade.7.9-native/1.0.0/lib/3rdparty/vtk-9.4.1-x64/include/vtk-9.4/vtkeigen/eigen"
+            "${CMAKE_CURRENT_SOURCE_DIR}/.pixi/envs/default/Library/include/eigen3"
         )
         foreach(_mcsolverengine_eigen_candidate IN LISTS _mcsolverengine_eigen_candidates)
             if(EXISTS "${_mcsolverengine_eigen_candidate}/Eigen/Core")
@@ -33,21 +32,16 @@ if(CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
     endif()
 
     if(NOT BOOST_INCLUDEDIR)
-        set(_mcsolverengine_boost_candidates
-            "${CMAKE_CURRENT_SOURCE_DIR}/../.pixi/envs/default/Library/include"
-            "$ENV{USERPROFILE}/.nuget/packages/boost.1.81.0-native/1.0.3/lib/native/inc"
+        set(_mcsolverengine_boost_candidate
+            "${CMAKE_CURRENT_SOURCE_DIR}/.pixi/envs/default/Library/include"
         )
-        foreach(_mcsolverengine_boost_candidate IN LISTS _mcsolverengine_boost_candidates)
-            if(EXISTS "${_mcsolverengine_boost_candidate}/boost/graph/graph_concepts.hpp")
-                set(BOOST_INCLUDEDIR "${_mcsolverengine_boost_candidate}")
-                break()
-            endif()
-        endforeach()
+        if(EXISTS "${_mcsolverengine_boost_candidate}/boost/graph/graph_concepts.hpp")
+            set(BOOST_INCLUDEDIR "${_mcsolverengine_boost_candidate}")
+        endif()
     endif()
 
     if(MCSOLVERENGINE_WITH_OCCT AND NOT OpenCASCADE_DIR AND NOT OCC_INCLUDE_DIR)
         set(_mcsolverengine_occt_config_candidates
-            "${CMAKE_CURRENT_SOURCE_DIR}/../.pixi/envs/default/Library/lib/cmake/opencascade"
             "$ENV{USERPROFILE}/.nuget/packages/opencascade.7.9-native/1.0.0/lib/cmake/opencascade"
         )
         foreach(_mcsolverengine_occt_config_candidate IN LISTS _mcsolverengine_occt_config_candidates)
