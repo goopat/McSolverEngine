@@ -318,6 +318,7 @@ public class WrapperRegressionTests
     private static string _v1025XmlPath = string.Empty;
     private static string _v1025ExpectedBrepPath = string.Empty;
     private static string _v1026XmlPath = string.Empty;
+    private static bool? _occtAvailable;
 
     [AssemblyInitialize]
     public static void AssemblyInitialize(TestContext _)
@@ -404,6 +405,7 @@ public class WrapperRegressionTests
     [TestMethod]
     public void BRepRegression_ForSample1_MatchesExpectedBrep()
     {
+        AssumeOcctAvailable();
         var documentXml = File.ReadAllText(_sampleXmlPath);
         var expectedBrep = File.ReadAllText(_expectedBrepPath);
 
@@ -428,6 +430,7 @@ public class WrapperRegressionTests
     [TestMethod]
     public void BRepRegression_ForV1024_MatchesExpectedBrep()
     {
+        AssumeOcctAvailable();
         var documentXml = File.ReadAllText(_v1024XmlPath);
         var expectedBrep = File.ReadAllText(_v1024ExpectedBrepPath);
 
@@ -452,6 +455,7 @@ public class WrapperRegressionTests
     [TestMethod]
     public void BRepRegression_ForV1024WithParameters_MatchesExpectedBrep()
     {
+        AssumeOcctAvailable();
         var documentXml = File.ReadAllText(_v1024XmlPath);
         var expectedBrep = File.ReadAllText(_v1024Plus1ExpectedBrepPath);
 
@@ -492,6 +496,7 @@ public class WrapperRegressionTests
     [TestMethod]
     public void BRepRegression_ForV1021_MatchesExpectedBrep()
     {
+        AssumeOcctAvailable();
         var documentXml = File.ReadAllText(_v1021XmlPath);
         var expectedBrep = File.ReadAllText(_v1021ExpectedBrepPath);
 
@@ -516,24 +521,28 @@ public class WrapperRegressionTests
     [TestMethod]
     public void BRepRegression_ForV1022Sketch_MatchesExpectedBrep()
     {
+        AssumeOcctAvailable();
         AssertBrepRegression(_v1022XmlPath, "Sketch", _v1022SketchExpectedBrepPath);
     }
 
     [TestMethod]
     public void BRepRegression_ForV1022Sketch001_MatchesExpectedBrep()
     {
+        AssumeOcctAvailable();
         AssertBrepRegression(_v1022XmlPath, "Sketch001", _v1022Sketch001ExpectedBrepPath);
     }
 
     [TestMethod]
     public void BRepRegression_ForV1022Sketch002_MatchesExpectedBrep()
     {
+        AssumeOcctAvailable();
         AssertBrepRegression(_v1022XmlPath, "Sketch002", _v1022Sketch002ExpectedBrepPath);
     }
 
     [TestMethod]
     public void BRepRegression_ForV1025_MatchesExpectedBrep()
     {
+        AssumeOcctAvailable();
         AssertBrepRegression(_v1025XmlPath, "Sketch", _v1025ExpectedBrepPath);
     }
 
@@ -645,6 +654,7 @@ public class WrapperRegressionTests
     [TestMethod]
     public void BRepRegression_WithParameters_UsesWrappedParameterOverrides()
     {
+        AssumeOcctAvailable();
         var defaultResult = McSolverEngineClient.SolveBRepFromDocumentXml(ParameterizedDocumentXml, "Sketch");
         var overriddenResult = McSolverEngineClient.SolveBRepFromDocumentXml(
             ParameterizedDocumentXml,
@@ -785,6 +795,20 @@ public class WrapperRegressionTests
         Assert.AreEqual(0.0, line.Start.Y, 1e-9);
         Assert.AreEqual(5.0, line.End.X, 1e-9);
         Assert.AreEqual(0.0, line.End.Y, 1e-9);
+    }
+
+    private static void AssumeOcctAvailable()
+    {
+        if (_occtAvailable == null)
+        {
+            var result = McSolverEngineClient.SolveBRepFromDocumentXml(
+                ParameterizedDocumentXml, "Sketch");
+            _occtAvailable = result.NativeStatus != McSolverEngineNativeStatus.OpenCascadeUnavailable;
+        }
+        if (_occtAvailable == false)
+        {
+            Assert.Inconclusive("OpenCASCADE not available -- skipping BREP regression.");
+        }
     }
 
     private static void AssertBrepEquivalent(string expected, string actual)
