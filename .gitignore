@@ -6,3 +6,5 @@ TestResults
 
 fcstdDoc/*.solver.brp
 
+__pycache__/
+
