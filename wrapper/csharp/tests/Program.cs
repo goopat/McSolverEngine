@@ -52,25 +52,28 @@ public static class Program
             Console.Write($"  {method.Name}... ");
 
             var instance = Activator.CreateInstance(testClassType);
+            var sw = System.Diagnostics.Stopwatch.StartNew();
 
             try
             {
                 method.Invoke(instance, null);
-                Console.WriteLine("PASS");
+                sw.Stop();
+                Console.WriteLine($"PASS ({sw.Elapsed.TotalSeconds:F3}s)");
                 passed++;
             }
             catch (TargetInvocationException ex)
             {
+                sw.Stop();
                 var inner = ex.InnerException;
                 var message = inner?.Message ?? "Unknown error";
 
                 if (inner is AssertInconclusiveException)
                 {
-                    Console.WriteLine("SKIP (inconclusive)");
+                    Console.WriteLine($"SKIP ({sw.Elapsed.TotalSeconds:F3}s)");
                 }
                 else
                 {
-                    Console.WriteLine("FAIL");
+                    Console.WriteLine($"FAIL ({sw.Elapsed.TotalSeconds:F3}s)");
                     Console.Error.WriteLine($"    {message}");
                     failed++;
                     failures.Add((method.Name, message));

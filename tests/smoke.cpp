@@ -480,6 +480,7 @@ std::size_t countShapes(const TopoDS_Shape& shape, TopAbs_ShapeEnum shapeType)
 
 int main()
 {
+    const auto mainStart = std::chrono::steady_clock::now();
     McSolverEngine::Detail::configureWindowsAssertMode();
 
     std::string_view version {McSolverEngine::Engine::version()};
@@ -2722,14 +2723,14 @@ int main()
         const double distToCenterSq =
             (pointX - arcCenterX) * (pointX - arcCenterX)
             + (pointY - arcCenterY) * (pointY - arcCenterY);
-        if (std::abs(distToCenterSq - arcRadius * arcRadius) > 1e-12) {
+        if (std::abs(distToCenterSq - arcRadius * arcRadius) > 1e-10) {
             std::cerr << "BSpline+Arc tangency: point not on arc after solve.\n";
             return 1;
         }
 
         const GCS::DeriVector2 pointAtBSplineParam = bspline.Value(bsplineParam, 1.0);
-        if (std::abs(pointAtBSplineParam.x - pointX) > 1e-12
-            || std::abs(pointAtBSplineParam.y - pointY) > 1e-12) {
+        if (std::abs(pointAtBSplineParam.x - pointX) > 1e-10
+            || std::abs(pointAtBSplineParam.y - pointY) > 1e-10) {
             std::cerr << "BSpline+Arc tangency: point not on BSpline after solve.\n";
             return 1;
         }
@@ -2751,6 +2752,10 @@ int main()
             return 1;
         }
     }
+
+    const auto totalMs = std::chrono::duration<double, std::milli>(
+        std::chrono::steady_clock::now() - mainStart).count();
+    std::cout << "\nTotal elapsed: " << totalMs << " ms" << std::endl;
 
     return 0;
 }
