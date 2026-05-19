@@ -967,13 +967,15 @@ bool addPointwiseCurveAngleConstraint(SolveContext& context, const Constraint& c
     const bool firstIsBSpline = isBSplineGeometry(context, constraint.first.geometryIndex);
     const bool secondIsBSpline = isBSplineGeometry(context, constraint.second.geometryIndex);
     if (firstIsBSpline && secondIsBSpline) {
-        auto* firstSpline = bSplineFor(context, constraint.first.geometryIndex);
-        auto* secondSpline = bSplineFor(context, constraint.second.geometryIndex);
+        GCS::BSpline* firstSpline = bSplineFor(context, constraint.first.geometryIndex);
+        GCS::BSpline* secondSpline = bSplineFor(context, constraint.second.geometryIndex);
         if (!firstSpline || !secondSpline) {
             return false;
         }
-        auto* firstPointParam = context.ownParameter(estimateBSplineParameter(*firstSpline, *point));
-        auto* secondPointParam = context.ownParameter(estimateBSplineParameter(*secondSpline, *point));
+        double firstParam = estimateBSplineParameter(*firstSpline, *point);
+        double* firstPointParam = context.ownParameter(firstParam);
+        double secondParam = estimateBSplineParameter(*secondSpline, *point);
+        double* secondPointParam = context.ownParameter(secondParam);
         context.parameters.push_back(firstPointParam);
         context.parameters.push_back(secondPointParam);
         context.system.addConstraintPointOnBSpline(
@@ -1145,13 +1147,15 @@ void addPointGeometry(SolveContext& context, const PointGeometry& geometry, bool
 
     const auto pointId = static_cast<int>(context.points.size());
     context.points.push_back(point);
-    context.geometries.push_back({
-        .kind = GeometryKind::Point,
-        .index = -1,
-        .startPointId = pointId,
-        .endPointId = pointId,
-        .midPointId = pointId,
-    });
+    {
+        GeometryBinding gb;
+        gb.kind = GeometryKind::Point;
+        gb.index = -1;
+        gb.startPointId = pointId;
+        gb.endPointId = pointId;
+        gb.midPointId = pointId;
+        context.geometries.push_back(gb);
+    }
 }
 
 void addLineGeometry(SolveContext& context, const LineSegmentGeometry& geometry, bool fixed, int geometryIndex)
@@ -1183,13 +1187,15 @@ void addLineGeometry(SolveContext& context, const LineSegmentGeometry& geometry,
     const auto lineIndex = static_cast<int>(context.lines.size());
     context.lines.push_back(line);
 
-    context.geometries.push_back({
-        .kind = GeometryKind::LineSegment,
-        .index = lineIndex,
-        .startPointId = startPointId,
-        .endPointId = endPointId,
-        .midPointId = -1,
-    });
+    {
+        GeometryBinding gb;
+        gb.kind = GeometryKind::LineSegment;
+        gb.index = lineIndex;
+        gb.startPointId = startPointId;
+        gb.endPointId = endPointId;
+        gb.midPointId = -1;
+        context.geometries.push_back(gb);
+    }
 }
 
 void addCircleGeometry(SolveContext& context, const CircleGeometry& geometry, bool fixed, int geometryIndex)
@@ -1213,13 +1219,15 @@ void addCircleGeometry(SolveContext& context, const CircleGeometry& geometry, bo
     const auto circleIndex = static_cast<int>(context.circles.size());
     context.circles.push_back(circle);
 
-    context.geometries.push_back({
-        .kind = GeometryKind::Circle,
-        .index = circleIndex,
-        .startPointId = -1,
-        .endPointId = -1,
-        .midPointId = centerPointId,
-    });
+    {
+        GeometryBinding gb;
+        gb.kind = GeometryKind::Circle;
+        gb.index = circleIndex;
+        gb.startPointId = -1;
+        gb.endPointId = -1;
+        gb.midPointId = centerPointId;
+        context.geometries.push_back(gb);
+    }
 }
 
 void addArcGeometry(SolveContext& context, const ArcGeometry& geometry, bool fixed, int geometryIndex)
@@ -1279,13 +1287,15 @@ void addArcGeometry(SolveContext& context, const ArcGeometry& geometry, bool fix
     const auto arcIndex = static_cast<int>(context.arcs.size());
     context.arcs.push_back(arc);
 
-    context.geometries.push_back({
-        .kind = GeometryKind::Arc,
-        .index = arcIndex,
-        .startPointId = startPointId,
-        .endPointId = endPointId,
-        .midPointId = centerPointId,
-    });
+    {
+        GeometryBinding gb;
+        gb.kind = GeometryKind::Arc;
+        gb.index = arcIndex;
+        gb.startPointId = startPointId;
+        gb.endPointId = endPointId;
+        gb.midPointId = centerPointId;
+        context.geometries.push_back(gb);
+    }
 
     if (!fixed) {
         context.system.addConstraintArcRules(context.arcs.back(), nextTag(context));

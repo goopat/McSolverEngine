@@ -192,7 +192,7 @@ endif()
 
 add_library(McSolverEngineCore STATIC ${MCSOLVERENGINE_CORE_SOURCES})
 
-set_source_files_properties(src/CompatSolver.cpp PROPERTIES COMPILE_FLAGS "/permissive /Od")
+# CompatSolver.cpp uses member-by-member assignment instead of designated initializers to avoid MSVC 19.44 C1001 (msc1.cpp:1589)
 
 add_library(McSolverEngine::Core ALIAS McSolverEngineCore)
 
