@@ -186,8 +186,6 @@ endif()
 
 add_library(McSolverEngineCore STATIC ${MCSOLVERENGINE_CORE_SOURCES})
 
-# CompatSolver.cpp uses member-by-member assignment instead of designated initializers to avoid MSVC 19.44 C1001 (msc1.cpp:1589)
-
 add_library(McSolverEngine::Core ALIAS McSolverEngineCore)
 
 mcsolverengine_enable_cxx20(McSolverEngineCore PUBLIC)

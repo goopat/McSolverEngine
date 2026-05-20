@@ -823,6 +823,54 @@ BSplineKnotTangentResult addBSplineKnotTangentConstraint(SolveContext& context, 
     return BSplineKnotTangentResult::Applied;
 }
 
+[[nodiscard]] static bool addAngleConstraintBothBSpline(
+    SolveContext& context,
+    const Constraint& constraint,
+    GCS::Point& point,
+    GCS::Curve& firstCurve,
+    GCS::Curve& secondCurve,
+    double* angle,
+    int tag
+)
+{
+    GCS::BSpline* firstSpline = bSplineFor(context, constraint.first.geometryIndex);
+    GCS::BSpline* secondSpline = bSplineFor(context, constraint.second.geometryIndex);
+    if (!firstSpline || !secondSpline) {
+        return false;
+    }
+    double firstParam = estimateBSplineParameter(*firstSpline, point);
+    double* firstPointParam = context.ownParameter(firstParam);
+    double secondParam = estimateBSplineParameter(*secondSpline, point);
+    double* secondPointParam = context.ownParameter(secondParam);
+    context.parameters.push_back(firstPointParam);
+    context.parameters.push_back(secondPointParam);
+    context.system.addConstraintPointOnBSpline(
+        point,
+        *firstSpline,
+        firstPointParam,
+        tag,
+        constraint.driving
+    );
+    context.system.addConstraintPointOnBSpline(
+        point,
+        *secondSpline,
+        secondPointParam,
+        tag,
+        constraint.driving
+    );
+    context.system.addConstraintAngleViaPointAndTwoParams(
+        firstCurve,
+        secondCurve,
+        point,
+        firstPointParam,
+        secondPointParam,
+        angle,
+        tag,
+        constraint.driving
+    );
+    return true;
+}
+
 bool addPointwiseCurveAngleConstraint(SolveContext& context, const Constraint& constraint)
 {
     if ((constraint.kind != ConstraintKind::Angle && constraint.kind != ConstraintKind::Tangent
@@ -967,42 +1015,9 @@ bool addPointwiseCurveAngleConstraint(SolveContext& context, const Constraint& c
     const bool firstIsBSpline = isBSplineGeometry(context, constraint.first.geometryIndex);
     const bool secondIsBSpline = isBSplineGeometry(context, constraint.second.geometryIndex);
     if (firstIsBSpline && secondIsBSpline) {
-        GCS::BSpline* firstSpline = bSplineFor(context, constraint.first.geometryIndex);
-        GCS::BSpline* secondSpline = bSplineFor(context, constraint.second.geometryIndex);
-        if (!firstSpline || !secondSpline) {
-            return false;
-        }
-        double firstParam = estimateBSplineParameter(*firstSpline, *point);
-        double* firstPointParam = context.ownParameter(firstParam);
-        double secondParam = estimateBSplineParameter(*secondSpline, *point);
-        double* secondPointParam = context.ownParameter(secondParam);
-        context.parameters.push_back(firstPointParam);
-        context.parameters.push_back(secondPointParam);
-        context.system.addConstraintPointOnBSpline(
-            *point,
-            *firstSpline,
-            firstPointParam,
-            tag,
-            constraint.driving
+        return addAngleConstraintBothBSpline(
+            context, constraint, *point, *firstCurve, *secondCurve, angle, tag
         );
-        context.system.addConstraintPointOnBSpline(
-            *point,
-            *secondSpline,
-            secondPointParam,
-            tag,
-            constraint.driving
-        );
-        context.system.addConstraintAngleViaPointAndTwoParams(
-            *firstCurve,
-            *secondCurve,
-            *point,
-            firstPointParam,
-            secondPointParam,
-            angle,
-            tag,
-            constraint.driving
-        );
-        return true;
     }
     if (firstIsBSpline || secondIsBSpline) {
         GCS::Curve* splineCurve = firstCurve;
