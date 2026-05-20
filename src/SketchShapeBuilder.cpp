@@ -4,6 +4,7 @@
 #include <cmath>
 #include <list>
 #include <string>
+#include <string_view>
 #include <variant>
 
 #include <BRep_Builder.hxx>
@@ -75,6 +76,21 @@ namespace
     return std::sqrt(std::max(0.0, dx * dx + dy * dy - minorRadius * minorRadius));
 }
 
+[[nodiscard]] bool appendMadeEdge(
+    BRepBuilderAPI_MakeEdge& maker,
+    std::list<TopoDS_Edge>& edges,
+    std::string& error,
+    std::string_view failureMessage
+)
+{
+    if (!maker.IsDone()) {
+        error = std::string(failureMessage);
+        return false;
+    }
+    edges.push_back(maker.Edge());
+    return true;
+}
+
 [[nodiscard]] bool appendGeometry(
     const Compat::Geometry& geometry,
     std::list<TopoDS_Edge>& edges,
@@ -113,8 +129,8 @@ namespace
                 gp_Ax2(makePoint(circle.center), gp_Dir(0.0, 0.0, 1.0)),
                 circle.radius
             );
-            edges.push_back(BRepBuilderAPI_MakeEdge(gpCircle).Edge());
-            return true;
+            BRepBuilderAPI_MakeEdge makeCircle(gpCircle);
+            return appendMadeEdge(makeCircle, edges, error, "Failed to build circle edge.");
         }
         case Compat::GeometryKind::Arc: {
             const auto& arc = std::get<Compat::ArcGeometry>(geometry.data);
@@ -122,8 +138,8 @@ namespace
                 gp_Ax2(makePoint(arc.center), gp_Dir(0.0, 0.0, 1.0)),
                 arc.radius
             );
-            edges.push_back(BRepBuilderAPI_MakeEdge(gpCircle, arc.startAngle, arc.endAngle).Edge());
-            return true;
+            BRepBuilderAPI_MakeEdge makeArc(gpCircle, arc.startAngle, arc.endAngle);
+            return appendMadeEdge(makeArc, edges, error, "Failed to build arc edge.");
         }
         case Compat::GeometryKind::Ellipse: {
             const auto& ellipse = std::get<Compat::EllipseGeometry>(geometry.data);
@@ -132,8 +148,8 @@ namespace
                 ellipseMajorRadius(ellipse.center, ellipse.focus1, ellipse.minorRadius),
                 ellipse.minorRadius
             );
-            edges.push_back(BRepBuilderAPI_MakeEdge(Handle(Geom_Ellipse)(new Geom_Ellipse(gpEllipse))).Edge());
-            return true;
+            BRepBuilderAPI_MakeEdge makeEllipse(Handle(Geom_Ellipse)(new Geom_Ellipse(gpEllipse)));
+            return appendMadeEdge(makeEllipse, edges, error, "Failed to build ellipse edge.");
         }
         case Compat::GeometryKind::ArcOfEllipse: {
             const auto& arc = std::get<Compat::ArcOfEllipseGeometry>(geometry.data);
@@ -145,8 +161,8 @@ namespace
             Handle(Geom_Ellipse) curve = new Geom_Ellipse(gpEllipse);
             Handle(Geom_TrimmedCurve) trimmed =
                 new Geom_TrimmedCurve(curve, arc.startAngle, arc.endAngle, true, true);
-            edges.push_back(BRepBuilderAPI_MakeEdge(trimmed).Edge());
-            return true;
+            BRepBuilderAPI_MakeEdge makeArc(trimmed);
+            return appendMadeEdge(makeArc, edges, error, "Failed to build arc-of-ellipse edge.");
         }
         case Compat::GeometryKind::ArcOfHyperbola: {
             const auto& arc = std::get<Compat::ArcOfHyperbolaGeometry>(geometry.data);
@@ -158,8 +174,8 @@ namespace
             Handle(Geom_Hyperbola) curve = new Geom_Hyperbola(gpHyperbola);
             Handle(Geom_TrimmedCurve) trimmed =
                 new Geom_TrimmedCurve(curve, arc.startAngle, arc.endAngle, true, true);
-            edges.push_back(BRepBuilderAPI_MakeEdge(trimmed).Edge());
-            return true;
+            BRepBuilderAPI_MakeEdge makeArc(trimmed);
+            return appendMadeEdge(makeArc, edges, error, "Failed to build arc-of-hyperbola edge.");
         }
         case Compat::GeometryKind::ArcOfParabola: {
             const auto& arc = std::get<Compat::ArcOfParabolaGeometry>(geometry.data);
@@ -171,8 +187,8 @@ namespace
             Handle(Geom_Parabola) curve = new Geom_Parabola(gpParabola);
             Handle(Geom_TrimmedCurve) trimmed =
                 new Geom_TrimmedCurve(curve, arc.startAngle, arc.endAngle, true, true);
-            edges.push_back(BRepBuilderAPI_MakeEdge(trimmed).Edge());
-            return true;
+            BRepBuilderAPI_MakeEdge makeArc(trimmed);
+            return appendMadeEdge(makeArc, edges, error, "Failed to build arc-of-parabola edge.");
         }
         case Compat::GeometryKind::BSpline: {
             const auto& spline = std::get<Compat::BSplineGeometry>(geometry.data);
@@ -205,8 +221,8 @@ namespace
                 spline.periodic,
                 true
             );
-            edges.push_back(BRepBuilderAPI_MakeEdge(curve).Edge());
-            return true;
+            BRepBuilderAPI_MakeEdge makeSpline(curve);
+            return appendMadeEdge(makeSpline, edges, error, "Failed to build BSpline edge.");
         }
     }
 

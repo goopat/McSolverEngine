@@ -2746,8 +2746,12 @@ SolveResult solveSketch(SketchModel& model, const McSolverEngine::ParameterMap& 
             analyseBlockedConstraintDependentParameters(context, blockAnalysis.blockedGeoIds, paramsToBlock);
         while (unsatisfiedGroups) {
             fixParametersAndDiagnose(context, paramsToBlock);
+            const auto previousParamsToBlockCount = paramsToBlock.size();
             unsatisfiedGroups =
                 analyseBlockedConstraintDependentParameters(context, blockAnalysis.blockedGeoIds, paramsToBlock);
+            if (unsatisfiedGroups && paramsToBlock.size() == previousParamsToBlockCount) {
+                return {.status = SolveStatus::Unsupported};
+            }
         }
         fixParametersAndDiagnose(context, paramsToBlock);
     }
