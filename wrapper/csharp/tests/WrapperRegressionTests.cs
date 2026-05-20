@@ -1332,7 +1332,9 @@ public class WrapperRegressionTests
             foreach (var candidate in new[] {
                          AppContext.BaseDirectory,
                          Path.Combine(_projectRoot, "build", configuration),
+                         Path.Combine(_projectRoot, "build", configuration, configuration),
                          Path.Combine(_workspaceRoot, "build", "mcsolverengine", configuration),
+                         Path.Combine(_workspaceRoot, "build", "mcsolverengine", configuration, configuration),
                      }) {
                 if (HasNativeLibrary(candidate)) {
                     return candidate;
