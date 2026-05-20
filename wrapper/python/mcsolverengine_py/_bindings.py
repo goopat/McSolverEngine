@@ -9,19 +9,38 @@ import sys
 def _find_dll() -> str:
     """Locate mcsolverengine_native.dll from build output."""
     repo_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
-    candidates = [
-        os.path.join(repo_root, "build", "Release", "mcsolverengine_native.dll"),
-        os.path.join(repo_root, "build", "nuget_UseOcct", "Release", "mcsolverengine_native.dll"),
-        os.path.join(repo_root, "build", "nuget_NoOcct", "Release", "mcsolverengine_native.dll"),
-    ]
-    for p in candidates:
-        if os.path.isfile(p):
-            return p
+    for config in ("Release", "Debug"):
+        for candidate in [
+            os.path.join(repo_root, "build", config, "mcsolverengine_native.dll"),
+            os.path.join(repo_root, "build", "nuget_UseOcct", config, "mcsolverengine_native.dll"),
+            os.path.join(repo_root, "build", "nuget_NoOcct", config, "mcsolverengine_native.dll"),
+        ]:
+            if os.path.isfile(candidate):
+                return candidate
     raise FileNotFoundError(
-        f"mcsolverengine_native.dll not found. Searched: {candidates}"
+        f"mcsolverengine_native.dll not found."
     )
 
+def _find_occt_runtime() -> str | None:
+    """Locate the OCCT runtime binary directory."""
+    home = os.environ.get("USERPROFILE", "")
+    candidates = [
+        os.path.join(home, ".nuget", "packages", "opencascade.7.9-native", "1.0.0", "lib", "build", "bin"),
+    ]
+    for p in candidates:
+        tkbrep = os.path.join(p, "TKBRep.dll")
+        if os.path.isfile(tkbrep):
+            return os.path.abspath(p)
+    return None
+
 _dll_path = _find_dll()
+_occt_dir = _find_occt_runtime()
+
+if hasattr(os, "add_dll_directory"):
+    os.add_dll_directory(os.path.dirname(_dll_path))
+    if _occt_dir:
+        os.add_dll_directory(_occt_dir)
+
 _native = ctypes.cdll.LoadLibrary(_dll_path)
 
 # ── Enums ────────────────────────────────────────────────────

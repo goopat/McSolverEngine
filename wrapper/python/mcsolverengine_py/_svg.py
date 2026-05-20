@@ -9,7 +9,13 @@ from __future__ import annotations
 import math
 from typing import List, Tuple
 
-import rhino3dm as rg
+import warnings
+
+try:
+    import rhino3dm as rg
+except ModuleNotFoundError:
+    rg = None
+    warnings.warn("rhino3dm not installed; B-Spline curves will export as control polygon")
 
 from ._engine import GeometryRecord
 from ._bindings import (
@@ -242,6 +248,8 @@ def _sample_rhino_nurbs_curve(
     num_samples: int,
     close: bool,
 ) -> List[SvgPoint]:
+    if rg is None:
+        return [(x, y) for (x, y, _) in controls]
     is_rational = any(abs(w - 1.0) > 1e-12 for (_, _, w) in controls)
 
     nc = rg.NurbsCurve(3, is_rational, degree + 1, len(controls))

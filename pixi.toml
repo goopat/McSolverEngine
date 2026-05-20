@@ -6,3 +6,6 @@ platforms = ["win-64"]
 [dependencies]
 eigen = ">=3.3,<5"
 libboost-devel = "*"
+
+[tool.pixi.pypi-dependencies]
+rhino3dm = "*"
