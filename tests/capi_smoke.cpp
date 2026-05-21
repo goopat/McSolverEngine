@@ -95,6 +95,12 @@ int main()
         if (!expect(std::string(McSolverEngine_GetVersion()).empty() == false, "Expected non-empty version string.")) {
             return EXIT_FAILURE;
         }
+        if (!expect(
+                McSolverEngine_GetLastError() != nullptr && std::string(McSolverEngine_GetLastError()).empty(),
+                "Expected GetLastError to return empty string after successful GetVersion."
+            )) {
+            return EXIT_FAILURE;
+        }
     }
 
     std::string documentXml;
@@ -181,6 +187,13 @@ int main()
             return EXIT_FAILURE;
         }
         if (!expect(hasArc, "Expected structured geometry result to contain an arc.")) {
+            McSolverEngine_FreeGeometryResult(structuredGeometry);
+            return EXIT_FAILURE;
+        }
+        if (!expect(
+                McSolverEngine_GetLastError() != nullptr && std::string(McSolverEngine_GetLastError()).empty(),
+                "Expected GetLastError to return empty string after successful SolveToGeometry."
+            )) {
             McSolverEngine_FreeGeometryResult(structuredGeometry);
             return EXIT_FAILURE;
         }
@@ -497,6 +510,13 @@ int main()
             McSolverEngine_FreeGeometryResult(invalidAngleGeometry);
             return EXIT_FAILURE;
         }
+        if (!expect(
+                McSolverEngine_GetLastError() != nullptr && std::string(McSolverEngine_GetLastError()).empty(),
+                "Expected GetLastError to return empty string after controlled import failure (no exception)."
+            )) {
+            McSolverEngine_FreeGeometryResult(invalidAngleGeometry);
+            return EXIT_FAILURE;
+        }
         McSolverEngine_FreeGeometryResult(invalidAngleGeometry);
     }
 
@@ -692,6 +712,109 @@ int main()
     }
 
     {
+        ScopedTestTimer timer("SolveToGeometry invalid XML");
+        McSolverEngineGeometryResult* result = nullptr;
+        const auto code = McSolverEngine_SolveToGeometry("not valid xml", "Sketch", &result);
+        if (!expect(
+                code == MCSOLVERENGINE_RESULT_IMPORT_FAILED,
+                "Expected invalid XML to fail with IMPORT_FAILED."
+            )) {
+            McSolverEngine_FreeGeometryResult(result);
+            return EXIT_FAILURE;
+        }
+        if (!expect(
+                result != nullptr && result->importStatus != nullptr
+                    && std::string(result->importStatus) == "Failed",
+                "Expected invalid XML result to expose failed import status."
+            )) {
+            McSolverEngine_FreeGeometryResult(result);
+            return EXIT_FAILURE;
+        }
+        if (!expect(
+                McSolverEngine_GetLastError() != nullptr && std::string(McSolverEngine_GetLastError()).empty(),
+                "Expected GetLastError empty after controlled XML parse failure."
+            )) {
+            McSolverEngine_FreeGeometryResult(result);
+            return EXIT_FAILURE;
+        }
+        McSolverEngine_FreeGeometryResult(result);
+    }
+
+    {
+        ScopedTestTimer timer("SolveToGeometryWithParameters non-existent sketch name");
+        const auto v1024Xml =
+            readTextFile(std::string(MCSOLVERENGINE_SOURCE_DIR) + "/fcstdDoc/V102.4.xml");
+        if (!expect(!v1024Xml.empty(), "Expected V102.4.xml to load.")) {
+            return EXIT_FAILURE;
+        }
+
+        McSolverEngineGeometryResult* result = nullptr;
+        const auto code =
+            McSolverEngine_SolveToGeometry(v1024Xml.c_str(), "NonExistentSketch", &result);
+        if (!expect(
+                code == MCSOLVERENGINE_RESULT_IMPORT_FAILED,
+                "Expected non-existent sketch name to fail with IMPORT_FAILED."
+            )) {
+            McSolverEngine_FreeGeometryResult(result);
+            return EXIT_FAILURE;
+        }
+        if (!expect(
+                result != nullptr && result->importStatus != nullptr
+                    && std::string(result->importStatus) == "Failed",
+                "Expected non-existent sketch result to expose failed import status."
+            )) {
+            McSolverEngine_FreeGeometryResult(result);
+            return EXIT_FAILURE;
+        }
+        if (!expect(
+                McSolverEngine_GetLastError() != nullptr && std::string(McSolverEngine_GetLastError()).empty(),
+                "Expected GetLastError empty after missing sketch import failure."
+            )) {
+            McSolverEngine_FreeGeometryResult(result);
+            return EXIT_FAILURE;
+        }
+        McSolverEngine_FreeGeometryResult(result);
+    }
+
+    {
+        ScopedTestTimer timer("SolveToGeometryWithParameters non-existent parameter key");
+        const auto v1024Xml =
+            readTextFile(std::string(MCSOLVERENGINE_SOURCE_DIR) + "/fcstdDoc/V102.4.xml");
+        if (!expect(!v1024Xml.empty(), "Expected V102.4.xml to load.")) {
+            return EXIT_FAILURE;
+        }
+
+        const char* keys[] = {"NonExistentParam"};
+        const char* values[] = {"42.0"};
+        McSolverEngineGeometryResult* result = nullptr;
+        const auto code = McSolverEngine_SolveToGeometryWithParameters(
+            v1024Xml.c_str(), "Sketch", keys, values, 1, &result);
+        if (!expect(
+                code == MCSOLVERENGINE_RESULT_IMPORT_FAILED,
+                "Expected non-existent parameter key to fail with IMPORT_FAILED."
+            )) {
+            McSolverEngine_FreeGeometryResult(result);
+            return EXIT_FAILURE;
+        }
+        if (!expect(
+                result != nullptr && result->importStatus != nullptr
+                    && std::string(result->importStatus) == "Failed",
+                "Expected non-existent parameter result to expose failed import status."
+            )) {
+            McSolverEngine_FreeGeometryResult(result);
+            return EXIT_FAILURE;
+        }
+        if (!expect(
+                McSolverEngine_GetLastError() != nullptr && std::string(McSolverEngine_GetLastError()).empty(),
+                "Expected GetLastError empty after unknown parameter import failure."
+            )) {
+            McSolverEngine_FreeGeometryResult(result);
+            return EXIT_FAILURE;
+        }
+        McSolverEngine_FreeGeometryResult(result);
+    }
+
+    {
         ScopedTestTimer timer("MultiThreaded SolveToGeometryWithParameters V102.4 (8 threads)");
         const auto v1024Xml =
             readTextFile(std::string(MCSOLVERENGINE_SOURCE_DIR) + "/fcstdDoc/V102.4.xml");
@@ -734,6 +857,13 @@ int main()
                 (std::string("Expected all ") + std::to_string(threadCount)
                  + " threads to succeed, failures: " + std::to_string(failCount.load()))
                     .c_str()
+            )) {
+            return EXIT_FAILURE;
+        }
+
+        if (!expect(
+                McSolverEngine_GetLastError() != nullptr && std::string(McSolverEngine_GetLastError()).empty(),
+                "Expected GetLastError to return empty string after multi-threaded solve."
             )) {
             return EXIT_FAILURE;
         }

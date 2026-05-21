@@ -19,6 +19,20 @@
 namespace
 {
 
+constexpr std::size_t kLastErrorBufferSize = 512;
+thread_local char lastErrorBuffer[kLastErrorBufferSize] = {};
+
+void setLastError(const char* message) noexcept
+{
+    std::strncpy(lastErrorBuffer, message, kLastErrorBufferSize - 1);
+    lastErrorBuffer[kLastErrorBufferSize - 1] = '\0';
+}
+
+void clearLastError() noexcept
+{
+    lastErrorBuffer[0] = '\0';
+}
+
 using McSolverEngine::Compat::ArcGeometry;
 using McSolverEngine::Compat::ArcOfEllipseGeometry;
 using McSolverEngine::Compat::ArcOfHyperbolaGeometry;
@@ -780,10 +794,15 @@ extern "C"
 
 const char* McSolverEngine_GetVersion(void)
 {
+    clearLastError();
     try {
         McSolverEngine::Detail::configureWindowsAssertMode();
         return McSolverEngine::Engine::version();
+    } catch (const std::exception& e) {
+        setLastError(e.what());
+        return "";
     } catch (...) {
+        setLastError("unknown exception");
         return "";
     }
 }
@@ -794,6 +813,7 @@ McSolverEngineResultCode McSolverEngine_SolveToGeometry(
     McSolverEngineGeometryResult** result
 )
 {
+    clearLastError();
     try {
         McSolverEngine::Detail::configureWindowsAssertMode();
         if (!documentXmlUtf8 || !result) {
@@ -810,13 +830,16 @@ McSolverEngineResultCode McSolverEngine_SolveToGeometry(
             },
             result
         );
-    } catch (const std::bad_alloc&) {
+    } catch (const std::bad_alloc& e) {
+        setLastError(e.what());
         resetOutput(result);
         return MCSOLVERENGINE_RESULT_OUT_OF_MEMORY;
-    } catch (const std::exception&) {
+    } catch (const std::exception& e) {
+        setLastError(e.what());
         resetOutput(result);
         return MCSOLVERENGINE_RESULT_SOLVE_FAILED;
     } catch (...) {
+        setLastError("unknown exception");
         resetOutput(result);
         return MCSOLVERENGINE_RESULT_SOLVE_FAILED;
     }
@@ -831,6 +854,7 @@ McSolverEngineResultCode McSolverEngine_SolveToGeometryWithParameters(
     McSolverEngineGeometryResult** result
 )
 {
+    clearLastError();
     try {
         McSolverEngine::Detail::configureWindowsAssertMode();
         if (!documentXmlUtf8 || !result) {
@@ -854,13 +878,16 @@ McSolverEngineResultCode McSolverEngine_SolveToGeometryWithParameters(
             },
             result
         );
-    } catch (const std::bad_alloc&) {
+    } catch (const std::bad_alloc& e) {
+        setLastError(e.what());
         resetOutput(result);
         return MCSOLVERENGINE_RESULT_OUT_OF_MEMORY;
-    } catch (const std::exception&) {
+    } catch (const std::exception& e) {
+        setLastError(e.what());
         resetOutput(result);
         return MCSOLVERENGINE_RESULT_SOLVE_FAILED;
     } catch (...) {
+        setLastError("unknown exception");
         resetOutput(result);
         return MCSOLVERENGINE_RESULT_SOLVE_FAILED;
     }
@@ -872,6 +899,7 @@ McSolverEngineResultCode McSolverEngine_SolveToBRep(
     McSolverEngineBRepResult** result
 )
 {
+    clearLastError();
     try {
         McSolverEngine::Detail::configureWindowsAssertMode();
         if (!documentXmlUtf8 || !result) {
@@ -888,13 +916,16 @@ McSolverEngineResultCode McSolverEngine_SolveToBRep(
             },
             result
         );
-    } catch (const std::bad_alloc&) {
+    } catch (const std::bad_alloc& e) {
+        setLastError(e.what());
         resetOutput(result);
         return MCSOLVERENGINE_RESULT_OUT_OF_MEMORY;
-    } catch (const std::exception&) {
+    } catch (const std::exception& e) {
+        setLastError(e.what());
         resetOutput(result);
         return MCSOLVERENGINE_RESULT_SOLVE_FAILED;
     } catch (...) {
+        setLastError("unknown exception");
         resetOutput(result);
         return MCSOLVERENGINE_RESULT_SOLVE_FAILED;
     }
@@ -909,6 +940,7 @@ McSolverEngineResultCode McSolverEngine_SolveToBRepWithParameters(
     McSolverEngineBRepResult** result
 )
 {
+    clearLastError();
     try {
         McSolverEngine::Detail::configureWindowsAssertMode();
         if (!documentXmlUtf8 || !result) {
@@ -932,13 +964,16 @@ McSolverEngineResultCode McSolverEngine_SolveToBRepWithParameters(
             },
             result
         );
-    } catch (const std::bad_alloc&) {
+    } catch (const std::bad_alloc& e) {
+        setLastError(e.what());
         resetOutput(result);
         return MCSOLVERENGINE_RESULT_OUT_OF_MEMORY;
-    } catch (const std::exception&) {
+    } catch (const std::exception& e) {
+        setLastError(e.what());
         resetOutput(result);
         return MCSOLVERENGINE_RESULT_SOLVE_FAILED;
     } catch (...) {
+        setLastError("unknown exception");
         resetOutput(result);
         return MCSOLVERENGINE_RESULT_SOLVE_FAILED;
     }
@@ -952,6 +987,11 @@ void McSolverEngine_FreeGeometryResult(McSolverEngineGeometryResult* value)
 void McSolverEngine_FreeBRepResult(McSolverEngineBRepResult* value)
 {
     freeBRepResult(value);
+}
+
+const char* McSolverEngine_GetLastError(void)
+{
+    return lastErrorBuffer;
 }
 
 }  // extern "C"

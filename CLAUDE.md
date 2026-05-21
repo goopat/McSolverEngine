@@ -2,6 +2,11 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## Rules
+
+- **Do not execute git write operations** (commit, revert, push, tag, etc.) unless the user
+  explicitly asks for it. Ask for confirmation before any git write.
+
 ## Build
 
 ```
