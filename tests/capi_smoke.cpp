@@ -866,5 +866,52 @@ int main()
         }
     }
 
+    {
+        ScopedTestTimer timer("ExtractFCStdDoc round-trip (all .FCStd files)");
+        const std::string docDir = std::string(MCSOLVERENGINE_SOURCE_DIR) + "/fcstdDoc";
+        const char* names[] = {
+            "1", "2", "3",
+            "V102.1", "V102.2", "V102.4", "V102.4.plus1", "V102.5", "V102.6"
+        };
+        constexpr int count = sizeof(names) / sizeof(names[0]);
+
+        for (int i = 0; i < count; ++i) {
+            const auto fcstdPath = docDir + "/" + names[i] + ".FCStd";
+            const auto xmlPath = docDir + "/" + names[i] + ".xml";
+            const auto expectedXml = readTextFile(xmlPath);
+            if (!expect(
+                    !expectedXml.empty(),
+                    (std::string("Expected ") + xmlPath + " to load.").c_str()
+                )) {
+                return EXIT_FAILURE;
+            }
+
+            char* extracted = nullptr;
+            const auto code = McSolverEngine_ExtractFCStdDoc(fcstdPath.c_str(), &extracted);
+            if (!expect(
+                    code == MCSOLVERENGINE_FCSTD_SUCCESS,
+                    (std::string("Expected ExtractFCStdDoc to succeed for ") + fcstdPath
+                     + ". Error: " + McSolverEngine_GetLastError())
+                        .c_str()
+                )) {
+                McSolverEngine_FreeFCStdDoc(extracted);
+                return EXIT_FAILURE;
+            }
+
+            const std::string extractedStr(extracted ? extracted : "");
+            McSolverEngine_FreeFCStdDoc(extracted);
+
+            if (!expect(
+                    extractedStr == expectedXml,
+                    (std::string("Expected extracted Document.xml to match ") + xmlPath
+                     + " (got " + std::to_string(extractedStr.size()) + " bytes, expected "
+                     + std::to_string(expectedXml.size()) + " bytes)")
+                        .c_str()
+                )) {
+                return EXIT_FAILURE;
+            }
+        }
+    }
+
     return EXIT_SUCCESS;
 }
