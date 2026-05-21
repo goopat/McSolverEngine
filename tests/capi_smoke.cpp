@@ -1,10 +1,13 @@
-#include <cstdlib>
+#include <atomic>
 #include <cmath>
 #include <chrono>
+#include <cstdlib>
 #include <fstream>
 #include <iostream>
 #include <iterator>
 #include <string>
+#include <thread>
+#include <vector>
 
 #ifndef MCSOLVERENGINE_WITH_OCCT
 #    define MCSOLVERENGINE_WITH_OCCT 0
@@ -686,6 +689,54 @@ int main()
         }
 
         McSolverEngine_FreeGeometryResult(v1025Result);
+    }
+
+    {
+        ScopedTestTimer timer("MultiThreaded SolveToGeometryWithParameters V102.4 (8 threads)");
+        const auto v1024Xml =
+            readTextFile(std::string(MCSOLVERENGINE_SOURCE_DIR) + "/fcstdDoc/V102.4.xml");
+        if (!expect(!v1024Xml.empty(), "Expected V102.4.xml to load.")) {
+            return EXIT_FAILURE;
+        }
+
+        constexpr int threadCount = 8;
+        std::vector<std::thread> threads;
+        threads.reserve(threadCount);
+        std::atomic<int> okCount{0};
+        std::atomic<int> failCount{0};
+
+        for (int i = 0; i < threadCount; ++i) {
+            threads.emplace_back([&, i]() {
+                const double l1 = 40.0 + i * 5.0;
+                const auto l1Str = std::to_string(l1);
+                const char* keys[] = {"VarSet.L1"};
+                const char* values[] = {l1Str.c_str()};
+
+                McSolverEngineGeometryResult* result = nullptr;
+                const auto code = McSolverEngine_SolveToGeometryWithParameters(
+                    v1024Xml.c_str(), "Sketch", keys, values, 1, &result);
+                if (code == MCSOLVERENGINE_RESULT_SUCCESS && result != nullptr) {
+                    okCount.fetch_add(1, std::memory_order_relaxed);
+                }
+                else {
+                    failCount.fetch_add(1, std::memory_order_relaxed);
+                }
+                McSolverEngine_FreeGeometryResult(result);
+            });
+        }
+
+        for (auto& t : threads) {
+            t.join();
+        }
+
+        if (!expect(
+                okCount.load() == threadCount,
+                (std::string("Expected all ") + std::to_string(threadCount)
+                 + " threads to succeed, failures: " + std::to_string(failCount.load()))
+                    .c_str()
+            )) {
+            return EXIT_FAILURE;
+        }
     }
 
     return EXIT_SUCCESS;
