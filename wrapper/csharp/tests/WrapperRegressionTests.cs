@@ -319,6 +319,8 @@ public class WrapperRegressionTests
     private static string _v1025ExpectedBrepPath = string.Empty;
     private static string _v1026XmlPath = string.Empty;
     private static string _v1026FCStdPath = string.Empty;
+    private static string _v1027FCStdPath = string.Empty;
+    private static string _v1027_50BrepPath = string.Empty;
     private static bool? _occtAvailable;
 
     [AssemblyInitialize]
@@ -341,6 +343,8 @@ public class WrapperRegressionTests
         _v1025ExpectedBrepPath = Path.Combine(_projectRoot, "fcstdDoc", "V102.5.brp");
         _v1026XmlPath = Path.Combine(_projectRoot, "fcstdDoc", "V102.6.xml");
         _v1026FCStdPath = Path.Combine(_projectRoot, "fcstdDoc", "V102.6.FCStd");
+        _v1027FCStdPath = Path.Combine(_projectRoot, "fcstdDoc", "V102.7.FCStd");
+        _v1027_50BrepPath = Path.Combine(_projectRoot, "fcstdDoc", "V102.7.50.brp");
 
         var nativeDirectory = FindNativeLibraryDirectory();
         var occtRuntimeDirectory = FindOcctRuntimeDirectory();
@@ -814,6 +818,30 @@ public class WrapperRegressionTests
         Assert.AreEqual(expectedXml, extractedXml,
             $"Extracted Document.xml does not match {_v1026XmlPath} "
             + $"(got {extractedXml.Length} bytes, expected {expectedXml.Length} bytes)");
+    }
+
+    [TestMethod]
+    public void FCStdRegression_ForV1027_L1_50_SolveBRepMatchesReference()
+    {
+        Assert.IsTrue(File.Exists(_v1027FCStdPath), $"Missing {_v1027FCStdPath}");
+        Assert.IsTrue(File.Exists(_v1027_50BrepPath), $"Missing {_v1027_50BrepPath}");
+        AssumeOcctAvailable();
+
+        var extractedXml = McSolverEngineClient.ExtractFCStdDocumentXml(
+            _v1027FCStdPath, out var extractStatus);
+        Assert.AreEqual(McSolverEngineFCStdStatus.Success, extractStatus,
+            $"ExtractFCStdDoc failed: {extractStatus}; LastError: {McSolverEngineClient.GetLastError()}");
+        Assert.IsFalse(string.IsNullOrEmpty(extractedXml), "Extracted Document.xml is empty.");
+
+        var parameters = new Dictionary<string, string> { ["VarSet.L1"] = "50" };
+        var result = McSolverEngineClient.SolveBRepFromDocumentXml(
+            extractedXml, "Sketch", parameters);
+        Assert.AreEqual(McSolverEngineNativeStatus.Success, result.NativeStatus,
+            $"SolveBRepFromDocumentXml failed: {result.NativeStatus}; LastError: {McSolverEngineClient.GetLastError()}");
+        Assert.IsFalse(string.IsNullOrEmpty(result.Brep), "BREP output is empty.");
+
+        var expectedBrep = File.ReadAllText(_v1027_50BrepPath);
+        AssertBrepEquivalent(expectedBrep, result.Brep!);
     }
 
     private static void AssumeOcctAvailable()
