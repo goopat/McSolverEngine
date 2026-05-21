@@ -1,6 +1,7 @@
 #include "McSolverEngine/CApi.h"
 
 #include <cstring>
+#include <exception>
 #include <limits>
 #include <new>
 #include <string>
@@ -779,8 +780,12 @@ extern "C"
 
 const char* McSolverEngine_GetVersion(void)
 {
-    McSolverEngine::Detail::configureWindowsAssertMode();
-    return McSolverEngine::Engine::version();
+    try {
+        McSolverEngine::Detail::configureWindowsAssertMode();
+        return McSolverEngine::Engine::version();
+    } catch (...) {
+        return "";
+    }
 }
 
 McSolverEngineResultCode McSolverEngine_SolveToGeometry(
@@ -789,21 +794,32 @@ McSolverEngineResultCode McSolverEngine_SolveToGeometry(
     McSolverEngineGeometryResult** result
 )
 {
-    McSolverEngine::Detail::configureWindowsAssertMode();
-    if (!documentXmlUtf8 || !result) {
-        resetOutput(result);
-        return MCSOLVERENGINE_RESULT_INVALID_ARGUMENT;
-    }
+    try {
+        McSolverEngine::Detail::configureWindowsAssertMode();
+        if (!documentXmlUtf8 || !result) {
+            resetOutput(result);
+            return MCSOLVERENGINE_RESULT_INVALID_ARGUMENT;
+        }
 
-    return runStructuredGeometryPipeline(
-        [&] {
-            return McSolverEngine::DocumentXml::importSketchFromDocumentXml(
-                safeStringView(documentXmlUtf8),
-                safeStringView(sketchNameUtf8)
-            );
-        },
-        result
-    );
+        return runStructuredGeometryPipeline(
+            [&] {
+                return McSolverEngine::DocumentXml::importSketchFromDocumentXml(
+                    safeStringView(documentXmlUtf8),
+                    safeStringView(sketchNameUtf8)
+                );
+            },
+            result
+        );
+    } catch (const std::bad_alloc&) {
+        resetOutput(result);
+        return MCSOLVERENGINE_RESULT_OUT_OF_MEMORY;
+    } catch (const std::exception&) {
+        resetOutput(result);
+        return MCSOLVERENGINE_RESULT_SOLVE_FAILED;
+    } catch (...) {
+        resetOutput(result);
+        return MCSOLVERENGINE_RESULT_SOLVE_FAILED;
+    }
 }
 
 McSolverEngineResultCode McSolverEngine_SolveToGeometryWithParameters(
@@ -815,28 +831,39 @@ McSolverEngineResultCode McSolverEngine_SolveToGeometryWithParameters(
     McSolverEngineGeometryResult** result
 )
 {
-    McSolverEngine::Detail::configureWindowsAssertMode();
-    if (!documentXmlUtf8 || !result) {
-        resetOutput(result);
-        return MCSOLVERENGINE_RESULT_INVALID_ARGUMENT;
-    }
+    try {
+        McSolverEngine::Detail::configureWindowsAssertMode();
+        if (!documentXmlUtf8 || !result) {
+            resetOutput(result);
+            return MCSOLVERENGINE_RESULT_INVALID_ARGUMENT;
+        }
 
-    McSolverEngine::ParameterMap parameters;
-    if (!buildParameterMap(parameterKeysUtf8, parameterValuesUtf8, parameterCount, parameters)) {
-        resetOutput(result);
-        return MCSOLVERENGINE_RESULT_INVALID_ARGUMENT;
-    }
+        McSolverEngine::ParameterMap parameters;
+        if (!buildParameterMap(parameterKeysUtf8, parameterValuesUtf8, parameterCount, parameters)) {
+            resetOutput(result);
+            return MCSOLVERENGINE_RESULT_INVALID_ARGUMENT;
+        }
 
-    return runStructuredGeometryPipeline(
-        [&] {
-            return McSolverEngine::DocumentXml::importSketchFromDocumentXml(
-                safeStringView(documentXmlUtf8),
-                parameters,
-                safeStringView(sketchNameUtf8)
-            );
-        },
-        result
-    );
+        return runStructuredGeometryPipeline(
+            [&] {
+                return McSolverEngine::DocumentXml::importSketchFromDocumentXml(
+                    safeStringView(documentXmlUtf8),
+                    parameters,
+                    safeStringView(sketchNameUtf8)
+                );
+            },
+            result
+        );
+    } catch (const std::bad_alloc&) {
+        resetOutput(result);
+        return MCSOLVERENGINE_RESULT_OUT_OF_MEMORY;
+    } catch (const std::exception&) {
+        resetOutput(result);
+        return MCSOLVERENGINE_RESULT_SOLVE_FAILED;
+    } catch (...) {
+        resetOutput(result);
+        return MCSOLVERENGINE_RESULT_SOLVE_FAILED;
+    }
 }
 
 McSolverEngineResultCode McSolverEngine_SolveToBRep(
@@ -845,21 +872,32 @@ McSolverEngineResultCode McSolverEngine_SolveToBRep(
     McSolverEngineBRepResult** result
 )
 {
-    McSolverEngine::Detail::configureWindowsAssertMode();
-    if (!documentXmlUtf8 || !result) {
-        resetOutput(result);
-        return MCSOLVERENGINE_RESULT_INVALID_ARGUMENT;
-    }
+    try {
+        McSolverEngine::Detail::configureWindowsAssertMode();
+        if (!documentXmlUtf8 || !result) {
+            resetOutput(result);
+            return MCSOLVERENGINE_RESULT_INVALID_ARGUMENT;
+        }
 
-    return runBRepPipeline(
-        [&] {
-            return McSolverEngine::DocumentXml::importSketchFromDocumentXml(
-                safeStringView(documentXmlUtf8),
-                safeStringView(sketchNameUtf8)
-            );
-        },
-        result
-    );
+        return runBRepPipeline(
+            [&] {
+                return McSolverEngine::DocumentXml::importSketchFromDocumentXml(
+                    safeStringView(documentXmlUtf8),
+                    safeStringView(sketchNameUtf8)
+                );
+            },
+            result
+        );
+    } catch (const std::bad_alloc&) {
+        resetOutput(result);
+        return MCSOLVERENGINE_RESULT_OUT_OF_MEMORY;
+    } catch (const std::exception&) {
+        resetOutput(result);
+        return MCSOLVERENGINE_RESULT_SOLVE_FAILED;
+    } catch (...) {
+        resetOutput(result);
+        return MCSOLVERENGINE_RESULT_SOLVE_FAILED;
+    }
 }
 
 McSolverEngineResultCode McSolverEngine_SolveToBRepWithParameters(
@@ -871,28 +909,39 @@ McSolverEngineResultCode McSolverEngine_SolveToBRepWithParameters(
     McSolverEngineBRepResult** result
 )
 {
-    McSolverEngine::Detail::configureWindowsAssertMode();
-    if (!documentXmlUtf8 || !result) {
-        resetOutput(result);
-        return MCSOLVERENGINE_RESULT_INVALID_ARGUMENT;
-    }
+    try {
+        McSolverEngine::Detail::configureWindowsAssertMode();
+        if (!documentXmlUtf8 || !result) {
+            resetOutput(result);
+            return MCSOLVERENGINE_RESULT_INVALID_ARGUMENT;
+        }
 
-    McSolverEngine::ParameterMap parameters;
-    if (!buildParameterMap(parameterKeysUtf8, parameterValuesUtf8, parameterCount, parameters)) {
-        resetOutput(result);
-        return MCSOLVERENGINE_RESULT_INVALID_ARGUMENT;
-    }
+        McSolverEngine::ParameterMap parameters;
+        if (!buildParameterMap(parameterKeysUtf8, parameterValuesUtf8, parameterCount, parameters)) {
+            resetOutput(result);
+            return MCSOLVERENGINE_RESULT_INVALID_ARGUMENT;
+        }
 
-    return runBRepPipeline(
-        [&] {
-            return McSolverEngine::DocumentXml::importSketchFromDocumentXml(
-                safeStringView(documentXmlUtf8),
-                parameters,
-                safeStringView(sketchNameUtf8)
-            );
-        },
-        result
-    );
+        return runBRepPipeline(
+            [&] {
+                return McSolverEngine::DocumentXml::importSketchFromDocumentXml(
+                    safeStringView(documentXmlUtf8),
+                    parameters,
+                    safeStringView(sketchNameUtf8)
+                );
+            },
+            result
+        );
+    } catch (const std::bad_alloc&) {
+        resetOutput(result);
+        return MCSOLVERENGINE_RESULT_OUT_OF_MEMORY;
+    } catch (const std::exception&) {
+        resetOutput(result);
+        return MCSOLVERENGINE_RESULT_SOLVE_FAILED;
+    } catch (...) {
+        resetOutput(result);
+        return MCSOLVERENGINE_RESULT_SOLVE_FAILED;
+    }
 }
 
 void McSolverEngine_FreeGeometryResult(McSolverEngineGeometryResult* value)
