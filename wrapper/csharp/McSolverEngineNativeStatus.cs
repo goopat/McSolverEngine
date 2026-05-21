@@ -13,3 +13,13 @@ public enum McSolverEngineNativeStatus
     OutOfMemory = 8,
     VarSetExpressionUnsupportedSubset = 9
 }
+
+public enum McSolverEngineFCStdStatus
+{
+    Success = 0,
+    OpenFailed = 1,
+    NotZip = 2,
+    XmlNotFound = 3,
+    DecompressFailed = 4,
+    OutOfMemory = 5
+}

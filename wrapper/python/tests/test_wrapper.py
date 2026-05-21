@@ -227,5 +227,23 @@ class TestV1024WithParameters(unittest.TestCase):
         self.assertIn("<polyline", content)
 
 
+class TestExtractFCStdDoc(unittest.TestCase):
+    def test_extract_1_fcstd_matches_xml(self):
+        fcstd_path = os.path.join(REPO_ROOT, "fcstdDoc", "1.FCStd")
+        xml_path = os.path.join(REPO_ROOT, "fcstdDoc", "1.xml")
+        self.assertTrue(os.path.isfile(fcstd_path), f"Missing {fcstd_path}")
+        self.assertTrue(os.path.isfile(xml_path), f"Missing {xml_path}")
+
+        with open(xml_path, "r", encoding="utf-8") as f:
+            expected = f.read()
+
+        extracted = Engine.extract_fcstd_doc(fcstd_path)
+        self.assertEqual(
+            expected, extracted,
+            f"Extracted Document.xml does not match {xml_path} "
+            f"(got {len(extracted)} bytes, expected {len(expected)} bytes)",
+        )
+
+
 if __name__ == "__main__":
     unittest.main()

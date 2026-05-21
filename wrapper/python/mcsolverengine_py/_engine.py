@@ -308,3 +308,22 @@ class Engine:
             return _convert_brep_result(result_ptr.contents)
         finally:
             _n._native.McSolverEngine_FreeBRepResult(result_ptr)
+
+    @staticmethod
+    def extract_fcstd_doc(fcstd_path: str) -> str:
+        """Extract ``Document.xml`` from a .FCStd archive. *fcstd_path* must be UTF-8."""
+        out_ptr = ctypes.c_char_p()
+        code = _n._native.McSolverEngine_ExtractFCStdDoc(
+            fcstd_path.encode("utf-8"),
+            ctypes.byref(out_ptr),
+        )
+        if code != 0:
+            last_error = _n._native.McSolverEngine_GetLastError()
+            err_msg = last_error.decode("utf-8") if last_error else ""
+            raise RuntimeError(
+                f"ExtractFCStdDoc failed: code={code} ({_n.fcstd_result_code_name(code)}); {err_msg}"
+            )
+        try:
+            return out_ptr.value.decode("utf-8")
+        finally:
+            _n._native.McSolverEngine_FreeFCStdDoc(out_ptr)

@@ -318,6 +318,7 @@ public class WrapperRegressionTests
     private static string _v1025XmlPath = string.Empty;
     private static string _v1025ExpectedBrepPath = string.Empty;
     private static string _v1026XmlPath = string.Empty;
+    private static string _v1026FCStdPath = string.Empty;
     private static bool? _occtAvailable;
 
     [AssemblyInitialize]
@@ -339,6 +340,7 @@ public class WrapperRegressionTests
         _v1025XmlPath = Path.Combine(_projectRoot, "fcstdDoc", "V102.5.xml");
         _v1025ExpectedBrepPath = Path.Combine(_projectRoot, "fcstdDoc", "V102.5.brp");
         _v1026XmlPath = Path.Combine(_projectRoot, "fcstdDoc", "V102.6.xml");
+        _v1026FCStdPath = Path.Combine(_projectRoot, "fcstdDoc", "V102.6.FCStd");
 
         var nativeDirectory = FindNativeLibraryDirectory();
         var occtRuntimeDirectory = FindOcctRuntimeDirectory();
@@ -795,6 +797,23 @@ public class WrapperRegressionTests
         Assert.AreEqual(0.0, line.Start.Y, 1e-9);
         Assert.AreEqual(5.0, line.End.X, 1e-9);
         Assert.AreEqual(0.0, line.End.Y, 1e-9);
+    }
+
+    [TestMethod]
+    public void FCStdRegression_ForV1026_ExtractedXmlMatchesReference()
+    {
+        Assert.IsTrue(File.Exists(_v1026FCStdPath), $"Missing {_v1026FCStdPath}");
+        Assert.IsTrue(File.Exists(_v1026XmlPath), $"Missing {_v1026XmlPath}");
+
+        var expectedXml = File.ReadAllText(_v1026XmlPath);
+        var extractedXml = McSolverEngineClient.ExtractFCStdDocumentXml(
+            _v1026FCStdPath, out var status);
+
+        Assert.AreEqual(McSolverEngineFCStdStatus.Success, status,
+            $"ExtractFCStdDoc failed: {status}; LastError: {McSolverEngineClient.GetLastError()}");
+        Assert.AreEqual(expectedXml, extractedXml,
+            $"Extracted Document.xml does not match {_v1026XmlPath} "
+            + $"(got {extractedXml.Length} bytes, expected {expectedXml.Length} bytes)");
     }
 
     private static void AssumeOcctAvailable()

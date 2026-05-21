@@ -814,4 +814,40 @@ public static class McSolverEngineClient
 
     [DllImport(NativeLibraryName, CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
     private static extern void McSolverEngine_FreeBRepResult(IntPtr value);
+
+    [DllImport(NativeLibraryName, CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    private static extern McSolverEngineFCStdStatus McSolverEngine_ExtractFCStdDoc(
+        IntPtr fcstdPathUtf8,
+        out IntPtr documentXmlOut
+    );
+
+    [DllImport(NativeLibraryName, CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    private static extern void McSolverEngine_FreeFCStdDoc(IntPtr documentXml);
+
+    [DllImport(NativeLibraryName, CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    private static extern IntPtr McSolverEngine_GetLastError();
+
+    /// <summary>Extract Document.xml content from a .FCStd (ZIP) file. Path must be UTF-8.</summary>
+    public static string ExtractFCStdDocumentXml(string fcstdPath, out McSolverEngineFCStdStatus status)
+    {
+        using var pathUtf8 = new NativeUtf8String(fcstdPath);
+        status = McSolverEngine_ExtractFCStdDoc(pathUtf8.Pointer, out var xmlPtr);
+        if (status != McSolverEngineFCStdStatus.Success || xmlPtr == IntPtr.Zero)
+            return string.Empty;
+        try
+        {
+            return ReadNativeUtf8String(xmlPtr);
+        }
+        finally
+        {
+            McSolverEngine_FreeFCStdDoc(xmlPtr);
+        }
+    }
+
+    /// <summary>Returns the last error message for the calling thread (UTF-8).</summary>
+    public static string GetLastError()
+    {
+        var ptr = McSolverEngine_GetLastError();
+        return ReadNativeUtf8String(ptr);
+    }
 }

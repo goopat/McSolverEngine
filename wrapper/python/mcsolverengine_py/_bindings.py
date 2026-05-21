@@ -258,3 +258,37 @@ _native.McSolverEngine_FreeGeometryResult.argtypes = [ctypes.POINTER(GeometryRes
 
 _native.McSolverEngine_FreeBRepResult.restype = None
 _native.McSolverEngine_FreeBRepResult.argtypes = [ctypes.POINTER(BRepResult)]
+
+# -- FCStd status codes
+FCSTD_SUCCESS = 0
+FCSTD_OPEN_FAILED = 1
+FCSTD_NOT_ZIP = 2
+FCSTD_XML_NOT_FOUND = 3
+FCSTD_DECOMPRESS_FAILED = 4
+FCSTD_OUT_OF_MEMORY = 5
+
+_FCSTD_CODE_NAMES = {
+    0: "FCSTD_SUCCESS",
+    1: "FCSTD_OPEN_FAILED",
+    2: "FCSTD_NOT_ZIP",
+    3: "FCSTD_XML_NOT_FOUND",
+    4: "FCSTD_DECOMPRESS_FAILED",
+    5: "FCSTD_OUT_OF_MEMORY",
+}
+
+
+def fcstd_result_code_name(code: int) -> str:
+    return _FCSTD_CODE_NAMES.get(code, f"FCSTD_UNKNOWN({code})")
+
+
+_native.McSolverEngine_ExtractFCStdDoc.restype = ctypes.c_int
+_native.McSolverEngine_ExtractFCStdDoc.argtypes = [
+    ctypes.c_char_p,
+    ctypes.POINTER(ctypes.c_char_p),
+]
+
+_native.McSolverEngine_FreeFCStdDoc.restype = None
+_native.McSolverEngine_FreeFCStdDoc.argtypes = [ctypes.c_char_p]
+
+_native.McSolverEngine_GetLastError.restype = ctypes.c_char_p
+_native.McSolverEngine_GetLastError.argtypes = []
