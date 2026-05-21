@@ -321,6 +321,7 @@ public class WrapperRegressionTests
     private static string _v1026FCStdPath = string.Empty;
     private static string _v1027FCStdPath = string.Empty;
     private static string _v1027_50BrepPath = string.Empty;
+    private static string _v1027_50SolverBrepPath = string.Empty;
     private static bool? _occtAvailable;
 
     [AssemblyInitialize]
@@ -345,6 +346,7 @@ public class WrapperRegressionTests
         _v1026FCStdPath = Path.Combine(_projectRoot, "fcstdDoc", "V102.6.FCStd");
         _v1027FCStdPath = Path.Combine(_projectRoot, "fcstdDoc", "V102.7.FCStd");
         _v1027_50BrepPath = Path.Combine(_projectRoot, "fcstdDoc", "V102.7.50.brp");
+        _v1027_50SolverBrepPath = Path.Combine(_projectRoot, "fcstdDoc", "V102.7.50.solver.brp");
 
         var nativeDirectory = FindNativeLibraryDirectory();
         var occtRuntimeDirectory = FindOcctRuntimeDirectory();
@@ -827,18 +829,25 @@ public class WrapperRegressionTests
         Assert.IsTrue(File.Exists(_v1027_50BrepPath), $"Missing {_v1027_50BrepPath}");
         AssumeOcctAvailable();
 
+        if (File.Exists(_v1027_50SolverBrepPath))
+            File.Delete(_v1027_50SolverBrepPath);
+        Assert.IsFalse(File.Exists(_v1027_50SolverBrepPath), "Solver BREP file should not exist before solve.");
+
         var extractedXml = McSolverEngineClient.ExtractFCStdDocumentXml(
             _v1027FCStdPath, out var extractStatus);
         Assert.AreEqual(McSolverEngineFCStdStatus.Success, extractStatus,
             $"ExtractFCStdDoc failed: {extractStatus}; LastError: {McSolverEngineClient.GetLastError()}");
         Assert.IsFalse(string.IsNullOrEmpty(extractedXml), "Extracted Document.xml is empty.");
 
-        var parameters = new Dictionary<string, string> { ["VarSet.L1"] = "50" };
+        var parameters = new Dictionary<string, string> { ["参数集1.L1"] = "50" };
         var result = McSolverEngineClient.SolveBRepFromDocumentXml(
             extractedXml, "Sketch", parameters);
         Assert.AreEqual(McSolverEngineNativeStatus.Success, result.NativeStatus,
             $"SolveBRepFromDocumentXml failed: {result.NativeStatus}; LastError: {McSolverEngineClient.GetLastError()}");
         Assert.IsFalse(string.IsNullOrEmpty(result.Brep), "BREP output is empty.");
+
+        File.WriteAllText(_v1027_50SolverBrepPath, result.Brep!);
+        Assert.IsTrue(File.Exists(_v1027_50SolverBrepPath), "Solver BREP file was not written.");
 
         var expectedBrep = File.ReadAllText(_v1027_50BrepPath);
         AssertBrepEquivalent(expectedBrep, result.Brep!);
