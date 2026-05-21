@@ -33,6 +33,21 @@ void clearLastError() noexcept
     lastErrorBuffer[0] = '\0';
 }
 
+void captureMessages(const std::vector<std::string>& messages) noexcept
+{
+    std::size_t offset = 0;
+    for (std::size_t i = 0; i < messages.size() && offset < kLastErrorBufferSize - 1; ++i) {
+        if (i > 0 && offset < kLastErrorBufferSize - 2) {
+            lastErrorBuffer[offset++] = ';';
+            lastErrorBuffer[offset++] = ' ';
+        }
+        const auto len = std::min(messages[i].size(), kLastErrorBufferSize - 1 - offset);
+        std::memcpy(lastErrorBuffer + offset, messages[i].data(), len);
+        offset += len;
+    }
+    lastErrorBuffer[offset] = '\0';
+}
+
 using McSolverEngine::Compat::ArcGeometry;
 using McSolverEngine::Compat::ArcOfEllipseGeometry;
 using McSolverEngine::Compat::ArcOfHyperbolaGeometry;
@@ -641,6 +656,7 @@ McSolverEngineResultCode runStructuredGeometryPipeline(ImportFn&& importFn, McSo
             *result = nullptr;
             return MCSOLVERENGINE_RESULT_OUT_OF_MEMORY;
         }
+        captureMessages(imported.messages);
         return toCApiImportFailureCode(imported.errorCode);
     }
 
@@ -652,6 +668,7 @@ McSolverEngineResultCode runStructuredGeometryPipeline(ImportFn&& importFn, McSo
             *result = nullptr;
             return MCSOLVERENGINE_RESULT_OUT_OF_MEMORY;
         }
+        captureMessages(imported.messages);
         return solveResult.status == McSolverEngine::Compat::SolveStatus::Unsupported
             ? MCSOLVERENGINE_RESULT_UNSUPPORTED
             : MCSOLVERENGINE_RESULT_SOLVE_FAILED;
@@ -666,11 +683,13 @@ McSolverEngineResultCode runStructuredGeometryPipeline(ImportFn&& importFn, McSo
             *result = nullptr;
             return MCSOLVERENGINE_RESULT_OUT_OF_MEMORY;
         }
+        captureMessages(messages);
         return MCSOLVERENGINE_RESULT_GEOMETRY_EXPORT_FAILED;
     }
     if (geometryResult.geometries.size() > static_cast<std::size_t>(std::numeric_limits<int>::max())) {
         freeGeometryResult(nativeResult);
         *result = nullptr;
+        setLastError("geometry count exceeds int max");
         return MCSOLVERENGINE_RESULT_GEOMETRY_EXPORT_FAILED;
     }
 
@@ -727,6 +746,7 @@ McSolverEngineResultCode runBRepPipeline(ImportFn&& importFn, McSolverEngineBRep
             *result = nullptr;
             return MCSOLVERENGINE_RESULT_OUT_OF_MEMORY;
         }
+        captureMessages(imported.messages);
         return toCApiImportFailureCode(imported.errorCode);
     }
 
@@ -738,6 +758,7 @@ McSolverEngineResultCode runBRepPipeline(ImportFn&& importFn, McSolverEngineBRep
             *result = nullptr;
             return MCSOLVERENGINE_RESULT_OUT_OF_MEMORY;
         }
+        captureMessages(imported.messages);
         return solveResult.status == McSolverEngine::Compat::SolveStatus::Unsupported
             ? MCSOLVERENGINE_RESULT_UNSUPPORTED
             : MCSOLVERENGINE_RESULT_SOLVE_FAILED;
@@ -754,6 +775,7 @@ McSolverEngineResultCode runBRepPipeline(ImportFn&& importFn, McSolverEngineBRep
             *result = nullptr;
             return MCSOLVERENGINE_RESULT_OUT_OF_MEMORY;
         }
+        captureMessages(messages);
         return MCSOLVERENGINE_RESULT_OPEN_CASCADE_UNAVAILABLE;
     }
     if (!brepResult.exported()) {
@@ -762,6 +784,7 @@ McSolverEngineResultCode runBRepPipeline(ImportFn&& importFn, McSolverEngineBRep
             *result = nullptr;
             return MCSOLVERENGINE_RESULT_OUT_OF_MEMORY;
         }
+        captureMessages(messages);
         return MCSOLVERENGINE_RESULT_BREP_EXPORT_FAILED;
     }
     if (!brepResult.brep.has_value()) {
@@ -770,6 +793,7 @@ McSolverEngineResultCode runBRepPipeline(ImportFn&& importFn, McSolverEngineBRep
             *result = nullptr;
             return MCSOLVERENGINE_RESULT_OUT_OF_MEMORY;
         }
+        captureMessages(messages);
         return MCSOLVERENGINE_RESULT_BREP_EXPORT_FAILED;
     }
 

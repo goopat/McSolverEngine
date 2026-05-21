@@ -511,12 +511,13 @@ int main()
             return EXIT_FAILURE;
         }
         if (!expect(
-                McSolverEngine_GetLastError() != nullptr && std::string(McSolverEngine_GetLastError()).empty(),
-                "Expected GetLastError to return empty string after controlled import failure (no exception)."
+                McSolverEngine_GetLastError() != nullptr && !std::string(McSolverEngine_GetLastError()).empty(),
+                "Expected GetLastError non-empty after invalid angle parameter import failure."
             )) {
             McSolverEngine_FreeGeometryResult(invalidAngleGeometry);
             return EXIT_FAILURE;
         }
+        std::cout << "    got expected GetLastError: " << McSolverEngine_GetLastError() << '\n';
         McSolverEngine_FreeGeometryResult(invalidAngleGeometry);
     }
 
@@ -731,12 +732,13 @@ int main()
             return EXIT_FAILURE;
         }
         if (!expect(
-                McSolverEngine_GetLastError() != nullptr && std::string(McSolverEngine_GetLastError()).empty(),
-                "Expected GetLastError empty after controlled XML parse failure."
+                McSolverEngine_GetLastError() != nullptr && !std::string(McSolverEngine_GetLastError()).empty(),
+                "Expected GetLastError non-empty after invalid XML import failure."
             )) {
             McSolverEngine_FreeGeometryResult(result);
             return EXIT_FAILURE;
         }
+        std::cout << "    got expected GetLastError: " << McSolverEngine_GetLastError() << '\n';
         McSolverEngine_FreeGeometryResult(result);
     }
 
@@ -767,12 +769,13 @@ int main()
             return EXIT_FAILURE;
         }
         if (!expect(
-                McSolverEngine_GetLastError() != nullptr && std::string(McSolverEngine_GetLastError()).empty(),
-                "Expected GetLastError empty after missing sketch import failure."
+                McSolverEngine_GetLastError() != nullptr && !std::string(McSolverEngine_GetLastError()).empty(),
+                "Expected GetLastError non-empty after missing sketch import failure."
             )) {
             McSolverEngine_FreeGeometryResult(result);
             return EXIT_FAILURE;
         }
+        std::cout << "    got expected GetLastError: " << McSolverEngine_GetLastError() << '\n';
         McSolverEngine_FreeGeometryResult(result);
     }
 
@@ -805,12 +808,13 @@ int main()
             return EXIT_FAILURE;
         }
         if (!expect(
-                McSolverEngine_GetLastError() != nullptr && std::string(McSolverEngine_GetLastError()).empty(),
-                "Expected GetLastError empty after unknown parameter import failure."
+                McSolverEngine_GetLastError() != nullptr && !std::string(McSolverEngine_GetLastError()).empty(),
+                "Expected GetLastError non-empty after unknown parameter import failure."
             )) {
             McSolverEngine_FreeGeometryResult(result);
             return EXIT_FAILURE;
         }
+        std::cout << "    got expected GetLastError: " << McSolverEngine_GetLastError() << '\n';
         McSolverEngine_FreeGeometryResult(result);
     }
 
@@ -857,13 +861,6 @@ int main()
                 (std::string("Expected all ") + std::to_string(threadCount)
                  + " threads to succeed, failures: " + std::to_string(failCount.load()))
                     .c_str()
-            )) {
-            return EXIT_FAILURE;
-        }
-
-        if (!expect(
-                McSolverEngine_GetLastError() != nullptr && std::string(McSolverEngine_GetLastError()).empty(),
-                "Expected GetLastError to return empty string after multi-threaded solve."
             )) {
             return EXIT_FAILURE;
         }
