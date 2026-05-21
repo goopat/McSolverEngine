@@ -245,5 +245,71 @@ class TestExtractFCStdDoc(unittest.TestCase):
         )
 
 
+def _tokenize_brep(text: str):
+    return text.split()
+
+
+def _try_parse_float(token: str):
+    try:
+        return float(token)
+    except ValueError:
+        return None
+
+
+def _assert_brep_equivalent(test: unittest.TestCase, expected: str, actual: str):
+    expected_tokens = _tokenize_brep(expected)
+    actual_tokens = _tokenize_brep(actual)
+    test.assertEqual(
+        len(expected_tokens), len(actual_tokens),
+        f"BREP token count differs: {len(expected_tokens)} vs {len(actual_tokens)}",
+    )
+    for i, (et, at) in enumerate(zip(expected_tokens, actual_tokens)):
+        ev = _try_parse_float(et)
+        av = _try_parse_float(at)
+        if ev is not None and av is not None:
+            test.assertAlmostEqual(ev, av, delta=1e-9, msg=f"BREP numeric token mismatch at index {i}")
+        else:
+            test.assertEqual(et, at, f"BREP token mismatch at index {i}")
+
+
+class TestV1027ExtractAndSolveWithParameters(unittest.TestCase):
+    """Extract V102.7.FCStd, solve with 参数集1.L1=50, compare BREP."""
+
+    def setUp(self):
+        self.fcstd_path = os.path.join(REPO_ROOT, "fcstdDoc", "V102.7.FCStd")
+        self.reference_brep_path = os.path.join(REPO_ROOT, "fcstdDoc", "V102.7.50.brp")
+        self.solver_brep_path = os.path.join(REPO_ROOT, "fcstdDoc", "V102.7.50.solver.brp")
+        self.assertTrue(os.path.isfile(self.fcstd_path), f"Missing {self.fcstd_path}")
+        self.assertTrue(os.path.isfile(self.reference_brep_path), f"Missing {self.reference_brep_path}")
+
+    def test_extract_and_solve_parameterized_brep(self):
+        # Delete solver output before run
+        if os.path.isfile(self.solver_brep_path):
+            os.remove(self.solver_brep_path)
+        self.assertFalse(os.path.isfile(self.solver_brep_path),
+                         "Solver BREP file should not exist before solve.")
+
+        extracted_xml = Engine.extract_fcstd_doc(self.fcstd_path)
+        self.assertTrue(len(extracted_xml) > 0, "Extracted Document.xml is empty.")
+
+        result = Engine.solve_to_brep(
+            extracted_xml, "Sketch", parameters={"参数集1.L1": "50"}
+        )
+        self.assertIn("success", result.solveStatus.lower(),
+                      f"Solve failed: {result.solveStatus}")
+        self.assertTrue(len(result.brepUtf8) > 0, "BREP output is empty.")
+
+        # Write solver BREP and verify
+        with open(self.solver_brep_path, "w", encoding="utf-8") as f:
+            f.write(result.brepUtf8)
+        self.assertTrue(os.path.isfile(self.solver_brep_path),
+                        "Solver BREP file was not written.")
+
+        # Compare against reference
+        with open(self.reference_brep_path, "r", encoding="utf-8") as f:
+            expected_brep = f.read()
+        _assert_brep_equivalent(self, expected_brep, result.brepUtf8)
+
+
 if __name__ == "__main__":
     unittest.main()
