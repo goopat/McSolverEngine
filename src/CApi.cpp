@@ -14,6 +14,7 @@
 #include "McSolverEngine/DocumentXml.h"
 #include "McSolverEngine/Engine.h"
 #include "McSolverEngine/GeometryExport.h"
+#include "McSolverEngine/ZipExtract.h"
 #include "WindowsAssertMode.h"
 
 namespace
@@ -1011,6 +1012,67 @@ void McSolverEngine_FreeGeometryResult(McSolverEngineGeometryResult* value)
 void McSolverEngine_FreeBRepResult(McSolverEngineBRepResult* value)
 {
     freeBRepResult(value);
+}
+
+McSolverEngineFCStdResultCode McSolverEngine_ExtractFCStdDoc(
+    const char* fcstdPathUtf8,
+    char** documentXmlOut
+)
+{
+    clearLastError();
+    if (!fcstdPathUtf8 || !documentXmlOut) {
+        if (documentXmlOut) {
+            *documentXmlOut = nullptr;
+        }
+        return MCSOLVERENGINE_FCSTD_OPEN_FAILED;
+    }
+    *documentXmlOut = nullptr;
+
+    try {
+        const auto result = McSolverEngine::ZipExtract::extractDocumentXml(fcstdPathUtf8);
+        if (!result.success) {
+            setLastError(result.errorMessage.c_str());
+            if (result.errorMessage.find("Failed to open") != std::string::npos) {
+                return MCSOLVERENGINE_FCSTD_OPEN_FAILED;
+            }
+            if (result.errorMessage.find("Not a valid ZIP") != std::string::npos) {
+                return MCSOLVERENGINE_FCSTD_NOT_ZIP;
+            }
+            if (result.errorMessage.find("Document.xml not found") != std::string::npos) {
+                return MCSOLVERENGINE_FCSTD_XML_NOT_FOUND;
+            }
+            if (result.errorMessage.find("DEFLATE") != std::string::npos) {
+                return MCSOLVERENGINE_FCSTD_DECOMPRESS_FAILED;
+            }
+            return MCSOLVERENGINE_FCSTD_OPEN_FAILED;
+        }
+
+        const auto& xml = result.documentXml;
+        auto* buf = new (std::nothrow) char[xml.size() + 1];
+        if (!buf) {
+            setLastError("out of memory");
+            return MCSOLVERENGINE_FCSTD_OUT_OF_MEMORY;
+        }
+        std::memcpy(buf, xml.data(), xml.size());
+        buf[xml.size()] = '\0';
+        *documentXmlOut = buf;
+
+        return MCSOLVERENGINE_FCSTD_SUCCESS;
+    } catch (const std::bad_alloc& e) {
+        setLastError(e.what());
+        return MCSOLVERENGINE_FCSTD_OUT_OF_MEMORY;
+    } catch (const std::exception& e) {
+        setLastError(e.what());
+        return MCSOLVERENGINE_FCSTD_DECOMPRESS_FAILED;
+    } catch (...) {
+        setLastError("unknown exception");
+        return MCSOLVERENGINE_FCSTD_DECOMPRESS_FAILED;
+    }
+}
+
+void McSolverEngine_FreeFCStdDoc(char* documentXml)
+{
+    delete[] documentXml;
 }
 
 const char* McSolverEngine_GetLastError(void)

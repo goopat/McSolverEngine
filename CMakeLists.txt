@@ -162,6 +162,38 @@ function(mcsolverengine_enable_cxx20 target visibility)
     endif()
 endfunction()
 
+enable_language(C)
+
+set(MCSOLVERENGINE_ZLIB_SOURCES
+    third_party/zlib/adler32.c
+    third_party/zlib/crc32.c
+    third_party/zlib/inffast.c
+    third_party/zlib/inflate.c
+    third_party/zlib/inftrees.c
+    third_party/zlib/zutil.c
+)
+
+add_library(McSolverEngineZip STATIC
+    ${MCSOLVERENGINE_ZLIB_SOURCES}
+    src/ZipExtract.cpp
+)
+
+mcsolverengine_enable_cxx20(McSolverEngineZip PRIVATE)
+target_include_directories(McSolverEngineZip
+    PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/third_party/zlib
+    PUBLIC
+        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+        $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>
+)
+target_compile_options(McSolverEngineZip PRIVATE
+    $<$<C_COMPILER_ID:MSVC>:/FI "${CMAKE_CURRENT_SOURCE_DIR}/third_party/zlib/mse_zlib_prefix.h">
+    $<$<NOT:$<C_COMPILER_ID:MSVC>>:-include "${CMAKE_CURRENT_SOURCE_DIR}/third_party/zlib/mse_zlib_prefix.h">
+    $<$<C_COMPILER_ID:MSVC>:/wd4127 /wd4131>
+)
+
+add_library(McSolverEngine::Zip ALIAS McSolverEngineZip)
+
 set(MCSOLVERENGINE_CORE_SOURCES
     src/BRepExport.cpp
     src/CompatModel.cpp
@@ -206,6 +238,8 @@ target_include_directories(McSolverEngineCore
         ${CMAKE_CURRENT_SOURCE_DIR}
         ${CMAKE_CURRENT_SOURCE_DIR}/src
 )
+
+target_link_libraries(McSolverEngineCore PRIVATE McSolverEngineZip)
 
 if(TARGET Eigen3::Eigen)
     target_link_libraries(McSolverEngineCore PRIVATE Eigen3::Eigen)
@@ -436,6 +470,7 @@ install(
         McSolverEngineCore
         McSolverEngineNative
         McSolverEngineCli
+        McSolverEngineZip
     EXPORT McSolverEngineTargets
     RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
     LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}

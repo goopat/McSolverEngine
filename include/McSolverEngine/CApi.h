@@ -12,6 +12,12 @@
 #    define MCSOLVERENGINE_CAPI_EXPORT
 #endif
 
+// =============================================================================
+// All char* parameters and return values in this API use UTF-8 encoding.
+// This applies to Document.xml content, sketch names, parameter keys/values,
+// error messages, result metadata strings, and file paths.
+// =============================================================================
+
 #ifdef __cplusplus
 extern "C"
 {
@@ -100,7 +106,7 @@ typedef struct McSolverEngineConstraintRef
 {
     McSolverEngineConstraintKind kind;
     int originalIndex;
-    const char* expression;
+    const char* expression;        // UTF-8, or NULL
 } McSolverEngineConstraintRef;
 
 typedef struct McSolverEngineGeometryRecord
@@ -133,12 +139,12 @@ typedef struct McSolverEngineGeometryRecord
 
 typedef struct McSolverEngineGeometryResult
 {
-    const char* sketchName;
-    const char* importStatus;
+    const char* sketchName;        // UTF-8
+    const char* importStatus;      // UTF-8
     int skippedConstraints;
     int messageCount;
-    char** messages;
-    const char* solveStatus;
+    char** messages;               // UTF-8
+    const char* solveStatus;       // UTF-8
     int degreesOfFreedom;
     int conflictingCount;
     const int* conflicting;
@@ -146,8 +152,8 @@ typedef struct McSolverEngineGeometryResult
     const int* redundant;
     int partiallyRedundantCount;
     const int* partiallyRedundant;
-    const char* exportKind;
-    const char* exportStatus;
+    const char* exportKind;        // UTF-8
+    const char* exportStatus;      // UTF-8
     McSolverEnginePlacement placement;
     int geometryCount;
     const McSolverEngineGeometryRecord* geometries;
@@ -155,12 +161,12 @@ typedef struct McSolverEngineGeometryResult
 
 typedef struct McSolverEngineBRepResult
 {
-    const char* sketchName;
-    const char* importStatus;
+    const char* sketchName;        // UTF-8
+    const char* importStatus;      // UTF-8
     int skippedConstraints;
     int messageCount;
-    char** messages;
-    const char* solveStatus;
+    char** messages;               // UTF-8
+    const char* solveStatus;       // UTF-8
     int degreesOfFreedom;
     int conflictingCount;
     const int* conflicting;
@@ -168,20 +174,23 @@ typedef struct McSolverEngineBRepResult
     const int* redundant;
     int partiallyRedundantCount;
     const int* partiallyRedundant;
-    const char* exportKind;
-    const char* exportStatus;
+    const char* exportKind;        // UTF-8
+    const char* exportStatus;      // UTF-8
     McSolverEnginePlacement placement;
-    const char* brepUtf8;
+    const char* brepUtf8;          // UTF-8
 } McSolverEngineBRepResult;
 
 MCSOLVERENGINE_CAPI_EXPORT const char* McSolverEngine_GetVersion(void);
 
+// documentXmlUtf8          — FreeCAD Document.xml content (UTF-8)
+// sketchNameUtf8           — name of the Sketch object to solve (UTF-8)
 MCSOLVERENGINE_CAPI_EXPORT McSolverEngineResultCode McSolverEngine_SolveToGeometry(
     const char* documentXmlUtf8,
     const char* sketchNameUtf8,
     McSolverEngineGeometryResult** result
 );
 
+// parameterKeysUtf8 / parameterValuesUtf8 — VarSet property overrides (UTF-8)
 MCSOLVERENGINE_CAPI_EXPORT McSolverEngineResultCode McSolverEngine_SolveToGeometryWithParameters(
     const char* documentXmlUtf8,
     const char* sketchNameUtf8,
@@ -191,6 +200,7 @@ MCSOLVERENGINE_CAPI_EXPORT McSolverEngineResultCode McSolverEngine_SolveToGeomet
     McSolverEngineGeometryResult** result
 );
 
+// documentXmlUtf8 — FreeCAD Document.xml content (UTF-8)
 MCSOLVERENGINE_CAPI_EXPORT McSolverEngineResultCode McSolverEngine_SolveToBRep(
     const char* documentXmlUtf8,
     const char* sketchNameUtf8,
@@ -210,6 +220,26 @@ MCSOLVERENGINE_CAPI_EXPORT void McSolverEngine_FreeGeometryResult(McSolverEngine
 
 MCSOLVERENGINE_CAPI_EXPORT void McSolverEngine_FreeBRepResult(McSolverEngineBRepResult* value);
 
+typedef enum McSolverEngineFCStdResultCode
+{
+    MCSOLVERENGINE_FCSTD_SUCCESS = 0,
+    MCSOLVERENGINE_FCSTD_OPEN_FAILED = 1,
+    MCSOLVERENGINE_FCSTD_NOT_ZIP = 2,
+    MCSOLVERENGINE_FCSTD_XML_NOT_FOUND = 3,
+    MCSOLVERENGINE_FCSTD_DECOMPRESS_FAILED = 4,
+    MCSOLVERENGINE_FCSTD_OUT_OF_MEMORY = 5,
+} McSolverEngineFCStdResultCode;
+
+// fcstdPathUtf8 — path to .FCStd file (UTF-8)
+// documentXmlOut — extracted Document.xml content (UTF-8), caller frees via FreeFCStdDoc
+MCSOLVERENGINE_CAPI_EXPORT McSolverEngineFCStdResultCode McSolverEngine_ExtractFCStdDoc(
+    const char* fcstdPathUtf8,
+    char** documentXmlOut
+);
+
+MCSOLVERENGINE_CAPI_EXPORT void McSolverEngine_FreeFCStdDoc(char* documentXml);
+
+// Returns the last error message for the calling thread (UTF-8, thread-local).
 MCSOLVERENGINE_CAPI_EXPORT const char* McSolverEngine_GetLastError(void);
 
 #ifdef __cplusplus
