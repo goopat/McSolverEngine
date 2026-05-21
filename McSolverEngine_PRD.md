@@ -215,13 +215,14 @@ FreeCAD 中真正把“草图数据”翻译成 GCS 参数和约束的是：
 
 说明：
 
-- 当前实际的**非 C++ 标准库依赖**只有三类：`Eigen3`、`Boost`、`OpenCASCADE / OCCT`
-- 其中 `Eigen3` 与 `Boost` 是当前求解核心的必需依赖；若只保留“`Document.xml` 导入 + 基础 2D 约束求解 + 精确几何导出”，最小非标准库依赖集就是这两项
+- 当前实际的**非 C++ 标准库依赖**有四类：`Eigen3`、`Boost`、`OpenCASCADE / OCCT`、`zlib`
+- 其中 `Eigen3` 与 `Boost` 是当前求解核心的必需依赖；若只保留”`Document.xml` 导入 + 基础 2D 约束求解 + 精确几何导出”，最小非标准库依赖集就是这两项
 - `Boost` 当前主要通过 `planegcs` 使用 `Boost.Graph`、`Boost.Regex` 与 `Boost.Math constants`
-- 当前链接方式并非“全部动态链接”：
+- 当前链接方式并非”全部动态链接”：
   - `Eigen3` 在本项目中按 header-only 依赖使用
   - `Boost` 当前也按头文件依赖使用，构建脚本未显式链接 Boost 二进制库
   - `OpenCASCADE / OCCT` 在启用 BREP 导出时属于动态运行时依赖：构建期链接 `.lib`，运行期需要对应 `.dll`
+  - `zlib` 按**静态链接 + 符号隔离**使用：源码（1.3.2，仅 inflate 子集）位于 `third_party/zlib/`，通过编译级宏将全部公开符号重命名为 `McSolverEngine_<name>` 前缀，编译为目标 `McSolverEngineZip` 静态库，PRIVATE 链接进 `McSolverEngineNative` DLL，DLL 导出表不包含任何 zlib 符号，同进程内与其他 zlib 实例零冲突
   - Windows / MSVC 下当前使用动态 CRT（`/MD` / `/MDd`），不是静态 CRT
 - `MCSOLVERENGINE_WITH_OCCT=ON` 且找到 OpenCASCADE 时，启用 OCCT-backed BREP 输出
 - 未找到 OCCT 或显式关闭该选项时，核心求解、`Document.xml` 导入与精确几何导出仍可独立构建
@@ -230,7 +231,7 @@ FreeCAD 中真正把“草图数据”翻译成 GCS 参数和约束的是：
 - 此时 `BRep::exportSketchToBRepFile(...)` 返回 `OpenCascadeUnavailable`
 - 当前 `Document.xml` 兼容层未引入额外第三方 XML 库，而是使用 McSolverEngine 内部的轻量解析实现
 - 当前原生回归仍以自定义 smoke test 可执行文件 + `CTest` 为主；另有 `wrapper\csharp\tests` 下的 net48 + net6.0 MSTest 项目，通过 `dotnet test` 回归托管包装层
-- 当前目标划分为：`McSolverEngineCore`（静态库）、`McSolverEngineNative`（共享库）、`McSolverEngineCli`（CLI 可执行文件）
+- 当前目标划分为：`McSolverEngineZip`（静态库，zlib inflate + ZIP 解析）、`McSolverEngineCore`（静态库）、`McSolverEngineNative`（共享库）、`McSolverEngineCli`（CLI 可执行文件）
 
 第一阶段不依赖：
 
@@ -419,8 +420,15 @@ FreeCAD 中真正把“草图数据”翻译成 GCS 参数和约束的是：
 - `McSolverEngine_SolveToGeometryWithParameters(...)`
 - `McSolverEngine_SolveToBRep(...)`
 - `McSolverEngine_SolveToBRepWithParameters(...)`
+- `McSolverEngine_ExtractFCStdDoc(fcstdPathUtf8, &documentXmlOut)` — 从 .FCStd ZIP 包中解压提取 `Document.xml`
+- `McSolverEngine_FreeFCStdDoc(...)`
 - `McSolverEngine_FreeGeometryResult(...)`
 - `McSolverEngine_FreeBRepResult(...)`
+- `McSolverEngine_GetLastError()` — 获取当前线程上一次 C API 调用的失败原因（UTF-8，thread-local）
+
+当前 C API 入口已全部包裹 `try/catch`，将 `std::bad_alloc` 等 C++ 异常统一转换为错误码 + `GetLastError()` 诊断信息，防止异常穿透 C 边界导致宿主进程崩溃。
+
+`McSolverEngine_ExtractFCStdDoc` 通过内置的 ZIP 解析器 + DEFLATE 解压（基于 zlib 1.3.2，静态链接，符号隔离）从 `.FCStd` 包的根目录提取 `Document.xml` 内容，返回 UTF-8 字符串；调用方通过 `McSolverEngine_FreeFCStdDoc` 释放。支持 STORE 和 DEFLATE 两种压缩方法。失败时返回 `McSolverEngineFCStdResultCode` 并通过 `GetLastError()` 获取具体原因。
 
 当前跨语言边界采用 **Geometry 与 BREP 均返回结构化结果** 的设计：
 
