@@ -751,6 +751,37 @@ McSolverEngine_{Variant}.{version}.nupkg
 
 这属于调试与回归可用性改进，不改变求解结果语义。
 
+### 11.3 Git 行尾符与 FCStd 测试数据一致性
+
+**背景**：`fcstdDoc/` 中的参考 `.xml` 文件用于与 `FCStd` ZIP 提取结果逐字节比对。
+FreeCAD 在 `.FCStd` 内存储 `Document.xml` 时使用 **LF** 行尾符；提取代码
+（`ZipExtract.cpp` + zlib inflate）原样保留 ZIP 内的字节，不做任何行尾符转换。
+
+**问题**：Windows 上 `git config core.autocrlf=true`（默认值）会在 checkout 时将
+文本文件从 LF 转为 CRLF。这意味着：
+
+- `.FCStd` 内数据：LF（提取代码输出 LF）
+- 磁盘参考 `.xml`：CRLF（被 git 转换）
+
+两者逐字节比对失败，每个 `\n` 差一个 `\r`，导致测试误报。
+
+**确认方法**（以 `3.xml` 为例）：
+```
+git ls-files --eol fcstdDoc/3.xml
+# 输出: i/lf    w/crlf    attr/    fcstdDoc/3.xml
+#       ^^^^    ^^^^^^    git 将 index 中的 LF 在 worktree 转为 CRLF
+```
+
+**修复**：添加 `.gitattributes` 规则强制 `fcstdDoc/*.xml` 以 LF 检出：
+```
+fcstdDoc/*.xml text eol=lf
+```
+已写入仓库根目录 `.gitattributes`。同时需执行：
+```
+rm fcstdDoc/*.xml && git checkout -- fcstdDoc/
+```
+强制 git 按新属性重写工作区文件（`git add --renormalize` 对已匹配 index 的文件无效）。
+
 ## 12. 已知限制（2026-05-14 审查记录）
 
 以下项经与 FreeCAD 源码逐项对比审查后，确认为已知差异或限制，当前阶段明确不处理。
