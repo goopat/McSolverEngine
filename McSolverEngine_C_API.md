@@ -387,11 +387,31 @@ const char* McSolverEngine_GetLastError(void);
 
 ## 4. 处理管线
 
-所有 `Solve*` 函数遵循三阶段管线：
+`Solve*` 函数遵循四阶段管线。阶段 0 为可选项，仅在输入为 `.FCStd` 文件（而非独立的 `Document.xml` 字符串）时需要。
 
 ```
-Import（导入 Document.xml） → Solve（GCS 求解） → Export（导出 Geometry 或 BREP）
+阶段 0（可选）         阶段 1        阶段 2         阶段 3
+从 FCStd 文件中     →  导入   →  求解 (GCS)  →  导出 (Geometry 或 BREP)
+提取 Document.xml
 ```
+
+### 阶段 0（可选）：从 FCStd 文件中提取 Document.xml
+
+当输入为 `.FCStd` 文件（ZIP 归档）时，首先提取其中内嵌的 `Document.xml`：
+
+```c
+McSolverEngineFCStdResultCode rc = McSolverEngine_ExtractFCStdDoc("sketch.FCStd", &xml);
+if (rc != MCSOLVERENGINE_FCSTD_SUCCESS) {
+    fprintf(stderr, "提取错误: %s\n", McSolverEngine_GetLastError());
+    return;
+}
+// xml 现在包含 Document.xml 内容 — 送入阶段 1
+// ... 使用完毕后，调用 McSolverEngine_FreeFCStdDoc(xml) 释放
+```
+
+支持的压缩方法：STORE（方法 0）和 DEFLATE（方法 8）。内置 ZIP 解析器和 zlib inflate 以符号前缀 `McSolverEngine_` 静态链接 — DLL 不导出任何 zlib 符号，与同进程内其他 zlib 实例零冲突。
+
+如果调用方已有 `Document.xml` 内容（例如来自外部解压工具或独立的 `.xml` 文件），可跳过此阶段，直接进入阶段 1。
 
 ### 阶段 1：导入（Import）
 

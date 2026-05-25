@@ -387,11 +387,31 @@ Returns the last error message for the calling thread (UTF-8, thread-local, 512-
 
 ## 4. Processing Pipeline
 
-All `Solve*` functions follow a three-phase pipeline:
+The `Solve*` functions follow a four-phase pipeline. Phase 0 is optional and only needed when the input is a `.FCStd` file rather than a standalone `Document.xml` string.
 
 ```
-Import (Document.xml) → Solve (GCS) → Export (Geometry or BREP)
+Phase 0 (optional)        Phase 1         Phase 2        Phase 3
+Extract Document.xml  →  Import  →  Solve (GCS)  →  Export (Geometry or BREP)
+from FCStd file
 ```
+
+### Phase 0 (optional): Extract Document.xml from FCStd
+
+When the input is a `.FCStd` file (ZIP archive), first extract the embedded `Document.xml`:
+
+```c
+McSolverEngineFCStdResultCode rc = McSolverEngine_ExtractFCStdDoc("sketch.FCStd", &xml);
+if (rc != MCSOLVERENGINE_FCSTD_SUCCESS) {
+    fprintf(stderr, "Extract error: %s\n", McSolverEngine_GetLastError());
+    return;
+}
+// xml now contains the Document.xml content — feed it to Phase 1
+// ... after use, call McSolverEngine_FreeFCStdDoc(xml);
+```
+
+Supported compression methods: STORE (method 0) and DEFLATE (method 8). The internal ZIP parser and zlib inflate are statically linked with the symbol prefix `McSolverEngine_` — no zlib symbols are exported from the DLL, guaranteeing zero conflict with other zlib instances in the same process.
+
+If the caller already has `Document.xml` content (e.g. from an external extraction tool, or a standalone `.xml` file), skip this phase and proceed directly to Phase 1.
 
 ### Phase 1: Import
 
