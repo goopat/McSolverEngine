@@ -29,8 +29,8 @@ FreeCAD 是原始上游项目；本仓库不是 FreeCAD 官方仓库。
 
 | 库 | 版本 | 许可证 | 使用方式 |
 |---|---|---|---|
-| **zlib** | 1.3.2 | zlib License | 部分源码编译进 `McSolverEngineZip` 静态库（仅 inflate 解压路径，6 个 `.c` 文件：`adler32.c`、`crc32.c`、`inffast.c`、`inflate.c`、`inftrees.c`、`zutil.c`）。所有公开符号通过 `mse_zlib_prefix.h` 加 `McSolverEngine_` 前缀，避免符号冲突。用于解压 `.FCStd`（ZIP）格式文档。源码位于 `third_party/zlib/`。 |
-| **FreeCAD PlanGCS** | （移植自 FreeCAD） | LGPL-2.1-or-later | 约束求解器核心（`src/planegcs/` 下 9 个文件），移植自 FreeCAD Sketcher。版权：Konstantinos Poulios (2011)、Victor Titov / DeepSOIC (2014)。 |
+| **zlib** | 1.3.2 | zlib License | 部分源码编译进 `McSolverEngineZip` 静态库（仅 inflate 解压路径，6 个 `.c` 文件：`adler32.c`、`crc32.c`、`inffast.c`、`inflate.c`、`inftrees.c`、`zutil.c`）。所有公开符号通过 `mse_zlib_prefix.h` 加 `McSolverEngine_` 前缀，避免符号冲突。用于解压 `.FCStd`（ZIP）格式文档。源码位于 `src/third_party/zlib/`。 |
+| **FreeCAD PlanGCS** | （移植自 FreeCAD） | LGPL-2.1-or-later | 约束求解器核心（`src/core/planegcs/` 下 9 个文件），移植自 FreeCAD Sketcher。版权：Konstantinos Poulios (2011)、Victor Titov / DeepSOIC (2014)。 |
 
 ### 测试依赖（不影响库本身）
 

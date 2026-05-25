@@ -117,7 +117,7 @@ FreeCAD Sketcher 的 GCS 求解核心主要集中在：
 
 为了让这批抽离后的 `planegcs` 源码继续按原 FreeCAD 目录约定编译，`McSolverEngine` 还保留了一个最小兼容头：
 
-- `McSolverEngine\SketcherGlobal.h`
+- `McSolverEngine\src\SketcherGlobal.h`
 
 它不是业务逻辑头文件，而是一个**兼容垫片**，当前主要作用是：
 
@@ -222,7 +222,7 @@ FreeCAD 中真正把“草图数据”翻译成 GCS 参数和约束的是：
   - `Eigen3` 在本项目中按 header-only 依赖使用
   - `Boost` 当前也按头文件依赖使用，构建脚本未显式链接 Boost 二进制库
   - `OpenCASCADE / OCCT` 在启用 BREP 导出时属于动态运行时依赖：构建期链接 `.lib`，运行期需要对应 `.dll`
-  - `zlib` 按**静态链接 + 符号隔离**使用：源码（1.3.2，仅 inflate 子集）位于 `third_party/zlib/`，通过编译级宏将全部公开符号重命名为 `McSolverEngine_<name>` 前缀，编译为目标 `McSolverEngineZip` 静态库，PRIVATE 链接进 `McSolverEngineNative` DLL，DLL 导出表不包含任何 zlib 符号，同进程内与其他 zlib 实例零冲突
+  - `zlib` 按**静态链接 + 符号隔离**使用：源码（1.3.2，仅 inflate 子集）位于 `src/third_party/zlib/`，通过编译级宏将全部公开符号重命名为 `McSolverEngine_<name>` 前缀，编译为目标 `McSolverEngineZip` 静态库，PRIVATE 链接进 `McSolverEngineNative` DLL，DLL 导出表不包含任何 zlib 符号，同进程内与其他 zlib 实例零冲突
   - Windows / MSVC 下当前使用动态 CRT（`/MD` / `/MDd`），不是静态 CRT
 - `MCSOLVERENGINE_WITH_OCCT=ON` 且找到 OpenCASCADE 时，启用 OCCT-backed BREP 输出
 - 未找到 OCCT 或显式关闭该选项时，核心求解、`Document.xml` 导入与精确几何导出仍可独立构建
@@ -682,7 +682,7 @@ McSolverEngine_{Variant}.{version}.nupkg
 
 当前明确约定：
 
-- `src\planegcs\` 目录下的源码应保持与 FreeCAD `Sketcher\App\planegcs` 上游实现尽量一致
+- `src\core\planegcs\` 目录下的源码应保持与 FreeCAD `Sketcher\App\planegcs` 上游实现尽量一致
 - 允许保留为独立构建所必需的本地 build shim（例如日志/包含路径兼容）
 - 业务语义修正、输入兼容补丁和 FreeCAD 行为对齐，应优先落在：
   - `DocumentXml.cpp`

@@ -44,8 +44,8 @@ Standalone extraction of FreeCAD Sketcher's GCS constraint solver. 12 layers, to
 6. **Compat Solver** — `CompatSolver.h/cpp`. Translates `SketchModel` → GCS parameters → solves → writes results back. Handles `ParameterMap` overrides
 7. **Document.xml Import** — `DocumentXml.h/cpp`. Custom XML parser (no external library). Extracts sketch objects, geometries, constraints, Placement, ExpressionEngine, VarSet
 8. **VarSet Expression Engine** — `VarSetExpressionEngine.cpp/h`. Lightweight FreeCAD expression subset: arithmetic, units, VarSet refs, math functions, pi/e, cycle detection
-9. **FCStd ZIP Extraction** — `ZipExtract.cpp` + `third_party/zlib/`. Custom ZIP parser + raw-DEFLATE via bundled zlib inflate
-10. **GCS Core** — `src/planegcs/`. DogLeg solver (`convergence=1e-10`, `maxIter=100`, `FullPivLU`). LGPL-2.1-or-later (derived from FreeCAD)
+9. **FCStd ZIP Extraction** — `ZipExtract.cpp` + `src/third_party/zlib/`. Custom ZIP parser + raw-DEFLATE via bundled zlib inflate
+10. **GCS Core** — `src/core/planegcs/`. DogLeg solver (`convergence=1e-10`, `maxIter=100`, `FullPivLU`). LGPL-2.1-or-later (derived from FreeCAD)
 11. **BREP Export** — OCCT `TopoDS_Edge/Wire` → `BRepTools_ShapeSet` VERSION_1 text
 12. **Geometry Export** — structured export, no OCCT dependency
 
