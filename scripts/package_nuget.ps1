@@ -77,6 +77,9 @@ Copy-Item $dllLib            $stageLib
 Copy-Item $dll               $stageRuntime
 Copy-Item "$PSScriptRoot\McSolverEngine.targets" (Join-Path $stageTargets "$packageId.targets")
 
+# License
+Copy-Item "$repoRoot\License.md" $stageDir
+
 # Python wrapper
 $pythonSrc = Join-Path $repoRoot "wrapper\python\mcsolverengine_py"
 Get-ChildItem -Path $pythonSrc -File -Filter "*.py" | ForEach-Object {
@@ -110,6 +113,7 @@ $nuspec = @"
     </dependencies>
   </metadata>
   <files>
+    <file src="License.md"                                target="License.md" />
     <file src="build\native\include\McSolverEngine\*.h"  target="build\native\include\McSolverEngine\" />
     <file src="lib\native\x64\Release\*.lib"              target="lib\native\x64\Release\" />
     <file src="runtimes\win-x64\native\*.dll"             target="runtimes\win-x64\native\" />
