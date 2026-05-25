@@ -67,9 +67,10 @@ $stageInclude = Join-Path $stageDir "build\native\include\McSolverEngine"
 $stageLib     = Join-Path $stageDir "lib\native\x64\Release"
 $stageRuntime = Join-Path $stageDir "runtimes\win-x64\native"
 $stagePython  = Join-Path $stageDir "runtimes\python\mcsolverengine_py"
+$stagePythonTests = Join-Path $stageDir "runtimes\python\tests"
 $stageTargets = Join-Path $stageDir "build\native"
 
-New-Item -ItemType Directory -Force -Path $stageInclude, $stageLib, $stageRuntime, $stagePython, $stageTargets | Out-Null
+New-Item -ItemType Directory -Force -Path $stageInclude, $stageLib, $stageRuntime, $stagePython, $stagePythonTests, $stageTargets | Out-Null
 
 Copy-Item "$headersDir\*.h"  $stageInclude
 Copy-Item $staticLib         $stageLib
@@ -84,6 +85,14 @@ Copy-Item "$repoRoot\License.md" $stageDir
 $pythonSrc = Join-Path $repoRoot "wrapper\python\mcsolverengine_py"
 Get-ChildItem -Path $pythonSrc -File -Filter "*.py" | ForEach-Object {
     Copy-Item $_.FullName $stagePython
+}
+
+# Python wrapper tests
+$pythonTests = Join-Path $repoRoot "wrapper\python\tests"
+if (Test-Path $pythonTests) {
+    Get-ChildItem -Path $pythonTests -File -Filter "*.py" | ForEach-Object {
+        Copy-Item $_.FullName $stagePythonTests
+    }
 }
 
 # --- Generate nuspec ---
@@ -119,6 +128,7 @@ $nuspec = @"
     <file src="runtimes\win-x64\native\*.dll"             target="runtimes\win-x64\native\" />
     <file src="build\native\$packageId.targets"             target="build\native\$packageId.targets" />
     <file src="runtimes\python\mcsolverengine_py\*.py"     target="runtimes\python\mcsolverengine_py\" />
+    <file src="runtimes\python\tests\*.py"                 target="runtimes\python\tests\" />
   </files>
 </package>
 "@
