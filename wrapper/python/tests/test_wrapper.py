@@ -8,6 +8,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from mcsolverengine_py import (
     Engine,
+    set_native_lib_path,
     write_visible_geometry_svg,
     GEOMETRY_POINT,
     GEOMETRY_LINE_SEGMENT,
@@ -21,6 +22,27 @@ from mcsolverengine_py import (
 )
 
 REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
+
+
+def _find_build_dll():
+    """Locate mcsolverengine_native.dll from build output (for testing)."""
+    for config in ("Release", "Debug"):
+        for candidate in [
+            os.path.join(REPO_ROOT, "build", config, "mcsolverengine_native.dll"),
+            os.path.join(REPO_ROOT, "build", "nuget_UseOcct", config, "mcsolverengine_native.dll"),
+            os.path.join(REPO_ROOT, "build", "nuget_NoOcct", config, "mcsolverengine_native.dll"),
+        ]:
+            if os.path.isfile(candidate):
+                return candidate
+    raise FileNotFoundError(
+        "mcsolverengine_native.dll not found in build output. "
+        "Build the project first, or set MCSOLVERENGINE_NATIVE_LIB_PATH."
+    )
+
+
+# Resolve the native library before any tests touch the Engine.
+set_native_lib_path(_find_build_dll())
+
 SAMPLE_XML = os.path.join(REPO_ROOT, "fcstdDoc", "1.xml")
 
 

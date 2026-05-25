@@ -15,6 +15,7 @@ from ._engine import (
 from ._svg import write_visible_geometry_svg
 
 from ._bindings import (
+    set_native_lib_path,
     RESULT_SUCCESS,
     RESULT_INVALID_ARGUMENT,
     RESULT_IMPORT_FAILED,
@@ -48,6 +49,7 @@ __all__ = [
     "BSplineKnot",
     "ConstraintRef",
     "write_visible_geometry_svg",
+    "set_native_lib_path",
     "RESULT_SUCCESS",
     "RESULT_OPEN_CASCADE_UNAVAILABLE",
     "GEOMETRY_POINT",

@@ -4,24 +4,53 @@ import ctypes
 import os
 import sys
 
-# ── DLL loading ──────────────────────────────────────────────
+# ── DLL path configuration ─────────────────────────────────────
+
+_explicit_dll_path: "str | None" = None
+
+
+def set_native_lib_path(path: str) -> None:
+    """Specify the absolute path to the native library.
+
+    This is the highest-priority discovery method. Must be called before
+    any Engine method that triggers library loading.
+    """
+    global _explicit_dll_path
+    if not os.path.isabs(path):
+        raise ValueError(f"Path must be absolute: {path}")
+    if not os.path.isfile(path):
+        raise FileNotFoundError(f"Native library not found at: {path}")
+    _explicit_dll_path = path
+
 
 def _find_dll() -> str:
-    """Locate mcsolverengine_native.dll from build output."""
-    repo_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
-    for config in ("Release", "Debug"):
-        for candidate in [
-            os.path.join(repo_root, "build", config, "mcsolverengine_native.dll"),
-            os.path.join(repo_root, "build", "nuget_UseOcct", config, "mcsolverengine_native.dll"),
-            os.path.join(repo_root, "build", "nuget_NoOcct", config, "mcsolverengine_native.dll"),
-        ]:
-            if os.path.isfile(candidate):
-                return candidate
+    """Locate mcsolverengine_native.dll using 3-tier priority."""
+    # 1. Explicitly set path (highest priority)
+    if _explicit_dll_path:
+        return _explicit_dll_path
+
+    # 2. Same directory as this .py file
+    py_dir = os.path.dirname(os.path.abspath(__file__))
+    candidate = os.path.join(py_dir, "mcsolverengine_native.dll")
+    if os.path.isfile(candidate):
+        return candidate
+
+    # 3. Walk through PATH
+    for path_dir in os.environ.get("PATH", "").split(os.pathsep):
+        if not path_dir:
+            continue
+        candidate = os.path.join(path_dir.strip(), "mcsolverengine_native.dll")
+        if os.path.isfile(candidate):
+            return candidate
+
     raise FileNotFoundError(
-        f"mcsolverengine_native.dll not found."
+        "mcsolverengine_native.dll not found. "
+        "Use set_native_lib_path() to specify the path explicitly, "
+        "place the DLL next to the .py files, or add it to PATH."
     )
 
-def _find_occt_runtime() -> str | None:
+
+def _find_occt_runtime() -> "str | None":
     """Locate the OCCT runtime binary directory."""
     home = os.environ.get("USERPROFILE", "")
     candidates = [
@@ -33,15 +62,36 @@ def _find_occt_runtime() -> str | None:
             return os.path.abspath(p)
     return None
 
-_dll_path = _find_dll()
-_occt_dir = _find_occt_runtime()
 
-if hasattr(os, "add_dll_directory"):
-    os.add_dll_directory(os.path.dirname(_dll_path))
-    if _occt_dir:
-        os.add_dll_directory(_occt_dir)
+# ── Lazy DLL loading ───────────────────────────────────────────
 
-_native = ctypes.cdll.LoadLibrary(_dll_path)
+_native_lib = None
+_loaded = False
+
+
+def _ensure_loaded():
+    global _native_lib, _loaded
+    if _loaded:
+        return
+    dll_path = _find_dll()
+    occt_dir = _find_occt_runtime()
+    if hasattr(os, "add_dll_directory"):
+        os.add_dll_directory(os.path.dirname(dll_path))
+        if occt_dir:
+            os.add_dll_directory(occt_dir)
+    _native_lib = ctypes.cdll.LoadLibrary(dll_path)
+    _setup_signatures(_native_lib)
+    _loaded = True
+
+
+class _LazyLib:
+    def __getattr__(self, name):
+        _ensure_loaded()
+        globals()["_native"] = _native_lib
+        return getattr(_native_lib, name)
+
+
+_native = _LazyLib()
 
 # ── Enums ────────────────────────────────────────────────────
 
@@ -216,48 +266,62 @@ class BRepResult(ctypes.Structure):
 
 # ── Function signatures ──────────────────────────────────────
 
-_native.McSolverEngine_GetVersion.restype = ctypes.c_char_p
-_native.McSolverEngine_GetVersion.argtypes = []
+def _setup_signatures(lib):
+    lib.McSolverEngine_GetVersion.restype = ctypes.c_char_p
+    lib.McSolverEngine_GetVersion.argtypes = []
 
-_native.McSolverEngine_SolveToGeometry.restype = ctypes.c_int
-_native.McSolverEngine_SolveToGeometry.argtypes = [
-    ctypes.c_char_p,
-    ctypes.c_char_p,
-    ctypes.POINTER(ctypes.POINTER(GeometryResult)),
-]
+    lib.McSolverEngine_SolveToGeometry.restype = ctypes.c_int
+    lib.McSolverEngine_SolveToGeometry.argtypes = [
+        ctypes.c_char_p,
+        ctypes.c_char_p,
+        ctypes.POINTER(ctypes.POINTER(GeometryResult)),
+    ]
 
-_native.McSolverEngine_SolveToGeometryWithParameters.restype = ctypes.c_int
-_native.McSolverEngine_SolveToGeometryWithParameters.argtypes = [
-    ctypes.c_char_p,
-    ctypes.c_char_p,
-    ctypes.POINTER(ctypes.c_char_p),
-    ctypes.POINTER(ctypes.c_char_p),
-    ctypes.c_int,
-    ctypes.POINTER(ctypes.POINTER(GeometryResult)),
-]
+    lib.McSolverEngine_SolveToGeometryWithParameters.restype = ctypes.c_int
+    lib.McSolverEngine_SolveToGeometryWithParameters.argtypes = [
+        ctypes.c_char_p,
+        ctypes.c_char_p,
+        ctypes.POINTER(ctypes.c_char_p),
+        ctypes.POINTER(ctypes.c_char_p),
+        ctypes.c_int,
+        ctypes.POINTER(ctypes.POINTER(GeometryResult)),
+    ]
 
-_native.McSolverEngine_SolveToBRep.restype = ctypes.c_int
-_native.McSolverEngine_SolveToBRep.argtypes = [
-    ctypes.c_char_p,
-    ctypes.c_char_p,
-    ctypes.POINTER(ctypes.POINTER(BRepResult)),
-]
+    lib.McSolverEngine_SolveToBRep.restype = ctypes.c_int
+    lib.McSolverEngine_SolveToBRep.argtypes = [
+        ctypes.c_char_p,
+        ctypes.c_char_p,
+        ctypes.POINTER(ctypes.POINTER(BRepResult)),
+    ]
 
-_native.McSolverEngine_SolveToBRepWithParameters.restype = ctypes.c_int
-_native.McSolverEngine_SolveToBRepWithParameters.argtypes = [
-    ctypes.c_char_p,
-    ctypes.c_char_p,
-    ctypes.POINTER(ctypes.c_char_p),
-    ctypes.POINTER(ctypes.c_char_p),
-    ctypes.c_int,
-    ctypes.POINTER(ctypes.POINTER(BRepResult)),
-]
+    lib.McSolverEngine_SolveToBRepWithParameters.restype = ctypes.c_int
+    lib.McSolverEngine_SolveToBRepWithParameters.argtypes = [
+        ctypes.c_char_p,
+        ctypes.c_char_p,
+        ctypes.POINTER(ctypes.c_char_p),
+        ctypes.POINTER(ctypes.c_char_p),
+        ctypes.c_int,
+        ctypes.POINTER(ctypes.POINTER(BRepResult)),
+    ]
 
-_native.McSolverEngine_FreeGeometryResult.restype = None
-_native.McSolverEngine_FreeGeometryResult.argtypes = [ctypes.POINTER(GeometryResult)]
+    lib.McSolverEngine_FreeGeometryResult.restype = None
+    lib.McSolverEngine_FreeGeometryResult.argtypes = [ctypes.POINTER(GeometryResult)]
 
-_native.McSolverEngine_FreeBRepResult.restype = None
-_native.McSolverEngine_FreeBRepResult.argtypes = [ctypes.POINTER(BRepResult)]
+    lib.McSolverEngine_FreeBRepResult.restype = None
+    lib.McSolverEngine_FreeBRepResult.argtypes = [ctypes.POINTER(BRepResult)]
+
+    lib.McSolverEngine_ExtractFCStdDoc.restype = ctypes.c_int
+    lib.McSolverEngine_ExtractFCStdDoc.argtypes = [
+        ctypes.c_char_p,
+        ctypes.POINTER(ctypes.c_char_p),
+    ]
+
+    lib.McSolverEngine_FreeFCStdDoc.restype = None
+    lib.McSolverEngine_FreeFCStdDoc.argtypes = [ctypes.c_char_p]
+
+    lib.McSolverEngine_GetLastError.restype = ctypes.c_char_p
+    lib.McSolverEngine_GetLastError.argtypes = []
+
 
 # -- FCStd status codes
 FCSTD_SUCCESS = 0
@@ -279,16 +343,3 @@ _FCSTD_CODE_NAMES = {
 
 def fcstd_result_code_name(code: int) -> str:
     return _FCSTD_CODE_NAMES.get(code, f"FCSTD_UNKNOWN({code})")
-
-
-_native.McSolverEngine_ExtractFCStdDoc.restype = ctypes.c_int
-_native.McSolverEngine_ExtractFCStdDoc.argtypes = [
-    ctypes.c_char_p,
-    ctypes.POINTER(ctypes.c_char_p),
-]
-
-_native.McSolverEngine_FreeFCStdDoc.restype = None
-_native.McSolverEngine_FreeFCStdDoc.argtypes = [ctypes.c_char_p]
-
-_native.McSolverEngine_GetLastError.restype = ctypes.c_char_p
-_native.McSolverEngine_GetLastError.argtypes = []
