@@ -5,6 +5,7 @@
 #include <cstring>
 #include <fstream>
 #include <limits>
+#include <memory>
 #include <string>
 #include <vector>
 
@@ -174,7 +175,7 @@ bool inflateRaw(
     const unsigned char* compressedData,
     std::uint32_t compressedSize,
     std::uint32_t uncompressedSize,
-    std::string& out
+    char* out
 )
 {
     McSolverEngine_z_stream strm {};
@@ -187,25 +188,13 @@ bool inflateRaw(
         return false;
     }
 
-    try {
-        out.resize(uncompressedSize);
-    } catch (const std::bad_alloc&) {
-        McSolverEngine_inflateEnd(&strm);
-        return false;
-    }
-
-    strm.next_out = reinterpret_cast<unsigned char*>(out.data());
+    strm.next_out = reinterpret_cast<unsigned char*>(out);
     strm.avail_out = uncompressedSize;
 
     ret = McSolverEngine_inflate(&strm, Z_FINISH);
     McSolverEngine_inflateEnd(&strm);
 
-    if (ret != Z_STREAM_END) {
-        out.clear();
-        return false;
-    }
-
-    return true;
+    return ret == Z_STREAM_END;
 }
 
 }  // namespace
@@ -252,8 +241,11 @@ ExtractResult extractDocumentXml(const std::string& fcstdPath)
     }
 
     if (compressionMethod == kCompressionStored && compressedSize == uncompressedSize) {
-        result.documentXml.assign(
-            reinterpret_cast<const char*>(compressedData), compressedSize);
+        auto buf = std::make_unique<char[]>(compressedSize + 1);
+        std::memcpy(buf.get(), reinterpret_cast<const char*>(compressedData), compressedSize);
+        buf[compressedSize] = '\0';
+        result.documentXml = std::move(buf);
+        result.documentXmlSize = compressedSize;
         result.success = true;
         return result;
     }
@@ -264,10 +256,14 @@ ExtractResult extractDocumentXml(const std::string& fcstdPath)
         return result;
     }
 
-    if (!inflateRaw(compressedData, compressedSize, uncompressedSize, result.documentXml)) {
+    auto buf = std::make_unique<char[]>(uncompressedSize + 1);
+    if (!inflateRaw(compressedData, compressedSize, uncompressedSize, buf.get())) {
         result.errorMessage = "DEFLATE decompression failed.";
         return result;
     }
+    buf[uncompressedSize] = '\0';
+    result.documentXml = std::move(buf);
+    result.documentXmlSize = uncompressedSize;
 
     result.success = true;
     return result;

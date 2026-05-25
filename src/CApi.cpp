@@ -1029,7 +1029,7 @@ McSolverEngineFCStdResultCode McSolverEngine_ExtractFCStdDoc(
     *documentXmlOut = nullptr;
 
     try {
-        const auto result = McSolverEngine::ZipExtract::extractDocumentXml(fcstdPathUtf8);
+        auto result = McSolverEngine::ZipExtract::extractDocumentXml(fcstdPathUtf8);
         if (!result.success) {
             setLastError(result.errorMessage.c_str());
             if (result.errorMessage.find("Failed to open") != std::string::npos) {
@@ -1047,15 +1047,7 @@ McSolverEngineFCStdResultCode McSolverEngine_ExtractFCStdDoc(
             return MCSOLVERENGINE_FCSTD_OPEN_FAILED;
         }
 
-        const auto& xml = result.documentXml;
-        auto* buf = new (std::nothrow) char[xml.size() + 1];
-        if (!buf) {
-            setLastError("out of memory");
-            return MCSOLVERENGINE_FCSTD_OUT_OF_MEMORY;
-        }
-        std::memcpy(buf, xml.data(), xml.size());
-        buf[xml.size()] = '\0';
-        *documentXmlOut = buf;
+        *documentXmlOut = result.documentXml.release();
 
         return MCSOLVERENGINE_FCSTD_SUCCESS;
     } catch (const std::bad_alloc& e) {

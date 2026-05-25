@@ -1,5 +1,6 @@
 #pragma once
 
+#include <memory>
 #include <string>
 #include <vector>
 
@@ -11,7 +12,8 @@ namespace McSolverEngine::ZipExtract
 struct ExtractResult
 {
     bool success {false};
-    std::string documentXml;
+    std::unique_ptr<char[]> documentXml;
+    std::size_t documentXmlSize {0};
     std::string errorMessage;
 };
 
