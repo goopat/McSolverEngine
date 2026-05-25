@@ -172,7 +172,7 @@ function(mcsolverengine_enable_cxx20 target visibility)
         CXX_EXTENSIONS NO
     )
     if(MSVC)
-        target_compile_options(${target} PRIVATE /permissive-)
+        target_compile_options(${target} PRIVATE /permissive- /utf-8)
     endif()
 endfunction()
 

@@ -177,8 +177,35 @@ CMake 按以下优先级自动发现依赖：
 - C++20，关闭编译器扩展
 - MSVC 下启用 `/permissive-`
 - 动态 CRT（`/MD`）
+- MSVC 下启用 `/utf-8`（源文件按 UTF-8 解析，消除 C4819 代码页警告）
 
-### 3.6 NuGet 打包
+### 3.6 编译警告说明
+
+MSVC Release 构建中会出现以下已知警告，均不影响编译结果：
+
+**C4005 — zlib 宏重定义（预期行为）**
+
+仅出现在 `McSolverEngineZip` 目标的 `.c` 源文件中。原因：
+
+1. `mse_zlib_prefix.h` 通过 `/FI` 在 `zlib.h` 之前强制包含，将 `inflateInit` 等符号重定义为 `McSolverEngine_inflateInit`
+2. `zlib.h` 内部的 `Z_PREFIX` 机制再次定义了同名宏
+3. 两次展开结果相同，编译器报告"宏重定义"
+
+这是符号隔离机制的**正常副作用**。验证方法：
+
+```powershell
+# DLL 导出表中应无原始 zlib 符号
+dumpbin /exports build/Release/mcsolverengine_native.dll | findstr "inflate deflate adler crc"
+
+# 静态库中所有公开符号应带 McSolverEngine_ 前缀
+dumpbin /symbols build/Release/McSolverEngineZip.lib | findstr "inflate deflate adler crc"
+```
+
+**C4819 — 代码页不兼容（已消除）**
+
+CMakeLists.txt 中已通过 MSVC `/utf-8` 编译选项解决，当前构建不再出现此警告。
+
+### 3.7 NuGet 打包
 
 两个变体，脚本位于 `scripts/`：
 
