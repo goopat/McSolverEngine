@@ -40,6 +40,10 @@ if(CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
         endif()
     endif()
 
+    if(MCSOLVERENGINE_WITH_OCCT AND OpenCASCADE_DIR AND NOT EXISTS "${OpenCASCADE_DIR}")
+        set(OpenCASCADE_DIR "")
+    endif()
+
     if(MCSOLVERENGINE_WITH_OCCT AND NOT OpenCASCADE_DIR AND NOT OCC_INCLUDE_DIR)
         set(_mcsolverengine_occt_config_candidates
             "$ENV{USERPROFILE}/.nuget/packages/opencascade.7.9-native/1.0.0/lib/cmake/opencascade"
@@ -117,6 +121,16 @@ if(CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
         endif()
     endif()
 
+    if(MCSOLVERENGINE_WITH_OCCT AND OCC_LIBRARY_DIR AND NOT OCC_LIBRARIES)
+        if(WIN32)
+            file(GLOB _mcsolverengine_occ_libs "${OCC_LIBRARY_DIR}/*.lib")
+        else()
+            file(GLOB _mcsolverengine_occ_libs "${OCC_LIBRARY_DIR}/lib*.so" "${OCC_LIBRARY_DIR}/lib*.a")
+        endif()
+        list(SORT _mcsolverengine_occ_libs)
+        set(OCC_LIBRARIES ${_mcsolverengine_occ_libs})
+    endif()
+
     if(NOT EIGEN3_INCLUDE_DIR)
         find_package(Eigen3 REQUIRED)
     endif()
@@ -165,12 +179,12 @@ endfunction()
 enable_language(C)
 
 set(MCSOLVERENGINE_ZLIB_SOURCES
-    third_party/zlib/adler32.c
-    third_party/zlib/crc32.c
-    third_party/zlib/inffast.c
-    third_party/zlib/inflate.c
-    third_party/zlib/inftrees.c
-    third_party/zlib/zutil.c
+    src/third_party/zlib/adler32.c
+    src/third_party/zlib/crc32.c
+    src/third_party/zlib/inffast.c
+    src/third_party/zlib/inflate.c
+    src/third_party/zlib/inftrees.c
+    src/third_party/zlib/zutil.c
 )
 
 add_library(McSolverEngineZip STATIC
@@ -181,14 +195,14 @@ add_library(McSolverEngineZip STATIC
 mcsolverengine_enable_cxx20(McSolverEngineZip PRIVATE)
 target_include_directories(McSolverEngineZip
     PRIVATE
-        ${CMAKE_CURRENT_SOURCE_DIR}/third_party/zlib
+        ${CMAKE_CURRENT_SOURCE_DIR}/src/third_party/zlib
     PUBLIC
         $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
         $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>
 )
 target_compile_options(McSolverEngineZip PRIVATE
-    $<$<C_COMPILER_ID:MSVC>:/FI "${CMAKE_CURRENT_SOURCE_DIR}/third_party/zlib/mse_zlib_prefix.h">
-    $<$<NOT:$<C_COMPILER_ID:MSVC>>:-include "${CMAKE_CURRENT_SOURCE_DIR}/third_party/zlib/mse_zlib_prefix.h">
+    $<$<C_COMPILER_ID:MSVC>:/FI "${CMAKE_CURRENT_SOURCE_DIR}/src/third_party/zlib/mse_zlib_prefix.h">
+    $<$<NOT:$<C_COMPILER_ID:MSVC>>:-include "${CMAKE_CURRENT_SOURCE_DIR}/src/third_party/zlib/mse_zlib_prefix.h">
     $<$<C_COMPILER_ID:MSVC>:/wd4127 /wd4131>
 )
 
@@ -252,14 +266,14 @@ if(BOOST_INCLUDEDIR)
 endif()
 
 if(MCSOLVERENGINE_HAS_OCCT AND TARGET TKBRep)
-    target_link_libraries(McSolverEngineCore PRIVATE TKBRep TKTopAlgo TKShHealing)
+    target_link_libraries(McSolverEngineCore PUBLIC TKBRep TKTopAlgo TKShHealing)
 elseif(MCSOLVERENGINE_HAS_OCCT AND OCC_INCLUDE_DIR)
-    target_include_directories(McSolverEngineCore SYSTEM PRIVATE ${OCC_INCLUDE_DIR})
+    target_include_directories(McSolverEngineCore SYSTEM PUBLIC ${OCC_INCLUDE_DIR})
     if(OCC_LIBRARY_DIR)
-        target_link_directories(McSolverEngineCore PRIVATE ${OCC_LIBRARY_DIR})
+        target_link_directories(McSolverEngineCore PUBLIC ${OCC_LIBRARY_DIR})
     endif()
     if(OCC_LIBRARIES)
-        target_link_libraries(McSolverEngineCore PRIVATE ${OCC_LIBRARIES})
+        target_link_libraries(McSolverEngineCore PUBLIC ${OCC_LIBRARIES})
     endif()
 endif()
 
