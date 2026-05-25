@@ -405,60 +405,16 @@ FreeCAD 中真正把“草图数据”翻译成 GCS 参数和约束的是：
 - `Locations` 反映的是 OCCT `TopLoc_Location` 表，而不是草图平面本身
 - 对于非 XY 平面的草图，真正决定 3D 结果的是草图 `Placement` 被映射到根 shape location
 
-### 9.5 原生 C API 与 C# 包装层
+### 9.5 原生 C API 与包装层
 
-当前已新增一层面向动态调用的稳定边界：
+提供面向动态调用的稳定 C ABI 边界：
 
-- 原生 C ABI 头文件：`include\McSolverEngine\CApi.h`
+- 原生 C ABI 头文件：`include/McSolverEngine/CApi.h`
 - 原生动态库目标：`mcsolverengine_native`
 - C# P/Invoke 包装目录：`wrapper\csharp`
+- Python ctypes 包装目录：`wrapper\python`
 
-当前 C ABI 接口包括：
-
-- `McSolverEngine_GetVersion()`
-- `McSolverEngine_SolveToGeometry(...)`
-- `McSolverEngine_SolveToGeometryWithParameters(...)`
-- `McSolverEngine_SolveToBRep(...)`
-- `McSolverEngine_SolveToBRepWithParameters(...)`
-- `McSolverEngine_ExtractFCStdDoc(fcstdPathUtf8, &documentXmlOut)` — 从 .FCStd ZIP 包中解压提取 `Document.xml`
-- `McSolverEngine_FreeFCStdDoc(...)`
-- `McSolverEngine_FreeGeometryResult(...)`
-- `McSolverEngine_FreeBRepResult(...)`
-- `McSolverEngine_GetLastError()` — 获取当前线程上一次 C API 调用的失败原因（UTF-8，thread-local）
-
-当前 C API 入口已全部包裹 `try/catch`，将 `std::bad_alloc` 等 C++ 异常统一转换为错误码 + `GetLastError()` 诊断信息，防止异常穿透 C 边界导致宿主进程崩溃。
-
-`McSolverEngine_ExtractFCStdDoc` 通过内置的 ZIP 解析器 + DEFLATE 解压（基于 zlib 1.3.2，静态链接，符号隔离）从 `.FCStd` 包的根目录提取 `Document.xml` 内容，返回 UTF-8 字符串；调用方通过 `McSolverEngine_FreeFCStdDoc` 释放。支持 STORE 和 DEFLATE 两种压缩方法。失败时返回 `McSolverEngineFCStdResultCode` 并通过 `GetLastError()` 获取具体原因。
-
-当前跨语言边界采用 **Geometry 与 BREP 均返回结构化结果** 的设计：
-
-- `McSolverEngine_SolveToGeometry(...)` 和 `McSolverEngine_SolveToBRep(...)` 均返回结构化结果，包含 `Placement` + 导入/求解/导出诊断元数据（`sketchName`、`importStatus`、`messages`、`solveStatus`、`degreesOfFreedom`、`conflicting` / `redundant` / `partiallyRedundant`、`exportKind`、`exportStatus`）。Geometry 结果额外携带 `geometryCount + geometries`，BREP 结果额外携带 `brepUtf8` 原始 BREP 文本。
-- Geometry C ABI 中每条 `McSolverEngineGeometryRecord` 携带 `geometryIndex`、`originalId`、几何本体字段、`construction` / `external` / `blocked` 标志，以及表达式驱动约束引用数组 `constraintCount + constraints`
-- 每条 `McSolverEngineConstraintRef` 携带 `kind`、`originalIndex` 与 `expression`；`originalIndex` 对应 `Document.xml` 中 `<ConstraintList>` 的原始约束序号
-- 参数化路径当前通过 `const char*[] keys + const char*[] values + count` 跨 ABI 传递参数表，供 `Document.xml + sketchName + parameters` 一起求解；其中值必须是纯数值字符串
-- 若 VarSet 表达式使用了当前精简子集之外的 FreeCAD 表达式能力，C API 返回 `MCSOLVERENGINE_RESULT_VARSET_EXPRESSION_UNSUPPORTED_SUBSET`，并在 `messages` 中携带 `MCSOLVERENGINE_IMPORT_VARSET_EXPRESSION_UNSUPPORTED_SUBSET`
-- Geometry 结果由原生层分配，调用方必须通过 `McSolverEngine_FreeGeometryResult(...)` 释放
-- BRep 结果由原生层分配，调用方必须通过 `McSolverEngine_FreeBRepResult(...)` 释放
-
-`wrapper\csharp` 当前提供：
-
-- 目标框架为 `net48;net6.0`（多目标构建），Windows x64
-- `McSolverEngineClient`：P/Invoke 入口；Geometry 和 BREP 均返回结构化结果，包含导入/求解/导出元数据
-- `McSolverEngineClient.SolveGeometryFromDocumentXml(documentXml, sketchName, parameters)`：包装参数化 Geometry 求解
-- `McSolverEngineClient.SolveBRepFromDocumentXml(documentXml, sketchName, parameters)`：包装参数化 BREP 求解
-- 对包装层透传的 `parameters`，当前沿用原生规则：长度按 **mm**、角度按 **degree**，且参数值必须是纯数值字符串
-- `McSolverEngineClient.ConfigureNativeLibrary(...)` / `ConfigureNativeLibraryDirectory(...)`：显式指定原生 DLL 路径，避免调用方只能依赖 `PATH`
-- .NET Framework 上通过 `kernel32.dll` 显式 `LoadLibrary` 加载原生库；.NET 6+ 通过 `NativeLibrary.Load` 加载，并按 OS 选择文件名（`mcsolverengine_native.dll` / `libmcsolverengine_native.so` / `libmcsolverengine_native.dylib`）
-- 当前包装层会缓存已加载的原生库句柄，因此同一进程内不支持切换到另一套原生构建产物
-- `StructuredGeometrySolveResponse` / `BRepSolveResponse`：托管 DTO，均包含完整的 `sketchName`/`importStatus`/`solveStatus`/`conflicting`/`redundant`/`placement` 等过程状态
-- `StructuredGeometryRecord` 会透传原生 geometry `OriginalId` 与表达式约束引用；`ConstraintRefDto` 会透传 `Kind`、`OriginalIndex` 与 `Expression`
-- `McSolverEngineNativeStatus`：与原生结果码对齐的枚举
-- `wrapper\csharp\tests\McSolverEngine.Wrapper.Tests.csproj`：net48 + net6.0 MSTest 回归项目，当前覆盖 `fcstdDoc\1.xml` 及 `V102.*` 样本的 Geometry / BREP 包装层回归
-
-无 OCCT 构建下：
-
-- Geometry 调用仍可正常返回成功结果
-- BREP 调用返回 `OpenCascadeUnavailable`，结果结构体的 `exportStatus` 可用，`brepUtf8` 指针为空
+完整的 C API 类型定义、函数签名、处理管线、参数约定、内存管理、线程安全和错误处理模式见 **[McSolverEngine_C_API.md](McSolverEngine_C_API.md)（英文版： **[McSolverEngine_C_API_en.md](McSolverEngine_C_API_en.md)**）。
 
 ### 9.6 数值精度结论
 
@@ -649,27 +605,24 @@ FreeCAD 中真正把“草图数据”翻译成 GCS 参数和约束的是：
 
 当前并存三层输出接口：
 
-1. **BREP 输出**
+1. **BREP 输出**（C++）
    - `BRep::exportSketchToBRep(...)`
    - `BRep::exportSketchToBRepFile(...)`
    - 若当前构建未启用 OCCT，接口不会尝试降级伪造 BREP，而是直接返回 `OpenCascadeUnavailable`
 
-2. **精确几何输出**
+2. **精确几何输出**（C++）
    - `Geometry::exportSketchGeometry(...)`
    - 返回完整 geometry 记录，包含 `originalId`、`construction` / `external` / `blocked` 标志，以及表达式驱动约束引用 `ConstraintRef { kind, originalIndex, expression }`
 
-3. **跨语言包装接口**
-   - `McSolverEngine_SolveToGeometry(...)` / `McSolverEngine_SolveToBRep(...)`
-   - 均返回携带完整过程状态的结构化结果（导入/求解/导出元数据 + placement）
-   - Geometry 结果附加 `geometryCount + geometries`，每条 geometry 可附带 `constraintCount + constraints`；BRep 结果附加 `brepUtf8`
-   - 释放接口：`McSolverEngine_FreeGeometryResult` / `McSolverEngine_FreeBRepResult`
-   - `wrapper\csharp\McSolverEngineClient` 多目标构建 net48 + net6.0
+3. **跨语言 C ABI 接口**
+   - C API 层将上述两种输出包装为结构化结果，携带完整的导入/求解/导出过程状态
+   - 详见 **[McSolverEngine_C_API.md](McSolverEngine_C_API.md)** （英文版： **[McSolverEngine_C_API_en.md](McSolverEngine_C_API_en.md)** ）
 
 当前建议：
 
 - 若目标是与 FreeCAD 持久化/形状结果对照，优先使用 BREP
 - 若目标是供其他系统直接消费解析几何，优先使用精确几何输出
-- 若目标是从 .NET / C# 动态集成当前引擎，优先使用 `wrapper\csharp` 对 `mcsolverengine_native` 的 P/Invoke 包装
+- 若目标是从 C# / Python 等跨语言动态集成，优先使用 C ABI + 对应包装层
 
 ### 10.6 NuGet 原生 C++ 分发包
 
