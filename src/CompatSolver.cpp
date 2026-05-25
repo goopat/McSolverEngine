@@ -15,7 +15,7 @@
 #include <vector>
 
 #include "ParameterValueUtils.h"
-#include "planegcs/GCS.h"
+#include "core/planegcs/GCS.h"
 
 namespace McSolverEngine::Compat
 {

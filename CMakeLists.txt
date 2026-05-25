@@ -203,11 +203,11 @@ set(MCSOLVERENGINE_CORE_SOURCES
     src/GeometryExport.cpp
     src/VarSetExpressionEngine.cpp
     src/Version.cpp
-    src/planegcs/Constraints.cpp
-    src/planegcs/GCS.cpp
-    src/planegcs/Geo.cpp
-    src/planegcs/SubSystem.cpp
-    src/planegcs/qp_eq.cpp
+    src/core/planegcs/Constraints.cpp
+    src/core/planegcs/GCS.cpp
+    src/core/planegcs/Geo.cpp
+    src/core/planegcs/SubSystem.cpp
+    src/core/planegcs/qp_eq.cpp
 )
 
 if(MCSOLVERENGINE_HAS_OCCT)

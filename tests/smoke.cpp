@@ -40,7 +40,7 @@
 #include "McSolverEngine/Engine.h"
 #include "McSolverEngine/GeometryExport.h"
 #include "src/WindowsAssertMode.h"
-#include "src/planegcs/GCS.h"
+#include "src/core/planegcs/GCS.h"
 
 namespace
 {

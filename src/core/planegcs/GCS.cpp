@@ -95,7 +95,7 @@
      }
 #endif
 
-#include "../ConsoleShim.h"
+#include "../../ConsoleShim.h"
 
 #include <boost/graph/connected_components.hpp>
 #include <boost/graph/adjacency_list.hpp>
