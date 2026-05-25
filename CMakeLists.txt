@@ -334,6 +334,11 @@ if(MCSOLVERENGINE_BUILD_TESTS)
     )
     mcsolverengine_enable_cxx20(McSolverEngineCApiSmokeTest PRIVATE)
 
+    add_executable(McSolverEngineUnitTest
+        tests/unit.cpp
+    )
+    mcsolverengine_enable_cxx20(McSolverEngineUnitTest PRIVATE)
+
     target_include_directories(McSolverEngineSmokeTest
         PRIVATE
             ${CMAKE_CURRENT_SOURCE_DIR}
@@ -355,6 +360,12 @@ if(MCSOLVERENGINE_BUILD_TESTS)
         PRIVATE
             MCSOLVERENGINE_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}"
             MCSOLVERENGINE_WITH_OCCT=$<BOOL:${MCSOLVERENGINE_HAS_OCCT}>
+    )
+
+    target_include_directories(McSolverEngineUnitTest
+        PRIVATE
+            ${CMAKE_CURRENT_SOURCE_DIR}
+            ${CMAKE_CURRENT_SOURCE_DIR}/src
     )
 
     if(TARGET Eigen3::Eigen)
@@ -389,6 +400,11 @@ if(MCSOLVERENGINE_BUILD_TESTS)
             McSolverEngineNative
     )
 
+    target_link_libraries(McSolverEngineUnitTest
+        PRIVATE
+            McSolverEngineCore
+    )
+
     if(BUILD_TESTING)
         if(WIN32)
             set(MCSOLVERENGINE_PATH_SEP ";")
@@ -414,6 +430,12 @@ if(MCSOLVERENGINE_BUILD_TESTS)
                     ${CMAKE_COMMAND} -E env "${MCSOLVERENGINE_LIB_PATH_VAR}=$<TARGET_FILE_DIR:McSolverEngineNative>${MCSOLVERENGINE_PATH_SEP}${MCSOLVERENGINE_RUNTIME_PATH}${MCSOLVERENGINE_PATH_SEP}$ENV{${MCSOLVERENGINE_LIB_PATH_VAR}}"
                     $<TARGET_FILE:McSolverEngineCApiSmokeTest>
             )
+            add_test(
+                NAME McSolverEngineUnitTest
+                COMMAND
+                    ${CMAKE_COMMAND} -E env "${MCSOLVERENGINE_LIB_PATH_VAR}=$<TARGET_FILE_DIR:McSolverEngineNative>${MCSOLVERENGINE_PATH_SEP}${MCSOLVERENGINE_RUNTIME_PATH}${MCSOLVERENGINE_PATH_SEP}$ENV{${MCSOLVERENGINE_LIB_PATH_VAR}}"
+                    $<TARGET_FILE:McSolverEngineUnitTest>
+            )
         else()
             add_test(NAME McSolverEngineSmokeTest COMMAND McSolverEngineSmokeTest)
             add_test(
@@ -421,6 +443,12 @@ if(MCSOLVERENGINE_BUILD_TESTS)
                 COMMAND
                     ${CMAKE_COMMAND} -E env "${MCSOLVERENGINE_LIB_PATH_VAR}=$<TARGET_FILE_DIR:McSolverEngineNative>${MCSOLVERENGINE_PATH_SEP}$ENV{${MCSOLVERENGINE_LIB_PATH_VAR}}"
                     $<TARGET_FILE:McSolverEngineCApiSmokeTest>
+            )
+            add_test(
+                NAME McSolverEngineUnitTest
+                COMMAND
+                    ${CMAKE_COMMAND} -E env "${MCSOLVERENGINE_LIB_PATH_VAR}=$<TARGET_FILE_DIR:McSolverEngineNative>${MCSOLVERENGINE_PATH_SEP}$ENV{${MCSOLVERENGINE_LIB_PATH_VAR}}"
+                    $<TARGET_FILE:McSolverEngineUnitTest>
             )
         endif()
 

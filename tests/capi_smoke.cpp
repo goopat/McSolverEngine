@@ -913,5 +913,46 @@ int main()
         }
     }
 
+    // ── C API null-argument guards ─────────────────────────────────────────────
+
+    {
+        // Null document XML → INVALID_ARGUMENT (SolveToGeometry)
+        McSolverEngineGeometryResult* geoResult = nullptr;
+        const auto codeNullDoc = McSolverEngine_SolveToGeometry(nullptr, "Sketch", &geoResult);
+        if (!expect(codeNullDoc == MCSOLVERENGINE_RESULT_INVALID_ARGUMENT, "C API: null document → INVALID_ARGUMENT"))
+            return EXIT_FAILURE;
+        if (!expect(geoResult == nullptr, "C API: null document → result pointer set to null"))
+            return EXIT_FAILURE;
+
+        // Null result pointer → INVALID_ARGUMENT (SolveToGeometry)
+        const auto codeNullResult = McSolverEngine_SolveToGeometry("<doc/>", "Sketch", nullptr);
+        if (!expect(codeNullResult == MCSOLVERENGINE_RESULT_INVALID_ARGUMENT, "C API: null result pointer → INVALID_ARGUMENT"))
+            return EXIT_FAILURE;
+
+        // Null document XML → INVALID_ARGUMENT (SolveToBRep)
+        McSolverEngineBRepResult* brepResult = nullptr;
+        const auto codeNullBrepDoc = McSolverEngine_SolveToBRep(nullptr, "Sketch", &brepResult);
+        if (!expect(codeNullBrepDoc == MCSOLVERENGINE_RESULT_INVALID_ARGUMENT, "C API BRep: null document → INVALID_ARGUMENT"))
+            return EXIT_FAILURE;
+        if (!expect(brepResult == nullptr, "C API BRep: null document → result pointer set to null"))
+            return EXIT_FAILURE;
+
+        // Null result pointer → INVALID_ARGUMENT (SolveToBRep)
+        const auto codeNullBrepResult = McSolverEngine_SolveToBRep("<doc/>", "Sketch", nullptr);
+        if (!expect(codeNullBrepResult == MCSOLVERENGINE_RESULT_INVALID_ARGUMENT, "C API BRep: null result pointer → INVALID_ARGUMENT"))
+            return EXIT_FAILURE;
+
+        // Negative parameter count → INVALID_ARGUMENT (SolveToGeometryWithParameters)
+        const char* keys[] = {"K"};
+        const char* vals[] = {"1"};
+        McSolverEngineGeometryResult* paramResult = nullptr;
+        const auto codeNegCount = McSolverEngine_SolveToGeometryWithParameters(
+            "<doc/>", "Sketch", keys, vals, -1, &paramResult);
+        if (!expect(codeNegCount == MCSOLVERENGINE_RESULT_INVALID_ARGUMENT, "C API: negative parameter count → INVALID_ARGUMENT"))
+            return EXIT_FAILURE;
+        if (!expect(paramResult == nullptr, "C API: negative parameter count → result pointer set to null"))
+            return EXIT_FAILURE;
+    }
+
     return EXIT_SUCCESS;
 }
