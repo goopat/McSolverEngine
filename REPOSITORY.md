@@ -61,7 +61,8 @@ McSolverEngine/
 │
 ├── tests/                         # C++ 测试
 │   ├── smoke.cpp                  #   核心库回归测试
-│   └── capi_smoke.cpp             #   C API 回归测试
+│   ├── capi_smoke.cpp             #   C API 回归测试
+│   └── unit.cpp                   #   单元测试（内部工具、边界条件、未覆盖约束）
 │
 ├── wrapper/                       # 跨语言包装层
 │   ├── csharp/                    #   C# P/Invoke 包装
@@ -141,6 +142,7 @@ McSolverEngine/
 | `McSolverEngineCli` | 可执行文件 | 命令行工具，输出名 `mcsolverengine` |
 | `McSolverEngineSmokeTest` | 可执行文件 | C++ 核心库回归测试 |
 | `McSolverEngineCApiSmokeTest` | 可执行文件 | C API 回归测试 |
+| `McSolverEngineUnitTest` | 可执行文件 | C++ 单元测试（内部工具、边界条件、未覆盖约束） |
 | `McSolverEngineCSharpWrapper` | 自定义目标 | C# 包装层编译 |
 | `McSolverEngineCSharpTests` | 自定义目标 | C# 测试编译 |
 
@@ -344,6 +346,7 @@ python -m unittest wrapper/python/tests/test_wrapper.py -v
 |---|---|---|
 | C++ SmokeTest | `tests/smoke.cpp` | 核心库回归：48+ 用例覆盖所有几何/约束类型、表达式引擎、参数化求解、Block 等 |
 | C API SmokeTest | `tests/capi_smoke.cpp` | C ABI 回归：结构化 Geometry/BRep 导出、OCCT/no-OCCT 路径、表达式驱动约束引用 |
+| C++ UnitTest | `tests/unit.cpp` | 单元测试：ParameterValueUtils、CompatModel API、Diameter/Equal/Parallel 约束、冲突/冗余检测、ZIP/GeometryExport/XML 边界 |
 | C# Wrapper (net48) | `wrapper/csharp/tests/` | P/Invoke 包装层回归：FCStd 提取 + 参数化 BREP 求解 + 表达式约束引用 |
 | C# Wrapper (net80) | `wrapper/csharp/tests/` | 同上，.NET 8.0 框架 |
 | Python Wrapper | `wrapper/python/tests/` | 19 个用例：求解、参数覆盖、BREP、几何导出、FCStd 提取、SVG 输出、版本 |
@@ -465,8 +468,8 @@ Document.xml
 | Z 坐标/法向量丢弃 | Sketcher 本质 2D，3D 姿态由 Placement 单独处理 |
 | 约束 GUI 元数据 | `IsVisible`, `LabelDistance`, `LabelPosition` 不解析（不影响求解） |
 | BREP `\r\n` 行尾 | 测试辅助函数 location check 在 Windows 可能有误判，不影响几何验证 |
-| 部分约束无直接程序化测试 | Coincident/Diameter/Parallel/Equal/Symmetric/PointOnObject 仅通过 XML 间接覆盖 |
-| ArcOfEllipse/ArcOfHyperbola | 零程序化测试覆盖（仅通过 XML 间接） |
+| 部分约束无直接程序化测试 | Coincident/Symmetric/PointOnObject 仅通过 XML 间接覆盖；Diameter/Equal/Parallel 已由 unit.cpp 直接覆盖 |
+| ArcOfEllipse/ArcOfHyperbola | 仅 addGeometry 程序化覆盖，求解路径仍仅通过 XML 间接验证 |
 
 ## 11. 许可证
 
