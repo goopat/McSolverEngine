@@ -42,6 +42,11 @@ class ConstraintRef:
     expression: Optional[str]
 
 @dataclass
+class VarSetPropertyValue:
+    value: float
+    unit: str = ""
+
+@dataclass
 class GeometryRecord:
     geometryIndex: int
     originalId: int
@@ -78,8 +83,9 @@ class GeometryResult:
     partiallyRedundant: List[int]
     exportKind: str
     exportStatus: str
-    placement: Placement
-    geometries: List[GeometryRecord]
+    varSetProperties: dict[str, VarSetPropertyValue] = field(default_factory=dict)
+    placement: Placement = field(default_factory=Placement)
+    geometries: List[GeometryRecord] = field(default_factory=list)
 
 @dataclass
 class BRepResult:
@@ -94,8 +100,9 @@ class BRepResult:
     partiallyRedundant: List[int]
     exportKind: str
     exportStatus: str
-    placement: Placement
-    brepUtf8: str
+    varSetProperties: dict[str, VarSetPropertyValue] = field(default_factory=dict)
+    placement: Placement = field(default_factory=Placement)
+    brepUtf8: str = ""
 
 # ── Helper ───────────────────────────────────────────────────
 
@@ -118,6 +125,18 @@ def _int_array(ptr, count: int) -> List[int]:
     if not ptr or count <= 0:
         return []
     return [int(ptr[i]) for i in range(count)]
+
+def _varset_properties(ptr, count: int) -> dict[str, VarSetPropertyValue]:
+    values: dict[str, VarSetPropertyValue] = {}
+    if not ptr or count <= 0:
+        return values
+    for i in range(count):
+        item = ptr[i]
+        values[_decode(item.keyUtf8)] = VarSetPropertyValue(
+            value=float(item.value),
+            unit=_decode(item.unitUtf8),
+        )
+    return values
 
 def _convert_point2(p: _n.Point2) -> Point2:
     return Point2(x=p.x, y=p.y)
@@ -191,6 +210,7 @@ def _convert_geometry_result(raw: _n.GeometryResult) -> GeometryResult:
         partiallyRedundant=_int_array(raw.partiallyRedundant, raw.partiallyRedundantCount),
         exportKind=_decode(raw.exportKind),
         exportStatus=_decode(raw.exportStatus),
+        varSetProperties=_varset_properties(raw.varSetProperties, raw.varSetPropertyCount),
         placement=_convert_placement(raw.placement),
         geometries=[
             _convert_geometry(raw.geometries[i]) for i in range(raw.geometryCount)
@@ -210,6 +230,7 @@ def _convert_brep_result(raw: _n.BRepResult) -> BRepResult:
         partiallyRedundant=_int_array(raw.partiallyRedundant, raw.partiallyRedundantCount),
         exportKind=_decode(raw.exportKind),
         exportStatus=_decode(raw.exportStatus),
+        varSetProperties=_varset_properties(raw.varSetProperties, raw.varSetPropertyCount),
         placement=_convert_placement(raw.placement),
         brepUtf8=_decode(raw.brepUtf8) if raw.brepUtf8 else "",
     )

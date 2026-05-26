@@ -105,6 +105,76 @@ public class WrapperRegressionTests
         </Document>
         """;
 
+    private const string EvaluatedVarSetPropertiesDocumentXml = """
+        <?xml version="1.0" encoding="UTF-8"?>
+        <Document>
+            <Objects Count="2">
+                <Object type="App::VarSet" name="VarSet001" id="1"/>
+                <Object type="Sketcher::SketchObject" name="Sketch" id="2"/>
+            </Objects>
+            <ObjectData Count="2">
+                <Object name="VarSet001">
+                    <Properties Count="8" TransientCount="0">
+                        <Property name="Label" type="App::PropertyString">
+                            <String value="Parameters"/>
+                        </Property>
+                        <Property name="Base" type="App::PropertyFloat">
+                            <Float value="4.0"/>
+                        </Property>
+                        <Property name="Length" type="App::PropertyQuantity">
+                            <Quantity value="1 m"/>
+                        </Property>
+                        <Property name="Angle" type="App::PropertyQuantity">
+                            <Quantity value="1.5707963267948966 rad"/>
+                        </Property>
+                        <Property name="Name" type="App::PropertyString">
+                            <String value="widget"/>
+                        </Property>
+                        <Property name="DoubleBase" type="App::PropertyFloat">
+                            <Float value="0.0"/>
+                        </Property>
+                        <Property name="Width" type="App::PropertyFloat">
+                            <Float value="0.0"/>
+                        </Property>
+                        <Property name="Area" type="App::PropertyFloat">
+                            <Float value="0.0"/>
+                        </Property>
+                        <Property name="ExpressionEngine" type="App::PropertyExpressionEngine">
+                            <ExpressionEngine count="3">
+                                <Expression path="DoubleBase" expression="Base * 2"/>
+                                <Expression path="Width" expression="DoubleBase + 1"/>
+                                <Expression path="Area" expression="Length * Length"/>
+                            </ExpressionEngine>
+                        </Property>
+                    </Properties>
+                </Object>
+                <Object name="Sketch">
+                    <Properties Count="3" TransientCount="0">
+                        <Property name="Constraints" type="Sketcher::PropertyConstraintList">
+                            <ConstraintList count="2">
+                                <Constrain Name="" Type="2" Value="0.0" First="0" FirstPos="0" Second="-2000" SecondPos="0" Third="-2000" ThirdPos="0" LabelDistance="10.0" LabelPosition="0.0" IsDriving="1" IsInVirtualSpace="0" IsActive="1" />
+                                <Constrain Name="" Type="6" Value="0.0" First="0" FirstPos="0" Second="-2000" SecondPos="0" Third="-2000" ThirdPos="0" LabelDistance="10.0" LabelPosition="0.0" IsDriving="1" IsInVirtualSpace="0" IsActive="1" />
+                            </ConstraintList>
+                        </Property>
+                        <Property name="ExpressionEngine" type="App::PropertyExpressionEngine">
+                            <ExpressionEngine count="1">
+                                <Expression path="Constraints[1]" expression="&lt;&lt;Parameters&gt;&gt;.Width"/>
+                            </ExpressionEngine>
+                        </Property>
+                        <Property name="Geometry" type="Part::PropertyGeometryList">
+                            <GeometryList count="1">
+                                <Geometry type="Part::GeomLineSegment" id="1" migrated="1">
+                                    <LineSegment StartX="0.0" StartY="0.0" StartZ="0.0" EndX="3.0" EndY="1.0" EndZ="0.0"/>
+                                    <Construction value="0"/>
+                                </Geometry>
+                            </GeometryList>
+                        </Property>
+                    </Properties>
+                </Object>
+            </ObjectData>
+        </Document>
+        """;
+
     private const string PointwiseAngleDocumentXml = """
         <?xml version="1.0" encoding="UTF-8"?>
         <Document>
@@ -408,6 +478,56 @@ public class WrapperRegressionTests
         Assert.AreEqual(0.0, result.Placement.Py, 1e-12);
         Assert.AreEqual(0.0, result.Placement.Pz, 1e-12);
         Assert.AreEqual(1.0, result.Placement.Qw, 1e-12);
+    }
+
+    [TestMethod]
+    public void GeometryResponse_ExposesEvaluatedVarSetProperties()
+    {
+        var result = McSolverEngineClient.SolveGeometryFromDocumentXml(EvaluatedVarSetPropertiesDocumentXml, "Sketch");
+
+        Assert.AreEqual(McSolverEngineNativeStatus.Success, result.NativeStatus);
+        Assert.AreEqual(6, result.VarSetProperties.Count);
+        Assert.IsTrue(result.VarSetProperties.ContainsKey("VarSet001.Base"));
+        Assert.IsTrue(result.VarSetProperties.ContainsKey("VarSet001.Length"));
+        Assert.IsTrue(result.VarSetProperties.ContainsKey("VarSet001.Angle"));
+        Assert.IsTrue(result.VarSetProperties.ContainsKey("VarSet001.Area"));
+        Assert.IsFalse(result.VarSetProperties.ContainsKey("VarSet001.Name"));
+        Assert.AreEqual(4.0, result.VarSetProperties["VarSet001.Base"].Value, 1e-9);
+        Assert.AreEqual(string.Empty, result.VarSetProperties["VarSet001.Base"].Unit);
+        Assert.AreEqual(1000.0, result.VarSetProperties["VarSet001.Length"].Value, 1e-9);
+        Assert.AreEqual("mm", result.VarSetProperties["VarSet001.Length"].Unit);
+        Assert.AreEqual(90.0, result.VarSetProperties["VarSet001.Angle"].Value, 1e-9);
+        Assert.AreEqual("deg", result.VarSetProperties["VarSet001.Angle"].Unit);
+        Assert.AreEqual(1000000.0, result.VarSetProperties["VarSet001.Area"].Value, 1e-6);
+        Assert.AreEqual("mm^2", result.VarSetProperties["VarSet001.Area"].Unit);
+    }
+
+    [TestMethod]
+    public void GeometryResponse_ExposesOverriddenEvaluatedVarSetProperties()
+    {
+        var result = McSolverEngineClient.SolveGeometryFromDocumentXml(
+            EvaluatedVarSetPropertiesDocumentXml,
+            "Sketch",
+            new Dictionary<string, string> { ["Parameters.Base"] = "6" }
+        );
+
+        Assert.AreEqual(McSolverEngineNativeStatus.Success, result.NativeStatus);
+        Assert.AreEqual(6.0, result.VarSetProperties["VarSet001.Base"].Value, 1e-9);
+        Assert.AreEqual(12.0, result.VarSetProperties["VarSet001.DoubleBase"].Value, 1e-9);
+        Assert.AreEqual(13.0, result.VarSetProperties["VarSet001.Width"].Value, 1e-9);
+    }
+
+    [TestMethod]
+    public void BRepResponse_ExposesEvaluatedVarSetProperties()
+    {
+        var result = McSolverEngineClient.SolveBRepFromDocumentXml(EvaluatedVarSetPropertiesDocumentXml, "Sketch");
+
+        Assert.AreEqual(McSolverEngineNativeStatus.Success, result.NativeStatus);
+        Assert.AreEqual(6, result.VarSetProperties.Count);
+        Assert.AreEqual(9.0, result.VarSetProperties["VarSet001.Width"].Value, 1e-9);
+        Assert.AreEqual("", result.VarSetProperties["VarSet001.Width"].Unit);
+        Assert.AreEqual(1000000.0, result.VarSetProperties["VarSet001.Area"].Value, 1e-6);
+        Assert.AreEqual("mm^2", result.VarSetProperties["VarSet001.Area"].Unit);
     }
 
     [TestMethod]

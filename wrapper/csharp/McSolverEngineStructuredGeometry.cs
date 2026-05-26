@@ -100,6 +100,7 @@ public sealed class StructuredGeometrySolveResponse
     public List<int> PartiallyRedundant { get; set; } = [];
     public string ExportKind { get; set; } = string.Empty;
     public string ExportStatus { get; set; } = string.Empty;
+    public Dictionary<string, VarSetPropertyValueDto> VarSetProperties { get; set; } = [];
     public PlacementDto Placement { get; set; } = new();
     public List<StructuredGeometryRecord> Geometries { get; set; } = [];
 }

@@ -113,6 +113,18 @@ typedef struct McSolverEngineBSplineKnot {
 } McSolverEngineBSplineKnot;
 ```
 
+### 2.4.1 VarSet evaluated property record
+
+```c
+typedef struct McSolverEngineVarSetProperty {
+    const char* keyUtf8;   // UTF-8, always ObjectName.PropertyName
+    double value;          // numeric value converted to canonical unit
+    const char* unitUtf8;  // UTF-8, "" | "mm" | "deg" | "mm^2"
+} McSolverEngineVarSetProperty;
+```
+
+`varSetProperties` returns **all numerically evaluable `App::VarSet` properties** after API overrides and VarSet expression evaluation. Canonical units are length=`mm`, angle=`deg`, area=`mm^2`, and dimensionless=`""`. Keys always use the real object name, never the `Label` alias.
+
 ### 2.5 Geometry Record
 
 ```c
@@ -186,6 +198,8 @@ typedef struct McSolverEngineGeometryResult {
     const char* exportStatus;        // "Success" | "Failed"
 
     // --- Results ---
+    int varSetPropertyCount;
+    const McSolverEngineVarSetProperty* varSetProperties;
     McSolverEnginePlacement placement;
     int geometryCount;
     const McSolverEngineGeometryRecord* geometries;
@@ -218,6 +232,8 @@ typedef struct McSolverEngineBRepResult {
     const char* exportStatus;        // "Success" | "Failed" | "OpenCascadeUnavailable"
 
     // --- Results ---
+    int varSetPropertyCount;
+    const McSolverEngineVarSetProperty* varSetProperties;
     McSolverEnginePlacement placement;
     const char* brepUtf8;            // full BREP text (UTF-8), or NULL
 } McSolverEngineBRepResult;

@@ -10,6 +10,7 @@ from ._engine import (
     BSplinePole,
     BSplineKnot,
     ConstraintRef,
+    VarSetPropertyValue,
 )
 
 from ._svg import write_visible_geometry_svg
@@ -48,6 +49,7 @@ __all__ = [
     "BSplinePole",
     "BSplineKnot",
     "ConstraintRef",
+    "VarSetPropertyValue",
     "write_visible_geometry_svg",
     "set_native_lib_path",
     "RESULT_SUCCESS",

@@ -257,6 +257,20 @@ void resetOutput(McSolverEngineBRepResult** out)
     return MCSOLVERENGINE_GEOMETRY_POINT;
 }
 
+void freeVarSetProperties(int count, const McSolverEngineVarSetProperty* values) noexcept
+{
+    auto* properties = const_cast<McSolverEngineVarSetProperty*>(values);
+    if (!properties) {
+        return;
+    }
+
+    for (int i = 0; i < count; ++i) {
+        delete[] properties[i].keyUtf8;
+        delete[] properties[i].unitUtf8;
+    }
+    delete[] properties;
+}
+
 void freeGeometryResult(McSolverEngineGeometryResult* value) noexcept
 {
     if (!value) {
@@ -278,6 +292,7 @@ void freeGeometryResult(McSolverEngineGeometryResult* value) noexcept
     delete[] value->partiallyRedundant;
     delete[] value->exportKind;
     delete[] value->exportStatus;
+    freeVarSetProperties(value->varSetPropertyCount, value->varSetProperties);
 
     auto* geometries = const_cast<McSolverEngineGeometryRecord*>(value->geometries);
     if (geometries) {
@@ -317,6 +332,7 @@ void freeBRepResult(McSolverEngineBRepResult* value) noexcept
     delete[] value->partiallyRedundant;
     delete[] value->exportKind;
     delete[] value->exportStatus;
+    freeVarSetProperties(value->varSetPropertyCount, value->varSetProperties);
     delete[] value->brepUtf8;
     delete value;
 }
@@ -385,6 +401,44 @@ void freeBRepResult(McSolverEngineBRepResult* value) noexcept
     return true;
 }
 
+[[nodiscard]] bool assignVarSetProperties(
+    const std::vector<McSolverEngine::DocumentXml::EvaluatedVarSetProperty>& values,
+    int* count,
+    const McSolverEngineVarSetProperty** out
+)
+{
+    if (!count || !out) {
+        return false;
+    }
+
+    *count = 0;
+    *out = nullptr;
+    if (values.size() > static_cast<std::size_t>(std::numeric_limits<int>::max())) {
+        return false;
+    }
+    if (values.empty()) {
+        return true;
+    }
+
+    auto* array = new (std::nothrow) McSolverEngineVarSetProperty[values.size()] {};
+    if (!array) {
+        return false;
+    }
+
+    for (std::size_t i = 0; i < values.size(); ++i) {
+        if (!assignOwnedString(values[i].key, &array[i].keyUtf8)
+            || !assignOwnedString(values[i].unit, &array[i].unitUtf8)) {
+            freeVarSetProperties(static_cast<int>(values.size()), array);
+            return false;
+        }
+        array[i].value = values[i].value;
+    }
+
+    *count = static_cast<int>(values.size());
+    *out = array;
+    return true;
+}
+
 template<typename ResultT, typename ImportResultT, typename SolveResultT>
 [[nodiscard]] bool fillSolveMetadata(
     ResultT& target,
@@ -430,6 +484,13 @@ template<typename ResultT, typename ImportResultT, typename SolveResultT>
         return false;
     }
     if (!assignOwnedString(exportStatus, &target.exportStatus)) {
+        return false;
+    }
+    if (!assignVarSetProperties(
+            imported.evaluatedVarSetProperties,
+            &target.varSetPropertyCount,
+            &target.varSetProperties
+        )) {
         return false;
     }
     return true;

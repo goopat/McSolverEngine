@@ -1484,7 +1484,8 @@ ImportResult importSketchFromDocumentXml(
     std::string error;
 
     if (!VarSetExpressions::applyApiParametersToVarSets(varSetCatalog, parsedParameters, result.messages)
-        || !VarSetExpressions::evaluateVarSetExpressions(varSetCatalog, result)) {
+        || !VarSetExpressions::evaluateVarSetExpressions(varSetCatalog, result)
+        || !VarSetExpressions::collectEvaluatedVarSetProperties(varSetCatalog, result)) {
         result.status = ImportStatus::Failed;
         return result;
     }

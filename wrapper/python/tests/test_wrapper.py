@@ -45,6 +45,75 @@ set_native_lib_path(_find_build_dll())
 
 SAMPLE_XML = os.path.join(REPO_ROOT, "fcstdDoc", "1.xml")
 
+EVALUATED_VARSET_PROPERTIES_XML = """<?xml version="1.0" encoding="UTF-8"?>
+<Document>
+    <Objects Count="2">
+        <Object type="App::VarSet" name="VarSet001" id="1"/>
+        <Object type="Sketcher::SketchObject" name="Sketch" id="2"/>
+    </Objects>
+    <ObjectData Count="2">
+        <Object name="VarSet001">
+            <Properties Count="8" TransientCount="0">
+                <Property name="Label" type="App::PropertyString">
+                    <String value="Parameters"/>
+                </Property>
+                <Property name="Base" type="App::PropertyFloat">
+                    <Float value="4.0"/>
+                </Property>
+                <Property name="Length" type="App::PropertyQuantity">
+                    <Quantity value="1 m"/>
+                </Property>
+                <Property name="Angle" type="App::PropertyQuantity">
+                    <Quantity value="1.5707963267948966 rad"/>
+                </Property>
+                <Property name="Name" type="App::PropertyString">
+                    <String value="widget"/>
+                </Property>
+                <Property name="DoubleBase" type="App::PropertyFloat">
+                    <Float value="0.0"/>
+                </Property>
+                <Property name="Width" type="App::PropertyFloat">
+                    <Float value="0.0"/>
+                </Property>
+                <Property name="Area" type="App::PropertyFloat">
+                    <Float value="0.0"/>
+                </Property>
+                <Property name="ExpressionEngine" type="App::PropertyExpressionEngine">
+                    <ExpressionEngine count="3">
+                        <Expression path="DoubleBase" expression="Base * 2"/>
+                        <Expression path="Width" expression="DoubleBase + 1"/>
+                        <Expression path="Area" expression="Length * Length"/>
+                    </ExpressionEngine>
+                </Property>
+            </Properties>
+        </Object>
+        <Object name="Sketch">
+            <Properties Count="3" TransientCount="0">
+                <Property name="Constraints" type="Sketcher::PropertyConstraintList">
+                    <ConstraintList count="2">
+                        <Constrain Name="" Type="2" Value="0.0" First="0" FirstPos="0" Second="-2000" SecondPos="0" Third="-2000" ThirdPos="0" LabelDistance="10.0" LabelPosition="0.0" IsDriving="1" IsInVirtualSpace="0" IsActive="1" />
+                        <Constrain Name="" Type="6" Value="0.0" First="0" FirstPos="0" Second="-2000" SecondPos="0" Third="-2000" ThirdPos="0" LabelDistance="10.0" LabelPosition="0.0" IsDriving="1" IsInVirtualSpace="0" IsActive="1" />
+                    </ConstraintList>
+                </Property>
+                <Property name="ExpressionEngine" type="App::PropertyExpressionEngine">
+                    <ExpressionEngine count="1">
+                        <Expression path="Constraints[1]" expression="&lt;&lt;Parameters&gt;&gt;.Width"/>
+                    </ExpressionEngine>
+                </Property>
+                <Property name="Geometry" type="Part::PropertyGeometryList">
+                    <GeometryList count="1">
+                        <Geometry type="Part::GeomLineSegment" id="1" migrated="1">
+                            <LineSegment StartX="0.0" StartY="0.0" StartZ="0.0" EndX="3.0" EndY="1.0" EndZ="0.0"/>
+                            <Construction value="0"/>
+                        </Geometry>
+                    </GeometryList>
+                </Property>
+            </Properties>
+        </Object>
+    </ObjectData>
+</Document>
+"""
+
 
 def _read_sample() -> str:
     with open(SAMPLE_XML, "r", encoding="utf-8") as f:
@@ -143,6 +212,31 @@ class TestParameters(unittest.TestCase):
     def test_solve_to_geometry_with_no_params_succeeds(self):
         result = Engine.solve_to_geometry(self.xml, "Sketch")
         self.assertGreater(len(result.geometries), 0)
+
+
+class TestEvaluatedVarSetProperties(unittest.TestCase):
+    def test_geometry_result_exposes_canonical_varset_properties(self):
+        result = Engine.solve_to_geometry(EVALUATED_VARSET_PROPERTIES_XML, "Sketch")
+        self.assertEqual(6, len(result.varSetProperties))
+        self.assertAlmostEqual(4.0, result.varSetProperties["VarSet001.Base"].value)
+        self.assertEqual("", result.varSetProperties["VarSet001.Base"].unit)
+        self.assertAlmostEqual(1000.0, result.varSetProperties["VarSet001.Length"].value)
+        self.assertEqual("mm", result.varSetProperties["VarSet001.Length"].unit)
+        self.assertAlmostEqual(90.0, result.varSetProperties["VarSet001.Angle"].value)
+        self.assertEqual("deg", result.varSetProperties["VarSet001.Angle"].unit)
+        self.assertAlmostEqual(1000000.0, result.varSetProperties["VarSet001.Area"].value)
+        self.assertEqual("mm^2", result.varSetProperties["VarSet001.Area"].unit)
+        self.assertNotIn("VarSet001.Name", result.varSetProperties)
+
+    def test_geometry_result_exposes_overridden_varset_properties(self):
+        result = Engine.solve_to_geometry(
+            EVALUATED_VARSET_PROPERTIES_XML,
+            "Sketch",
+            parameters={"Parameters.Base": "6"},
+        )
+        self.assertAlmostEqual(6.0, result.varSetProperties["VarSet001.Base"].value)
+        self.assertAlmostEqual(12.0, result.varSetProperties["VarSet001.DoubleBase"].value)
+        self.assertAlmostEqual(13.0, result.varSetProperties["VarSet001.Width"].value)
 
 
 class TestV1025ExpressionDrivenConstraint(unittest.TestCase):

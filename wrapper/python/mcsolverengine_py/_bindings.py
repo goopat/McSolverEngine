@@ -193,6 +193,13 @@ class ConstraintRef(ctypes.Structure):
         ("expression", ctypes.c_char_p),
     ]
 
+class VarSetProperty(ctypes.Structure):
+    _fields_ = [
+        ("keyUtf8", ctypes.c_char_p),
+        ("value", ctypes.c_double),
+        ("unitUtf8", ctypes.c_char_p),
+    ]
+
 class GeometryRecord(ctypes.Structure):
     _fields_ = [
         ("geometryIndex", ctypes.c_int),
@@ -238,6 +245,8 @@ class GeometryResult(ctypes.Structure):
         ("partiallyRedundant", ctypes.POINTER(ctypes.c_int)),
         ("exportKind", ctypes.c_char_p),
         ("exportStatus", ctypes.c_char_p),
+        ("varSetPropertyCount", ctypes.c_int),
+        ("varSetProperties", ctypes.POINTER(VarSetProperty)),
         ("placement", Placement),
         ("geometryCount", ctypes.c_int),
         ("geometries", ctypes.POINTER(GeometryRecord)),
@@ -260,6 +269,8 @@ class BRepResult(ctypes.Structure):
         ("partiallyRedundant", ctypes.POINTER(ctypes.c_int)),
         ("exportKind", ctypes.c_char_p),
         ("exportStatus", ctypes.c_char_p),
+        ("varSetPropertyCount", ctypes.c_int),
+        ("varSetProperties", ctypes.POINTER(VarSetProperty)),
         ("placement", Placement),
         ("brepUtf8", ctypes.c_char_p),
     ]

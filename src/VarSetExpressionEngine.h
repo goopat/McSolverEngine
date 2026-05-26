@@ -79,6 +79,7 @@ void rebuildVarSetShortNameLookup(VarSetCatalog& catalog);
 );
 
 [[nodiscard]] bool evaluateVarSetExpressions(VarSetCatalog& catalog, ImportResult& result);
+[[nodiscard]] bool collectEvaluatedVarSetProperties(VarSetCatalog& catalog, ImportResult& result);
 
 [[nodiscard]] std::optional<std::string> getVarSetValueForBinding(
     const VarSetCatalog& catalog,

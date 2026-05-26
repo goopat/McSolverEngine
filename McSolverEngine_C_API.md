@@ -113,6 +113,23 @@ typedef struct McSolverEngineBSplineKnot {
 } McSolverEngineBSplineKnot;
 ```
 
+### 2.4.1 VarSet 参数结果
+
+```c
+typedef struct McSolverEngineVarSetProperty {
+    const char* keyUtf8;   // UTF-8，固定使用 ObjectName.PropertyName
+    double value;          // 已按规范单位换算后的数值
+    const char* unitUtf8;  // UTF-8，"" | "mm" | "deg" | "mm^2"
+} McSolverEngineVarSetProperty;
+```
+
+`varSetProperties` 仅返回 **所有可数值求值的 `App::VarSet` 属性**：
+
+- 先应用 API `parameters` 覆盖
+- 再执行 VarSet 表达式求值
+- 最终按规范单位输出：长度=`mm`，角度=`deg`，面积=`mm^2`，无量纲=`""`
+- 键始终使用真实对象名，不使用 `Label` 别名
+
 ### 2.5 几何记录
 
 ```c
@@ -186,6 +203,8 @@ typedef struct McSolverEngineGeometryResult {
     const char* exportStatus;        // "Success" | "Failed"
 
     // --- 结果 ---
+    int varSetPropertyCount;
+    const McSolverEngineVarSetProperty* varSetProperties;
     McSolverEnginePlacement placement;
     int geometryCount;
     const McSolverEngineGeometryRecord* geometries;
@@ -218,6 +237,8 @@ typedef struct McSolverEngineBRepResult {
     const char* exportStatus;        // "Success" | "Failed" | "OpenCascadeUnavailable"
 
     // --- 结果 ---
+    int varSetPropertyCount;
+    const McSolverEngineVarSetProperty* varSetProperties;
     McSolverEnginePlacement placement;
     const char* brepUtf8;            // 完整 BREP 文本（UTF-8），可为 NULL
 } McSolverEngineBRepResult;

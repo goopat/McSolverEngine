@@ -109,6 +109,13 @@ typedef struct McSolverEngineConstraintRef
     const char* expression;        // UTF-8, or NULL
 } McSolverEngineConstraintRef;
 
+typedef struct McSolverEngineVarSetProperty
+{
+    const char* keyUtf8;          // UTF-8 canonical key: ObjectName.PropertyName
+    double value;
+    const char* unitUtf8;         // UTF-8 canonical unit, or "" for dimensionless
+} McSolverEngineVarSetProperty;
+
 typedef struct McSolverEngineGeometryRecord
 {
     int geometryIndex;
@@ -154,6 +161,8 @@ typedef struct McSolverEngineGeometryResult
     const int* partiallyRedundant;
     const char* exportKind;        // UTF-8
     const char* exportStatus;      // UTF-8
+    int varSetPropertyCount;
+    const McSolverEngineVarSetProperty* varSetProperties;
     McSolverEnginePlacement placement;
     int geometryCount;
     const McSolverEngineGeometryRecord* geometries;
@@ -176,6 +185,8 @@ typedef struct McSolverEngineBRepResult
     const int* partiallyRedundant;
     const char* exportKind;        // UTF-8
     const char* exportStatus;      // UTF-8
+    int varSetPropertyCount;
+    const McSolverEngineVarSetProperty* varSetProperties;
     McSolverEnginePlacement placement;
     const char* brepUtf8;          // UTF-8
 } McSolverEngineBRepResult;

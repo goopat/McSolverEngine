@@ -128,19 +128,28 @@ namespace
     return std::nullopt;
 }
 
+[[nodiscard]] std::string_view canonicalUnit(QuantityDimension dimension) noexcept
+{
+    switch (dimension) {
+        case QuantityDimension::Dimensionless:
+            return {};
+        case QuantityDimension::Length:
+            return "mm";
+        case QuantityDimension::Angle:
+            return "deg";
+        case QuantityDimension::Area:
+            return "mm^2";
+    }
+    return {};
+}
+
 [[nodiscard]] std::string formatQuantityForBinding(QuantityValue value)
 {
-    switch (value.dimension) {
-        case QuantityDimension::Dimensionless:
-            return formatDouble(value.value);
-        case QuantityDimension::Length:
-            return formatDouble(value.value) + " mm";
-        case QuantityDimension::Angle:
-            return formatDouble(value.value) + " deg";
-        case QuantityDimension::Area:
-            return formatDouble(value.value) + " mm^2";
+    const auto unit = canonicalUnit(value.dimension);
+    if (unit.empty()) {
+        return formatDouble(value.value);
     }
-    return formatDouble(value.value);
+    return formatDouble(value.value) + " " + makeString(unit);
 }
 
 [[nodiscard]] std::optional<QuantityValue> parseRawQuantityLiteral(
@@ -1125,6 +1134,54 @@ bool evaluateVarSetExpressions(VarSetCatalog& catalog, ImportResult& result)
             return false;
         }
     }
+    return true;
+}
+
+bool collectEvaluatedVarSetProperties(VarSetCatalog& catalog, ImportResult& result)
+{
+    result.evaluatedVarSetProperties.clear();
+    std::map<std::string, VarSetVisitState> states;
+
+    for (auto& [key, property] : catalog.properties) {
+        std::optional<QuantityValue> value;
+        if (property.expression) {
+            std::string error;
+            value = evaluateVarSetProperty(catalog, key, states, error);
+            if (!value) {
+                if (!error.empty()
+                    && error.find(VarSetExpressionUnsupportedSubsetCode) != std::string::npos) {
+                    result.errorCode = ImportErrorCode::VarSetExpressionUnsupportedSubset;
+                }
+                result.messages.push_back(
+                    error.empty() ? "Failed to evaluate VarSet expression '" + key + "'." : error
+                );
+                return false;
+            }
+        }
+        else if (property.evaluatedValue) {
+            value = property.evaluatedValue;
+        }
+        else if (property.hasRawValue) {
+            std::string ignoredError;
+            value = parseRawQuantityLiteral(property.rawValue, ignoredError, key);
+            if (value) {
+                property.evaluatedValue = *value;
+            }
+        }
+
+        if (!value) {
+            continue;
+        }
+
+        result.evaluatedVarSetProperties.push_back(
+            McSolverEngine::DocumentXml::EvaluatedVarSetProperty {
+                .key = key,
+                .value = value->value,
+                .unit = makeString(canonicalUnit(value->dimension)),
+            }
+        );
+    }
+
     return true;
 }
 

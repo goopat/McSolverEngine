@@ -1205,6 +1205,187 @@ int main()
         return 1;
     }
 
+    constexpr std::string_view evaluatedVarSetPropertiesDocumentXml = R"(<?xml version="1.0" encoding="UTF-8"?>
+<Document>
+    <Objects Count="2">
+        <Object type="App::VarSet" name="VarSet001" id="1"/>
+        <Object type="Sketcher::SketchObject" name="Sketch" id="2"/>
+    </Objects>
+    <ObjectData Count="2">
+        <Object name="VarSet001">
+            <Properties Count="8" TransientCount="0">
+                <Property name="Label" type="App::PropertyString">
+                    <String value="Parameters"/>
+                </Property>
+                <Property name="Base" type="App::PropertyFloat">
+                    <Float value="4.0"/>
+                </Property>
+                <Property name="Length" type="App::PropertyQuantity">
+                    <Quantity value="1 m"/>
+                </Property>
+                <Property name="Angle" type="App::PropertyQuantity">
+                    <Quantity value="1.5707963267948966 rad"/>
+                </Property>
+                <Property name="Name" type="App::PropertyString">
+                    <String value="widget"/>
+                </Property>
+                <Property name="DoubleBase" type="App::PropertyFloat">
+                    <Float value="0.0"/>
+                </Property>
+                <Property name="Width" type="App::PropertyFloat">
+                    <Float value="0.0"/>
+                </Property>
+                <Property name="Area" type="App::PropertyFloat">
+                    <Float value="0.0"/>
+                </Property>
+                <Property name="ExpressionEngine" type="App::PropertyExpressionEngine">
+                    <ExpressionEngine count="3">
+                        <Expression path="DoubleBase" expression="Base * 2"/>
+                        <Expression path="Width" expression="DoubleBase + 1"/>
+                        <Expression path="Area" expression="Length * Length"/>
+                    </ExpressionEngine>
+                </Property>
+            </Properties>
+        </Object>
+        <Object name="Sketch">
+            <Properties Count="3" TransientCount="0">
+                <Property name="Constraints" type="Sketcher::PropertyConstraintList">
+                    <ConstraintList count="2">
+                        <Constrain Name="" Type="2" Value="0.0" First="0" FirstPos="0" Second="-2000" SecondPos="0" Third="-2000" ThirdPos="0" LabelDistance="10.0" LabelPosition="0.0" IsDriving="1" IsInVirtualSpace="0" IsActive="1" />
+                        <Constrain Name="" Type="6" Value="0.0" First="0" FirstPos="0" Second="-2000" SecondPos="0" Third="-2000" ThirdPos="0" LabelDistance="10.0" LabelPosition="0.0" IsDriving="1" IsInVirtualSpace="0" IsActive="1" />
+                    </ConstraintList>
+                </Property>
+                <Property name="ExpressionEngine" type="App::PropertyExpressionEngine">
+                    <ExpressionEngine count="1">
+                        <Expression path="Constraints[1]" expression="&lt;&lt;Parameters&gt;&gt;.Width"/>
+                    </ExpressionEngine>
+                </Property>
+                <Property name="Geometry" type="Part::PropertyGeometryList">
+                    <GeometryList count="1">
+                        <Geometry type="Part::GeomLineSegment" id="1" migrated="1">
+                            <LineSegment StartX="0.0" StartY="0.0" StartZ="0.0" EndX="3.0" EndY="1.0" EndZ="0.0"/>
+                            <Construction value="0"/>
+                        </Geometry>
+                    </GeometryList>
+                </Property>
+            </Properties>
+        </Object>
+    </ObjectData>
+</Document>)";
+
+    const auto findEvaluatedVarSetProperty = [](
+                                               const std::vector<McSolverEngine::DocumentXml::EvaluatedVarSetProperty>& properties,
+                                               std::string_view key
+                                           ) -> const McSolverEngine::DocumentXml::EvaluatedVarSetProperty* {
+        for (const auto& property : properties) {
+            if (property.key == key) {
+                return &property;
+            }
+        }
+        return nullptr;
+    };
+
+    const auto expectEvaluatedVarSetProperty = [&](
+                                                   const std::vector<McSolverEngine::DocumentXml::EvaluatedVarSetProperty>& properties,
+                                                   std::string_view key,
+                                                   double expectedValue,
+                                                   std::string_view expectedUnit
+                                               ) {
+        const auto* property = findEvaluatedVarSetProperty(properties, key);
+        return property != nullptr && std::abs(property->value - expectedValue) <= 1e-9
+            && property->unit == expectedUnit;
+    };
+
+    auto importedEvaluatedVarSetProperties = McSolverEngine::DocumentXml::importSketchFromDocumentXml(
+        evaluatedVarSetPropertiesDocumentXml,
+        "Sketch"
+    );
+    if (!importedEvaluatedVarSetProperties.imported()
+        || importedEvaluatedVarSetProperties.status != McSolverEngine::DocumentXml::ImportStatus::Success) {
+        std::cerr << "Expected evaluated VarSet property import to succeed.\n";
+        return 1;
+    }
+    if (importedEvaluatedVarSetProperties.evaluatedVarSetProperties.size() != 6) {
+        std::cerr << "Expected only numerically evaluable VarSet properties to be returned.\n";
+        return 1;
+    }
+    if (!expectEvaluatedVarSetProperty(
+            importedEvaluatedVarSetProperties.evaluatedVarSetProperties,
+            "VarSet001.Base",
+            4.0,
+            ""
+        )
+        || !expectEvaluatedVarSetProperty(
+            importedEvaluatedVarSetProperties.evaluatedVarSetProperties,
+            "VarSet001.Length",
+            1000.0,
+            "mm"
+        )
+        || !expectEvaluatedVarSetProperty(
+            importedEvaluatedVarSetProperties.evaluatedVarSetProperties,
+            "VarSet001.Angle",
+            90.0,
+            "deg"
+        )
+        || !expectEvaluatedVarSetProperty(
+            importedEvaluatedVarSetProperties.evaluatedVarSetProperties,
+            "VarSet001.DoubleBase",
+            8.0,
+            ""
+        )
+        || !expectEvaluatedVarSetProperty(
+            importedEvaluatedVarSetProperties.evaluatedVarSetProperties,
+            "VarSet001.Width",
+            9.0,
+            ""
+        )
+        || !expectEvaluatedVarSetProperty(
+            importedEvaluatedVarSetProperties.evaluatedVarSetProperties,
+            "VarSet001.Area",
+            1000000.0,
+            "mm^2"
+        )) {
+        std::cerr << "Evaluated VarSet properties did not expose canonical key/value/unit results.\n";
+        return 1;
+    }
+    if (findEvaluatedVarSetProperty(importedEvaluatedVarSetProperties.evaluatedVarSetProperties, "VarSet001.Name")
+        != nullptr) {
+        std::cerr << "Expected non-numeric VarSet properties to be skipped.\n";
+        return 1;
+    }
+
+    auto importedEvaluatedVarSetPropertiesOverride = McSolverEngine::DocumentXml::importSketchFromDocumentXml(
+        evaluatedVarSetPropertiesDocumentXml,
+        McSolverEngine::ParameterMap {{"Parameters.Base", "6.0"}},
+        "Sketch"
+    );
+    if (!importedEvaluatedVarSetPropertiesOverride.imported()
+        || importedEvaluatedVarSetPropertiesOverride.status != McSolverEngine::DocumentXml::ImportStatus::Success) {
+        std::cerr << "Expected evaluated VarSet property override import to succeed.\n";
+        return 1;
+    }
+    if (!expectEvaluatedVarSetProperty(
+            importedEvaluatedVarSetPropertiesOverride.evaluatedVarSetProperties,
+            "VarSet001.Base",
+            6.0,
+            ""
+        )
+        || !expectEvaluatedVarSetProperty(
+            importedEvaluatedVarSetPropertiesOverride.evaluatedVarSetProperties,
+            "VarSet001.DoubleBase",
+            12.0,
+            ""
+        )
+        || !expectEvaluatedVarSetProperty(
+            importedEvaluatedVarSetPropertiesOverride.evaluatedVarSetProperties,
+            "VarSet001.Width",
+            13.0,
+            ""
+        )) {
+        std::cerr << "Expected canonical VarSet result export to reflect parameter overrides.\n";
+        return 1;
+    }
+
     constexpr std::string_view varSetExpressionDocumentXml = R"(<?xml version="1.0" encoding="UTF-8"?>
 <Document>
     <Objects Count="2">

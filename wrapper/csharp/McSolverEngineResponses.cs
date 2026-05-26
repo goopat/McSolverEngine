@@ -11,6 +11,12 @@ public sealed class PlacementDto
     public double Qw { get; set; } = 1.0;
 }
 
+public sealed class VarSetPropertyValueDto
+{
+    public double Value { get; set; }
+    public string Unit { get; set; } = string.Empty;
+}
+
 public sealed class BRepSolveResponse
 {
     public McSolverEngineNativeStatus NativeStatus { get; set; }
@@ -25,6 +31,7 @@ public sealed class BRepSolveResponse
     public List<int> PartiallyRedundant { get; set; } = [];
     public string ExportKind { get; set; } = string.Empty;
     public string ExportStatus { get; set; } = string.Empty;
+    public Dictionary<string, VarSetPropertyValueDto> VarSetProperties { get; set; } = [];
     public PlacementDto Placement { get; set; } = new();
     public string? Brep { get; set; }
 }

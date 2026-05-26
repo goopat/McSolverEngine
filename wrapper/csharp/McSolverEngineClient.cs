@@ -175,6 +175,10 @@ public static class McSolverEngineClient
             );
             response.ExportKind = ReadNativeUtf8String(nativeResult.ExportKind);
             response.ExportStatus = ReadNativeUtf8String(nativeResult.ExportStatus);
+            response.VarSetProperties = ReadVarSetProperties(
+                nativeResult.VarSetProperties,
+                nativeResult.VarSetPropertyCount
+            );
             response.Placement = ToPlacementDto(nativeResult.Placement);
             response.Geometries = ReadGeometryRecords(nativeResult.Geometries, nativeResult.GeometryCount);
             return response;
@@ -216,6 +220,10 @@ public static class McSolverEngineClient
             );
             response.ExportKind = ReadNativeUtf8String(nativeResult.ExportKind);
             response.ExportStatus = ReadNativeUtf8String(nativeResult.ExportStatus);
+            response.VarSetProperties = ReadVarSetProperties(
+                nativeResult.VarSetProperties,
+                nativeResult.VarSetPropertyCount
+            );
             response.Placement = ToPlacementDto(nativeResult.Placement);
             response.Brep = ReadNativeUtf8String(nativeResult.BrepUtf8);
             return response;
@@ -442,6 +450,26 @@ public static class McSolverEngineClient
         }
 
         return refs;
+    }
+
+    private static Dictionary<string, VarSetPropertyValueDto> ReadVarSetProperties(IntPtr pointer, int count)
+    {
+        var values = new Dictionary<string, VarSetPropertyValueDto>(StringComparer.Ordinal);
+        if (pointer == IntPtr.Zero || count <= 0) {
+            return values;
+        }
+
+        var stride = Marshal.SizeOf(typeof(NativeVarSetProperty));
+        for (var i = 0; i < count; ++i) {
+            var current = IntPtr.Add(pointer, i * stride);
+            var nativeProperty = (NativeVarSetProperty)Marshal.PtrToStructure(current, typeof(NativeVarSetProperty))!;
+            values[ReadNativeUtf8String(nativeProperty.KeyUtf8)] = new VarSetPropertyValueDto {
+                Value = nativeProperty.Value,
+                Unit = ReadNativeUtf8String(nativeProperty.UnitUtf8)
+            };
+        }
+
+        return values;
     }
 
     private static string? GetConfiguredLibraryCandidate()
@@ -691,6 +719,14 @@ public static class McSolverEngineClient
     }
 
     [StructLayout(LayoutKind.Sequential)]
+    private struct NativeVarSetProperty
+    {
+        public IntPtr KeyUtf8;
+        public double Value;
+        public IntPtr UnitUtf8;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
     private struct NativeGeometryRecord
     {
         public int GeometryIndex;
@@ -737,6 +773,8 @@ public static class McSolverEngineClient
         public IntPtr PartiallyRedundant;
         public IntPtr ExportKind;
         public IntPtr ExportStatus;
+        public int VarSetPropertyCount;
+        public IntPtr VarSetProperties;
         public NativePlacement Placement;
         public int GeometryCount;
         public IntPtr Geometries;
@@ -760,6 +798,8 @@ public static class McSolverEngineClient
         public IntPtr PartiallyRedundant;
         public IntPtr ExportKind;
         public IntPtr ExportStatus;
+        public int VarSetPropertyCount;
+        public IntPtr VarSetProperties;
         public NativePlacement Placement;
         public IntPtr BrepUtf8;
     }

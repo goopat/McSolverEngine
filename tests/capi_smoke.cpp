@@ -33,6 +33,36 @@ bool expect(bool condition, const char* message)
     return true;
 }
 
+const McSolverEngineVarSetProperty* findVarSetProperty(
+    const McSolverEngineVarSetProperty* properties,
+    int count,
+    std::string_view key
+)
+{
+    if (!properties || count <= 0) {
+        return nullptr;
+    }
+    for (int i = 0; i < count; ++i) {
+        if (properties[i].keyUtf8 != nullptr && key == properties[i].keyUtf8) {
+            return &properties[i];
+        }
+    }
+    return nullptr;
+}
+
+bool expectVarSetProperty(
+    const McSolverEngineVarSetProperty* properties,
+    int count,
+    std::string_view key,
+    double expectedValue,
+    std::string_view expectedUnit
+)
+{
+    const auto* property = findVarSetProperty(properties, count, key);
+    return property != nullptr && std::abs(property->value - expectedValue) <= 1e-9
+        && property->unitUtf8 != nullptr && expectedUnit == property->unitUtf8;
+}
+
 double lineLength(const McSolverEngineGeometryRecord& record)
 {
     const double dx = record.end.x - record.start.x;
@@ -519,6 +549,168 @@ int main()
         }
         std::cout << "    got expected GetLastError: " << McSolverEngine_GetLastError() << '\n';
         McSolverEngine_FreeGeometryResult(invalidAngleGeometry);
+    }
+
+    constexpr std::string_view evaluatedVarSetPropertiesDocumentXml = R"(<?xml version="1.0" encoding="UTF-8"?>
+<Document>
+    <Objects Count="2">
+        <Object type="App::VarSet" name="VarSet001" id="1"/>
+        <Object type="Sketcher::SketchObject" name="Sketch" id="2"/>
+    </Objects>
+    <ObjectData Count="2">
+        <Object name="VarSet001">
+            <Properties Count="8" TransientCount="0">
+                <Property name="Label" type="App::PropertyString">
+                    <String value="Parameters"/>
+                </Property>
+                <Property name="Base" type="App::PropertyFloat">
+                    <Float value="4.0"/>
+                </Property>
+                <Property name="Length" type="App::PropertyQuantity">
+                    <Quantity value="1 m"/>
+                </Property>
+                <Property name="Angle" type="App::PropertyQuantity">
+                    <Quantity value="1.5707963267948966 rad"/>
+                </Property>
+                <Property name="Name" type="App::PropertyString">
+                    <String value="widget"/>
+                </Property>
+                <Property name="DoubleBase" type="App::PropertyFloat">
+                    <Float value="0.0"/>
+                </Property>
+                <Property name="Width" type="App::PropertyFloat">
+                    <Float value="0.0"/>
+                </Property>
+                <Property name="Area" type="App::PropertyFloat">
+                    <Float value="0.0"/>
+                </Property>
+                <Property name="ExpressionEngine" type="App::PropertyExpressionEngine">
+                    <ExpressionEngine count="3">
+                        <Expression path="DoubleBase" expression="Base * 2"/>
+                        <Expression path="Width" expression="DoubleBase + 1"/>
+                        <Expression path="Area" expression="Length * Length"/>
+                    </ExpressionEngine>
+                </Property>
+            </Properties>
+        </Object>
+        <Object name="Sketch">
+            <Properties Count="3" TransientCount="0">
+                <Property name="Constraints" type="Sketcher::PropertyConstraintList">
+                    <ConstraintList count="2">
+                        <Constrain Name="" Type="2" Value="0.0" First="0" FirstPos="0" Second="-2000" SecondPos="0" Third="-2000" ThirdPos="0" LabelDistance="10.0" LabelPosition="0.0" IsDriving="1" IsInVirtualSpace="0" IsActive="1" />
+                        <Constrain Name="" Type="6" Value="0.0" First="0" FirstPos="0" Second="-2000" SecondPos="0" Third="-2000" ThirdPos="0" LabelDistance="10.0" LabelPosition="0.0" IsDriving="1" IsInVirtualSpace="0" IsActive="1" />
+                    </ConstraintList>
+                </Property>
+                <Property name="ExpressionEngine" type="App::PropertyExpressionEngine">
+                    <ExpressionEngine count="1">
+                        <Expression path="Constraints[1]" expression="&lt;&lt;Parameters&gt;&gt;.Width"/>
+                    </ExpressionEngine>
+                </Property>
+                <Property name="Geometry" type="Part::PropertyGeometryList">
+                    <GeometryList count="1">
+                        <Geometry type="Part::GeomLineSegment" id="1" migrated="1">
+                            <LineSegment StartX="0.0" StartY="0.0" StartZ="0.0" EndX="3.0" EndY="1.0" EndZ="0.0"/>
+                            <Construction value="0"/>
+                        </Geometry>
+                    </GeometryList>
+                </Property>
+            </Properties>
+        </Object>
+    </ObjectData>
+</Document>)";
+
+    const char* evaluatedVarSetParameterKeys[] = {"Parameters.Base"};
+    const char* evaluatedVarSetParameterValues[] = {"6"};
+
+    {
+        ScopedTestTimer timer("SolveToGeometry evaluated VarSet properties");
+        McSolverEngineGeometryResult* geometryResult = nullptr;
+        const auto geometryCode = McSolverEngine_SolveToGeometry(
+            evaluatedVarSetPropertiesDocumentXml.data(),
+            "Sketch",
+            &geometryResult
+        );
+        if (!expect(geometryCode == MCSOLVERENGINE_RESULT_SUCCESS, "Expected Geometry call with evaluated VarSet properties to succeed.")
+            || !expect(geometryResult != nullptr, "Expected Geometry result pointer for evaluated VarSet properties.")
+            || !expect(geometryResult->varSetPropertyCount == 6, "Expected Geometry result to expose all numerically evaluable VarSet properties.")
+            || !expectVarSetProperty(geometryResult->varSetProperties, geometryResult->varSetPropertyCount, "VarSet001.Base", 4.0, "")
+            || !expectVarSetProperty(geometryResult->varSetProperties, geometryResult->varSetPropertyCount, "VarSet001.Length", 1000.0, "mm")
+            || !expectVarSetProperty(geometryResult->varSetProperties, geometryResult->varSetPropertyCount, "VarSet001.Angle", 90.0, "deg")
+            || !expectVarSetProperty(geometryResult->varSetProperties, geometryResult->varSetPropertyCount, "VarSet001.Area", 1000000.0, "mm^2")
+            || !expect(findVarSetProperty(geometryResult->varSetProperties, geometryResult->varSetPropertyCount, "VarSet001.Name") == nullptr, "Expected Geometry result to skip non-numeric VarSet properties.")) {
+            McSolverEngine_FreeGeometryResult(geometryResult);
+            return EXIT_FAILURE;
+        }
+        McSolverEngine_FreeGeometryResult(geometryResult);
+    }
+
+    {
+        ScopedTestTimer timer("SolveToGeometryWithParameters evaluated VarSet properties");
+        McSolverEngineGeometryResult* geometryResult = nullptr;
+        const auto geometryCode = McSolverEngine_SolveToGeometryWithParameters(
+            evaluatedVarSetPropertiesDocumentXml.data(),
+            "Sketch",
+            evaluatedVarSetParameterKeys,
+            evaluatedVarSetParameterValues,
+            1,
+            &geometryResult
+        );
+        if (!expect(geometryCode == MCSOLVERENGINE_RESULT_SUCCESS, "Expected parameterized Geometry call with evaluated VarSet properties to succeed.")
+            || !expect(geometryResult != nullptr, "Expected parameterized Geometry result pointer for evaluated VarSet properties.")
+            || !expectVarSetProperty(geometryResult->varSetProperties, geometryResult->varSetPropertyCount, "VarSet001.Base", 6.0, "")
+            || !expectVarSetProperty(geometryResult->varSetProperties, geometryResult->varSetPropertyCount, "VarSet001.DoubleBase", 12.0, "")
+            || !expectVarSetProperty(geometryResult->varSetProperties, geometryResult->varSetPropertyCount, "VarSet001.Width", 13.0, "")) {
+            McSolverEngine_FreeGeometryResult(geometryResult);
+            return EXIT_FAILURE;
+        }
+        McSolverEngine_FreeGeometryResult(geometryResult);
+    }
+
+    {
+        ScopedTestTimer timer("SolveToBRep evaluated VarSet properties");
+        McSolverEngineBRepResult* brepResult = nullptr;
+        const auto brepCode = McSolverEngine_SolveToBRep(
+            evaluatedVarSetPropertiesDocumentXml.data(),
+            "Sketch",
+            &brepResult
+        );
+        if (!expect(
+                brepCode == MCSOLVERENGINE_RESULT_SUCCESS
+                    || brepCode == MCSOLVERENGINE_RESULT_OPEN_CASCADE_UNAVAILABLE,
+                "Expected BRep call with evaluated VarSet properties to succeed or report missing OCCT."
+            )
+            || !expect(brepResult != nullptr, "Expected BRep result pointer for evaluated VarSet properties.")
+            || !expectVarSetProperty(brepResult->varSetProperties, brepResult->varSetPropertyCount, "VarSet001.Width", 9.0, "")
+            || !expectVarSetProperty(brepResult->varSetProperties, brepResult->varSetPropertyCount, "VarSet001.Area", 1000000.0, "mm^2")) {
+            McSolverEngine_FreeBRepResult(brepResult);
+            return EXIT_FAILURE;
+        }
+        McSolverEngine_FreeBRepResult(brepResult);
+    }
+
+    {
+        ScopedTestTimer timer("SolveToBRepWithParameters evaluated VarSet properties");
+        McSolverEngineBRepResult* brepResult = nullptr;
+        const auto brepCode = McSolverEngine_SolveToBRepWithParameters(
+            evaluatedVarSetPropertiesDocumentXml.data(),
+            "Sketch",
+            evaluatedVarSetParameterKeys,
+            evaluatedVarSetParameterValues,
+            1,
+            &brepResult
+        );
+        if (!expect(
+                brepCode == MCSOLVERENGINE_RESULT_SUCCESS
+                    || brepCode == MCSOLVERENGINE_RESULT_OPEN_CASCADE_UNAVAILABLE,
+                "Expected parameterized BRep call with evaluated VarSet properties to succeed or report missing OCCT."
+            )
+            || !expect(brepResult != nullptr, "Expected parameterized BRep result pointer for evaluated VarSet properties.")
+            || !expectVarSetProperty(brepResult->varSetProperties, brepResult->varSetPropertyCount, "VarSet001.Base", 6.0, "")
+            || !expectVarSetProperty(brepResult->varSetProperties, brepResult->varSetPropertyCount, "VarSet001.Width", 13.0, "")) {
+            McSolverEngine_FreeBRepResult(brepResult);
+            return EXIT_FAILURE;
+        }
+        McSolverEngine_FreeBRepResult(brepResult);
     }
 
     constexpr std::string_view unsupportedVarSetExpressionDocumentXml = R"(<?xml version="1.0" encoding="UTF-8"?>
