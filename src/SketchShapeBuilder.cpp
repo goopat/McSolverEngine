@@ -12,17 +12,20 @@
 #include <BRepBuilderAPI_MakeVertex.hxx>
 #include <BRepBuilderAPI_MakeWire.hxx>
 #include <BRepBuilderAPI_WireError.hxx>
+#include <BRepBuilderAPI_Copy.hxx>
+#include <BRepCheck_Analyzer.hxx>
 #include <Geom_BSplineCurve.hxx>
 #include <Geom_Ellipse.hxx>
 #include <Geom_Hyperbola.hxx>
 #include <Geom_Parabola.hxx>
 #include <Geom_TrimmedCurve.hxx>
 #include <Precision.hxx>
-#include <ShapeFix_Wire.hxx>
+#include <ShapeFix_Shape.hxx>
 #include <Standard_Failure.hxx>
 #include <TColStd_Array1OfInteger.hxx>
 #include <TColStd_Array1OfReal.hxx>
 #include <TColgp_Array1OfPnt.hxx>
+#include <TopoDS.hxx>
 #include <TopoDS_Compound.hxx>
 #include <TopoDS_Edge.hxx>
 #include <TopoDS_Vertex.hxx>
@@ -230,6 +233,40 @@ namespace
     return false;
 }
 
+[[nodiscard]] TopoDS_Wire fixWire(const TopoDS_Wire& wire)
+{
+    // Match FreeCAD's Part::TopoShape::fix() behavior for each assembled wire.
+    BRepBuilderAPI_Copy copyBuilder(wire);
+    if (!copyBuilder.IsDone()) {
+        return wire;
+    }
+
+    const TopoDS_Shape copiedWire = copyBuilder.Shape();
+    ShapeFix_Shape fixCopy(copiedWire);
+    fixCopy.Perform();
+    if (fixCopy.Shape().IsSame(copiedWire)) {
+        return wire;
+    }
+
+    BRepCheck_Analyzer checker(fixCopy.Shape());
+    if (!checker.IsValid()) {
+        return wire;
+    }
+
+    ShapeFix_Shape fixOriginal(wire);
+    fixOriginal.Perform();
+    checker.Init(fixOriginal.Shape());
+    if (checker.IsValid() && fixOriginal.Shape().ShapeType() == TopAbs_WIRE) {
+        return TopoDS::Wire(fixOriginal.Shape());
+    }
+
+    if (fixCopy.Shape().ShapeType() == TopAbs_WIRE) {
+        return TopoDS::Wire(fixCopy.Shape());
+    }
+
+    return wire;
+}
+
 }  // namespace
 
 gp_Trsf makePlacementTransform(const Compat::Placement& placement)
@@ -275,13 +312,7 @@ TopoDS_Shape buildSketchShape(const Compat::SketchModel& model, std::string& err
                 }
             } while (found);
 
-            ShapeFix_Wire fixWire;
-            fixWire.SetPrecision(Precision::Confusion());
-            fixWire.Load(newWire);
-            fixWire.FixReorder();
-            fixWire.FixConnected();
-            fixWire.FixClosed();
-            wires.push_back(fixWire.Wire());
+            wires.push_back(fixWire(newWire));
         }
 
     if (wires.size() == 1 && vertexList.empty()) {
