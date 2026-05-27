@@ -53,12 +53,12 @@ Standalone extraction of FreeCAD Sketcher's GCS constraint solver. 12 layers, to
 
 **Namespaces**: `McSolverEngine::Compat` | `::DocumentXml` | `::BRep` | `::Geometry` | `::ZipExtract` | `McSolverEngine` (root: `Engine` + `ParameterMap`).
 
-**Parameter flow**: Document.xml → VarSet defaults + ExpressionEngine bindings → `Compat::Constraint` stores `parameterName/key/defaultValue` → caller overrides via `ParameterMap` (keys: `VarSetName.PropertyName` or bare `PropertyName`) → solver applies values. API values must be pure numeric strings (no unit suffixes). Lengths = mm, angles = degrees (converted to radians internally).
+**Parameter flow**: Document.xml → VarSet defaults + ExpressionEngine bindings → `Compat::Constraint` stores `parameterName/key/defaultValue` → caller overrides via `ParameterMap` (keys: `VarSetName.PropertyName` only; bare property names are rejected) → solver applies values. API values must be pure numeric strings (no unit suffixes). Lengths = mm, angles = degrees (converted to radians internally).
 
 ## Key conventions
 
 - **Compat boundary**: extend `Compat::SketchModel`, never reintroduce FreeCAD dependencies
-- **Parameter lookup order**: full key (`VarSet.Property`) → short property name → imported default (ExpressionEngine / VarSet)
+- **Parameter lookup order**: full key (`VarSet.Property`) → imported default (ExpressionEngine / VarSet)
 - **Import tolerance**: `DocumentXml` can return `ImportStatus::Partial` with `messages` + `skippedConstraints`; fatal VarSet issues use the dedicated unsupported-subset error path
 - **Flag preservation**: `originalId`, `construction`, `external`, `blocked` must survive round-trips through import → solve → export → C API
 - **Fixed geometry**: External and blocked geometry are solver-fixed references. Construction and external are excluded from BREP output

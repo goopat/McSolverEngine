@@ -322,8 +322,8 @@ Full pipeline: import `Document.xml` → solve with GCS → export structured ge
 - `result` — output, allocated by native layer; caller frees via `McSolverEngine_FreeGeometryResult`
 
 **Pipeline states reflected in `result`**:
-- **Import failure**: `importStatus != "Success"`, `solveStatus`/`exportKind`/`exportStatus` set to "Skipped", `geometryCount = 0`
-- **Solve failure**: `importStatus == "Success"`, `solveStatus != "Success"`/`"Converged"`, export skipped, `geometryCount = 0`
+- **Import failure**: `importStatus != "Success"`, `exportKind` set to `"Geometry"`, `exportStatus` set to `"Skipped"`, `solveStatus` is `NULL`, `geometryCount = 0`
+- **Solve failure**: `importStatus == "Success"`, `solveStatus != "Success"`/"Converged", `exportKind` set to `"Geometry"`, `exportStatus` set to `"Skipped"`, `geometryCount = 0`
 - **Export failure**: import and solve succeeded, `exportStatus == "Failed"`, `geometryCount = 0`
 - **Success**: import, solve, and export all succeeded; `geometries` populated
 
@@ -410,6 +410,7 @@ Parses `Document.xml` object metadata only and returns all Sketch summaries plus
 - No constraint solving
 - Returns `MCSOLVERENGINE_RESULT_SUCCESS` on success
 - Returns `MCSOLVERENGINE_RESULT_IMPORT_FAILED` on parse failure and, when possible, populates `result->messages` with diagnostics
+- Returns `MCSOLVERENGINE_RESULT_OUT_OF_MEMORY` on allocation failure
 
 ---
 
@@ -462,7 +463,7 @@ Extracts `Document.xml` from a `.FCStd` file (ZIP archive). Supports STORE (meth
 
 ---
 
-### 3.9 `McSolverEngine_FreeFCStdDoc`
+### 3.11 `McSolverEngine_FreeFCStdDoc`
 
 ```c
 void McSolverEngine_FreeFCStdDoc(char* documentXml);
@@ -472,7 +473,7 @@ Frees the string returned by `McSolverEngine_ExtractFCStdDoc`. Passing `NULL` is
 
 ---
 
-### 3.10 `McSolverEngine_GetLastError`
+### 3.12 `McSolverEngine_GetLastError`
 
 ```c
 const char* McSolverEngine_GetLastError(void);

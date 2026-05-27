@@ -328,8 +328,8 @@ McSolverEngineResultCode McSolverEngine_SolveToGeometry(
 - `result` — 输出，由原生层分配；调用方通过 `McSolverEngine_FreeGeometryResult` 释放
 
 **`result` 中反映的管线状态**：
-- **导入失败**：`importStatus != "Success"`，`solveStatus`/`exportKind`/`exportStatus` 设为 `"Skipped"`，`geometryCount = 0`
-- **求解失败**：`importStatus == "Success"`，`solveStatus != "Success"`/`"Converged"`，导出跳过，`geometryCount = 0`
+- **导入失败**：`importStatus != "Success"`，`exportKind` 设为 `"Geometry"`，`exportStatus` 设为 `"Skipped"`，`solveStatus` 为 `NULL`，`geometryCount = 0`
+- **求解失败**：`importStatus == "Success"`，`solveStatus != "Success"`/"Converged"，`exportKind` 设为 `"Geometry"`，`exportStatus` 设为 `"Skipped"`，`geometryCount = 0`
 - **导出失败**：导入和求解成功，`exportStatus == "Failed"`，`geometryCount = 0`
 - **成功**：导入、求解、导出全部成功；`geometries` 已填充
 
@@ -416,6 +416,7 @@ McSolverEngineResultCode McSolverEngine_InspectDocumentXml(
 - 不做约束求解
 - 成功时返回 `MCSOLVERENGINE_RESULT_SUCCESS`
 - 解析失败时返回 `MCSOLVERENGINE_RESULT_IMPORT_FAILED`，并尽量在 `result->messages` 中给出诊断信息
+- 内存分配失败时返回 `MCSOLVERENGINE_RESULT_OUT_OF_MEMORY`
 
 ---
 
@@ -468,7 +469,7 @@ McSolverEngineFCStdResultCode McSolverEngine_ExtractFCStdDoc(
 
 ---
 
-### 3.9 `McSolverEngine_FreeFCStdDoc`
+### 3.11 `McSolverEngine_FreeFCStdDoc`
 
 ```c
 void McSolverEngine_FreeFCStdDoc(char* documentXml);
@@ -478,7 +479,7 @@ void McSolverEngine_FreeFCStdDoc(char* documentXml);
 
 ---
 
-### 3.10 `McSolverEngine_GetLastError`
+### 3.12 `McSolverEngine_GetLastError`
 
 ```c
 const char* McSolverEngine_GetLastError(void);

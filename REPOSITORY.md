@@ -95,6 +95,7 @@ McSolverEngine/
 │   ├── V102.5.FCStd / V102.5.xml / V102.5.brp / V102.5.solver.brp（表达式驱动）
 │   ├── V102.6.FCStd / V102.6.xml / V102.6.brp（VarSet + 参数化, V102.6_400.brp 覆盖）
 │   ├── V102.7.FCStd / V102.7.xml / V102.7.brp（FCStd 提取 + 参数化 BREP）
+│   ├── V102.7.50.FCStd / V102.7.50.xml / V102.7.50.brp（V102.7 + 参数集1.L1=50 覆盖）
 │   ├── V102.8.FCStd / V102.8.xml / V102.8.brp
 │   └── *.svg                      #   Python wrapper 输出的 SVG 可视化
 │
@@ -125,7 +126,7 @@ McSolverEngine/
 ├── CLAUDE.md                      # Claude Code 项目指令
 ├── McSolverEngine_PRD.md          # 产品需求文档
 ├── McSolverEngine_C_API.md        # C API 中文文档
-├── McSolverEngine_C_API_en.md     # C API 英文文档
+├── McSolverEngine_C_API.en.md     # C API 英文文档
 ├── Plan.md                        # 实施计划（Phase 0-5 已完成）
 └── REPOSITORY.md                  # 本文件
 ```
@@ -351,8 +352,8 @@ python -m unittest wrapper/python/tests/test_wrapper.py -v
 | C API SmokeTest | `tests/capi_smoke.cpp` | C ABI 回归：结构化 Geometry/BRep 导出、OCCT/no-OCCT 路径、表达式驱动约束引用 |
 | C++ UnitTest | `tests/unit.cpp` | 单元测试：ParameterValueUtils、CompatModel API、Diameter/Equal/Parallel 约束、冲突/冗余检测、ZIP/GeometryExport/XML 边界 |
 | C# Wrapper (net48) | `wrapper/csharp/tests/` | P/Invoke 包装层回归：FCStd 提取 + 参数化 BREP 求解 + 表达式约束引用 |
-| C# Wrapper (net80) | `wrapper/csharp/tests/` | 同上，.NET 8.0 框架 |
-| Python Wrapper | `wrapper/python/tests/` | 19 个用例：求解、参数覆盖、BREP、几何导出、FCStd 提取、SVG 输出、版本 |
+| C# Wrapper (net8.0) | `wrapper/csharp/tests/` | 同上，.NET 8.0 框架 |
+| Python Wrapper | `wrapper/python/tests/` | 23 个用例：求解、参数覆盖、BREP、几何导出、FCStd 提取、SVG 输出、版本、V111.9 等价校验 |
 
 **V111.9 BREP 回归校验说明**
 
@@ -362,7 +363,7 @@ python -m unittest wrapper/python/tests/test_wrapper.py -v
 
 ### 6.3 回归数据（fcstdDoc/）
 
-`fcstdDoc/` 是权威的回归语料库，共 62 个文件：
+`fcstdDoc/` 是权威的回归语料库，共 48 个文件：
 
 - **样本 1-3**：基础单/多平面草图
 - **V102.1**：参数化尺寸驱动
@@ -370,10 +371,12 @@ python -m unittest wrapper/python/tests/test_wrapper.py -v
 - **V102.4**：VarSet + ExpressionEngine + 参数覆盖
 - **V102.5**：表达式驱动角度/尺寸约束
 - **V102.6**：VarSet 参数链 + 参数覆盖
-- **V102.7**：FCStd 提取 + 参数化 BREP 求解
+- **V102.7**：FCStd 提取 + 参数化 BREP 求解（含 V102.7.50 参数覆盖变体）
 - **V102.8**：最新样本
+- **V111.9**：参数化 BREP 非确定性顺序漂移校验样本（含 V111.9.500 参数覆盖变体）
 
 每个样本包含 `.FCStd`（原始文件）、`.xml`（Document.xml）、`.brp`（参考 BREP）、`.solver.brp`（求解后 BREP）。
+测试运行时产生的 `.solver.py.brp`、`.solver.py.param.nochange.brp`、`.svg`、`.py.svg` 等属于测试生成物，不计入权威语料库。
 
 ## 7. 依赖项总览
 
@@ -466,7 +469,7 @@ Document.xml
 | Block, Weight | 已支持 |
 | SnellsLaw | 已支持 |
 
-全部 8 种基础几何类型已支持：Point, LineSegment, Circle, Arc, Ellipse, ArcOfEllipse, ArcOfHyperbola, ArcOfParabola, B-Spline。
+全部 9 种基础几何类型已支持：Point, LineSegment, Circle, Arc, Ellipse, ArcOfEllipse, ArcOfHyperbola, ArcOfParabola, B-Spline。
 
 ## 10. 已知限制
 
@@ -494,6 +497,6 @@ Document.xml
 | `McSolverEngine_PRD.md` | 产品需求、目标架构、兼容策略、输出策略 |
 | `Plan.md` | 分阶段实施计划（Phase 0-5 已全部完成） |
 | `McSolverEngine_C_API.md` | C API 完整中文文档 |
-| `McSolverEngine_C_API_en.md` | C API 完整英文文档 |
+| `McSolverEngine_C_API.en.md` | C API 完整英文文档 |
 | `CLAUDE.md` | Claude Code 项目指令（构建/测试/架构约定） |
 | `License.md` | 许可证（含第三方依赖许可） |
