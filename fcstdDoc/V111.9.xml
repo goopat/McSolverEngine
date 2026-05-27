@@ -24,13 +24,13 @@
             <String value=""/>
         </Property>
         <Property name="Label" type="App::PropertyString" status="16777217">
-            <String value="V102.9"/>
+            <String value="V111.9"/>
         </Property>
         <Property name="LastModifiedBy" type="App::PropertyString">
             <String value=""/>
         </Property>
         <Property name="LastModifiedDate" type="App::PropertyString" status="16777217">
-            <String value="2026-05-27T02:34:45Z"/>
+            <String value="2026-05-27T22:03:07+08:00"/>
         </Property>
         <Property name="License" type="App::PropertyString" status="1">
             <String value="All rights reserved"/>
@@ -101,7 +101,7 @@
         </ObjectDeps>
         <ObjectDeps Name="VarSet" Count="0"/>
         <ObjectDeps Name="Origin001" Count="0"/>
-        <Object type="PartDesign::Body" name="Body" id="3603" />
+        <Object type="PartDesign::Body" name="Body" id="3603" Touched="1" />
         <Object type="App::Origin" name="Origin" id="3604" />
         <Object type="App::Line" name="X_Axis" id="3605" />
         <Object type="App::Line" name="Y_Axis" id="3606" />
@@ -474,98 +474,98 @@
                             <GeoExtensions count="1">
                                 <GeoExtension type="Sketcher::SketchGeometryExtension" id="1" internalGeometryType="0" geometryModeFlags="00000000000000000000000000000000" geometryLayer="0"/>
                             </GeoExtensions>
-                            <LineSegment StartX="500.0000000000000568" StartY="-288.6751345948127891" StartZ="0.0000000000000000" EndX="499.9999999999999432" EndY="288.6751345948129028" EndZ="0.0000000000000000"/>
+                            <LineSegment StartX="499.9999999999999432" StartY="-288.6751345948129597" StartZ="0.0000000000000000" EndX="499.9999999999999432" EndY="288.6751345948128460" EndZ="0.0000000000000000"/>
                             <Construction value="0"/>
                         </Geometry>
                         <Geometry type="Part::GeomLineSegment" id="2" migrated="1">
                             <GeoExtensions count="1">
                                 <GeoExtension type="Sketcher::SketchGeometryExtension" id="2" internalGeometryType="0" geometryModeFlags="00000000000000000000000000000000" geometryLayer="0"/>
                             </GeoExtensions>
-                            <LineSegment StartX="499.9999999999999432" StartY="288.6751345948129028" StartZ="0.0000000000000000" EndX="-0.0000000000000568" EndY="577.3502691896256920" EndZ="0.0000000000000000"/>
+                            <LineSegment StartX="499.9999999999999432" StartY="288.6751345948128460" StartZ="0.0000000000000000" EndX="-0.0000000000000568" EndY="577.3502691896258057" EndZ="0.0000000000000000"/>
                             <Construction value="0"/>
                         </Geometry>
                         <Geometry type="Part::GeomLineSegment" id="3" migrated="1">
                             <GeoExtensions count="1">
                                 <GeoExtension type="Sketcher::SketchGeometryExtension" id="3" internalGeometryType="0" geometryModeFlags="00000000000000000000000000000000" geometryLayer="0"/>
                             </GeoExtensions>
-                            <LineSegment StartX="-0.0000000000000568" StartY="577.3502691896256920" StartZ="0.0000000000000000" EndX="-500.0000000000000568" EndY="288.6751345948128460" EndZ="0.0000000000000000"/>
+                            <LineSegment StartX="-0.0000000000000568" StartY="577.3502691896258057" StartZ="0.0000000000000000" EndX="-500.0000000000000568" EndY="288.6751345948129597" EndZ="0.0000000000000000"/>
                             <Construction value="0"/>
                         </Geometry>
                         <Geometry type="Part::GeomLineSegment" id="4" migrated="1">
                             <GeoExtensions count="1">
                                 <GeoExtension type="Sketcher::SketchGeometryExtension" id="4" internalGeometryType="0" geometryModeFlags="00000000000000000000000000000000" geometryLayer="0"/>
                             </GeoExtensions>
-                            <LineSegment StartX="-500.0000000000000568" StartY="288.6751345948128460" StartZ="0.0000000000000000" EndX="-499.9999999999999432" EndY="-288.6751345948128460" EndZ="0.0000000000000000"/>
+                            <LineSegment StartX="-500.0000000000000000" StartY="288.6751345948129597" StartZ="0.0000000000000000" EndX="-500.0000000000000000" EndY="-288.6751345948128460" EndZ="0.0000000000000000"/>
                             <Construction value="0"/>
                         </Geometry>
                         <Geometry type="Part::GeomLineSegment" id="5" migrated="1">
                             <GeoExtensions count="1">
                                 <GeoExtension type="Sketcher::SketchGeometryExtension" id="5" internalGeometryType="0" geometryModeFlags="00000000000000000000000000000000" geometryLayer="0"/>
                             </GeoExtensions>
-                            <LineSegment StartX="-499.9999999999999432" StartY="-288.6751345948128460" StartZ="0.0000000000000000" EndX="0.0000000000000568" EndY="-577.3502691896256920" EndZ="0.0000000000000000"/>
+                            <LineSegment StartX="-500.0000000000000000" StartY="-288.6751345948128460" StartZ="0.0000000000000000" EndX="-0.0000000000001137" EndY="-577.3502691896258057" EndZ="0.0000000000000000"/>
                             <Construction value="0"/>
                         </Geometry>
                         <Geometry type="Part::GeomLineSegment" id="6" migrated="1">
                             <GeoExtensions count="1">
                                 <GeoExtension type="Sketcher::SketchGeometryExtension" id="6" internalGeometryType="0" geometryModeFlags="00000000000000000000000000000000" geometryLayer="0"/>
                             </GeoExtensions>
-                            <LineSegment StartX="0.0000000000000568" StartY="-577.3502691896256920" StartZ="0.0000000000000000" EndX="500.0000000000000568" EndY="-288.6751345948127891" EndZ="0.0000000000000000"/>
+                            <LineSegment StartX="-0.0000000000001137" StartY="-577.3502691896258057" StartZ="0.0000000000000000" EndX="499.9999999999999432" EndY="-288.6751345948129597" EndZ="0.0000000000000000"/>
                             <Construction value="0"/>
                         </Geometry>
                         <Geometry type="Part::GeomCircle" id="7" migrated="1">
                             <GeoExtensions count="1">
                                 <GeoExtension type="Sketcher::SketchGeometryExtension" id="7" internalGeometryType="0" geometryModeFlags="00000000000000000000000000000010" geometryLayer="0"/>
                             </GeoExtensions>
-                            <Circle CenterX="0.0000000000000000" CenterY="0.0000000000000000" CenterZ="0.0000000000000000" NormalX="0.0000000000000000" NormalY="0.0000000000000000" NormalZ="1.0000000000000000" AngleXU="-0.0000000000000000" Radius="577.3502691896256920"/>
+                            <Circle CenterX="0.0000000000000000" CenterY="0.0000000000000000" CenterZ="0.0000000000000000" NormalX="0.0000000000000000" NormalY="0.0000000000000000" NormalZ="1.0000000000000000" AngleXU="-0.0000000000000000" Radius="577.3502691896258057"/>
                             <Construction value="1"/>
                         </Geometry>
                         <Geometry type="Part::GeomLineSegment" id="8" migrated="1">
                             <GeoExtensions count="1">
                                 <GeoExtension type="Sketcher::SketchGeometryExtension" id="8" internalGeometryType="0" geometryModeFlags="00000000000000000000000000000000" geometryLayer="0"/>
                             </GeoExtensions>
-                            <LineSegment StartX="-500.0000000000000568" StartY="288.6751345948128460" StartZ="0.0000000000000000" EndX="499.9999999999999432" EndY="288.6751345948129028" EndZ="0.0000000000000000"/>
+                            <LineSegment StartX="-500.0000000000000000" StartY="288.6751345948129597" StartZ="0.0000000000000000" EndX="500.0000000000000000" EndY="288.6751345948128460" EndZ="0.0000000000000000"/>
                             <Construction value="0"/>
                         </Geometry>
                         <Geometry type="Part::GeomLineSegment" id="9" migrated="1">
                             <GeoExtensions count="1">
                                 <GeoExtension type="Sketcher::SketchGeometryExtension" id="9" internalGeometryType="0" geometryModeFlags="00000000000000000000000000000000" geometryLayer="0"/>
                             </GeoExtensions>
-                            <LineSegment StartX="-499.9999999999999432" StartY="-288.6751345948128460" StartZ="0.0000000000000000" EndX="500.0000000000000568" EndY="-288.6751345948127891" EndZ="0.0000000000000000"/>
+                            <LineSegment StartX="-500.0000000000000000" StartY="-288.6751345948128460" StartZ="0.0000000000000000" EndX="500.0000000000000000" EndY="-288.6751345948129597" EndZ="0.0000000000000000"/>
                             <Construction value="0"/>
                         </Geometry>
                         <Geometry type="Part::GeomArcOfCircle" id="11" migrated="1">
                             <GeoExtensions count="1">
                                 <GeoExtension type="Sketcher::SketchGeometryExtension" id="11" internalGeometryType="0" geometryModeFlags="00000000000000000000000000000000" geometryLayer="0"/>
                             </GeoExtensions>
-                            <ArcOfCircle CenterX="0.0000000000000000" CenterY="0.0000000000000000" CenterZ="0.0000000000000000" NormalX="0.0000000000000000" NormalY="0.0000000000000000" NormalZ="1.0000000000000000" AngleXU="-0.0000000000000000" Radius="2000.0000000000000000" StartAngle="0.7853981633974484" EndAngle="1.5707963267948966"/>
+                            <ArcOfCircle CenterX="0.0000000000000000" CenterY="0.0000000000000000" CenterZ="0.0000000000000000" NormalX="0.0000000000000000" NormalY="0.0000000000000000" NormalZ="1.0000000000000000" AngleXU="-0.0000000000000000" Radius="2000.0000000000000000" StartAngle="0.7853981633974483" EndAngle="1.5707963267948966"/>
                             <Construction value="0"/>
                         </Geometry>
                         <Geometry type="Part::GeomLineSegment" id="12" migrated="1">
                             <GeoExtensions count="1">
                                 <GeoExtension type="Sketcher::SketchGeometryExtension" id="12" internalGeometryType="0" geometryModeFlags="00000000000000000000000000000010" geometryLayer="0"/>
                             </GeoExtensions>
-                            <LineSegment StartX="0.0000000000000000" StartY="0.0000000000000000" StartZ="0.0000000000000000" EndX="1414.2135623730948737" EndY="1414.2135623730951011" EndZ="0.0000000000000000"/>
+                            <LineSegment StartX="0.0000000000000000" StartY="0.0000000000000000" StartZ="0.0000000000000000" EndX="1414.2135623730951011" EndY="1414.2135623730948737" EndZ="0.0000000000000000"/>
                             <Construction value="1"/>
                         </Geometry>
                         <Geometry type="Part::GeomLineSegment" id="13" migrated="1">
                             <GeoExtensions count="1">
                                 <GeoExtension type="Sketcher::SketchGeometryExtension" id="13" internalGeometryType="0" geometryModeFlags="00000000000000000000000000000000" geometryLayer="0"/>
                             </GeoExtensions>
-                            <LineSegment StartX="0.0000000000000568" StartY="-577.3502691896256920" StartZ="0.0000000000000000" EndX="4000.0000000000000000" EndY="-577.3502691896256920" EndZ="0.0000000000000000"/>
+                            <LineSegment StartX="-0.0000000000001137" StartY="-577.3502691896258057" StartZ="0.0000000000000000" EndX="4000.0000000000000000" EndY="-577.3502691896258057" EndZ="0.0000000000000000"/>
                             <Construction value="0"/>
                         </Geometry>
                         <Geometry type="Part::GeomLineSegment" id="14" migrated="1">
                             <GeoExtensions count="1">
                                 <GeoExtension type="Sketcher::SketchGeometryExtension" id="14" internalGeometryType="0" geometryModeFlags="00000000000000000000000000000000" geometryLayer="0"/>
                             </GeoExtensions>
-                            <LineSegment StartX="0.0000000000000568" StartY="-577.3502691896256920" StartZ="0.0000000000000000" EndX="-500.0000000000000000" EndY="-577.3502691896256920" EndZ="0.0000000000000000"/>
+                            <LineSegment StartX="-0.0000000000001137" StartY="-577.3502691896258057" StartZ="0.0000000000000000" EndX="-500.0000000000001137" EndY="-577.3502691896258057" EndZ="0.0000000000000000"/>
                             <Construction value="0"/>
                         </Geometry>
                         <Geometry type="Part::GeomLineSegment" id="15" migrated="1">
                             <GeoExtensions count="1">
                                 <GeoExtension type="Sketcher::SketchGeometryExtension" id="15" internalGeometryType="0" geometryModeFlags="00000000000000000000000000000000" geometryLayer="0"/>
                             </GeoExtensions>
-                            <LineSegment StartX="4000.0000000000000000" StartY="-577.3502691896256920" StartZ="0.0000000000000000" EndX="4000.0000000000000000" EndY="2422.6497308103744217" EndZ="0.0000000000000000"/>
+                            <LineSegment StartX="4000.0000000000000000" StartY="-577.3502691896258057" StartZ="0.0000000000000000" EndX="4000.0000000000000000" EndY="2422.6497308103744217" EndZ="0.0000000000000000"/>
                             <Construction value="0"/>
                         </Geometry>
                     </GeometryList>
