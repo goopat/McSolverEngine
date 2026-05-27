@@ -266,6 +266,7 @@ void freeVarSetProperties(int count, const McSolverEngineVarSetProperty* values)
 
     for (int i = 0; i < count; ++i) {
         delete[] properties[i].keyUtf8;
+        delete[] properties[i].valueUtf8;
         delete[] properties[i].unitUtf8;
     }
     delete[] properties;
@@ -402,7 +403,7 @@ void freeBRepResult(McSolverEngineBRepResult* value) noexcept
 }
 
 [[nodiscard]] bool assignVarSetProperties(
-    const std::vector<McSolverEngine::DocumentXml::EvaluatedVarSetProperty>& values,
+    const std::vector<McSolverEngine::DocumentXml::VarSetPropertyValue>& values,
     int* count,
     const McSolverEngineVarSetProperty** out
 )
@@ -427,11 +428,11 @@ void freeBRepResult(McSolverEngineBRepResult* value) noexcept
 
     for (std::size_t i = 0; i < values.size(); ++i) {
         if (!assignOwnedString(values[i].key, &array[i].keyUtf8)
+            || !assignOwnedString(values[i].value, &array[i].valueUtf8)
             || !assignOwnedString(values[i].unit, &array[i].unitUtf8)) {
             freeVarSetProperties(static_cast<int>(values.size()), array);
             return false;
         }
-        array[i].value = values[i].value;
     }
 
     *count = static_cast<int>(values.size());
@@ -487,7 +488,7 @@ template<typename ResultT, typename ImportResultT, typename SolveResultT>
         return false;
     }
     if (!assignVarSetProperties(
-            imported.evaluatedVarSetProperties,
+            imported.varSetProperties,
             &target.varSetPropertyCount,
             &target.varSetProperties
         )) {

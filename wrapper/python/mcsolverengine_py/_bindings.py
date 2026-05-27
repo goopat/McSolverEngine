@@ -196,7 +196,7 @@ class ConstraintRef(ctypes.Structure):
 class VarSetProperty(ctypes.Structure):
     _fields_ = [
         ("keyUtf8", ctypes.c_char_p),
-        ("value", ctypes.c_double),
+        ("valueUtf8", ctypes.c_char_p),
         ("unitUtf8", ctypes.c_char_p),
     ]
 

@@ -152,6 +152,26 @@ namespace
     return formatDouble(value.value) + " " + makeString(unit);
 }
 
+struct VarSetPropertyExportValue
+{
+    std::string value;
+    std::string unit;
+};
+
+[[nodiscard]] VarSetPropertyExportValue exportQuantityValue(QuantityValue value)
+{
+    return VarSetPropertyExportValue {
+        .value = formatDouble(value.value),
+        .unit = makeString(canonicalUnit(value.dimension)),
+    };
+}
+
+[[nodiscard]] bool preserveRawVarSetValue(const VarSetProperty& property) noexcept
+{
+    return property.typeName.find("PropertyString") != std::string::npos
+        || property.typeName.find("PropertyBool") != std::string::npos;
+}
+
 [[nodiscard]] std::optional<QuantityValue> parseRawQuantityLiteral(
     std::string_view value,
     std::string& error,
@@ -1137,16 +1157,16 @@ bool evaluateVarSetExpressions(VarSetCatalog& catalog, ImportResult& result)
     return true;
 }
 
-bool collectEvaluatedVarSetProperties(VarSetCatalog& catalog, ImportResult& result)
+bool collectVarSetProperties(VarSetCatalog& catalog, ImportResult& result)
 {
-    result.evaluatedVarSetProperties.clear();
+    result.varSetProperties.clear();
     std::map<std::string, VarSetVisitState> states;
 
     for (auto& [key, property] : catalog.properties) {
-        std::optional<QuantityValue> value;
+        std::optional<VarSetPropertyExportValue> exportedValue;
         if (property.expression) {
             std::string error;
-            value = evaluateVarSetProperty(catalog, key, states, error);
+            const auto value = evaluateVarSetProperty(catalog, key, states, error);
             if (!value) {
                 if (!error.empty()
                     && error.find(VarSetExpressionUnsupportedSubsetCode) != std::string::npos) {
@@ -1157,27 +1177,37 @@ bool collectEvaluatedVarSetProperties(VarSetCatalog& catalog, ImportResult& resu
                 );
                 return false;
             }
+            exportedValue = exportQuantityValue(*value);
         }
         else if (property.evaluatedValue) {
-            value = property.evaluatedValue;
+            exportedValue = exportQuantityValue(*property.evaluatedValue);
         }
         else if (property.hasRawValue) {
-            std::string ignoredError;
-            value = parseRawQuantityLiteral(property.rawValue, ignoredError, key);
-            if (value) {
-                property.evaluatedValue = *value;
+            if (preserveRawVarSetValue(property)) {
+                exportedValue = VarSetPropertyExportValue {.value = property.rawValue, .unit = {}};
+            }
+            else {
+                std::string ignoredError;
+                const auto value = parseRawQuantityLiteral(property.rawValue, ignoredError, key);
+                if (value) {
+                    property.evaluatedValue = *value;
+                    exportedValue = exportQuantityValue(*value);
+                }
+                else {
+                    exportedValue = VarSetPropertyExportValue {.value = property.rawValue, .unit = {}};
+                }
             }
         }
 
-        if (!value) {
+        if (!exportedValue) {
             continue;
         }
 
-        result.evaluatedVarSetProperties.push_back(
-            McSolverEngine::DocumentXml::EvaluatedVarSetProperty {
+        result.varSetProperties.push_back(
+            McSolverEngine::DocumentXml::VarSetPropertyValue {
                 .key = key,
-                .value = value->value,
-                .unit = makeString(canonicalUnit(value->dimension)),
+                .value = std::move(exportedValue->value),
+                .unit = std::move(exportedValue->unit),
             }
         );
     }

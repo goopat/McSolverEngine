@@ -53,7 +53,7 @@ EVALUATED_VARSET_PROPERTIES_XML = """<?xml version="1.0" encoding="UTF-8"?>
     </Objects>
     <ObjectData Count="2">
         <Object name="VarSet001">
-            <Properties Count="8" TransientCount="0">
+            <Properties Count="10" TransientCount="0">
                 <Property name="Label" type="App::PropertyString">
                     <String value="Parameters"/>
                 </Property>
@@ -68,6 +68,9 @@ EVALUATED_VARSET_PROPERTIES_XML = """<?xml version="1.0" encoding="UTF-8"?>
                 </Property>
                 <Property name="Name" type="App::PropertyString">
                     <String value="widget"/>
+                </Property>
+                <Property name="Visible" type="App::PropertyBool">
+                    <Bool value="true"/>
                 </Property>
                 <Property name="DoubleBase" type="App::PropertyFloat">
                     <Float value="0.0"/>
@@ -217,16 +220,18 @@ class TestParameters(unittest.TestCase):
 class TestEvaluatedVarSetProperties(unittest.TestCase):
     def test_geometry_result_exposes_canonical_varset_properties(self):
         result = Engine.solve_to_geometry(EVALUATED_VARSET_PROPERTIES_XML, "Sketch")
-        self.assertEqual(6, len(result.varSetProperties))
-        self.assertAlmostEqual(4.0, result.varSetProperties["VarSet001.Base"].value)
+        self.assertEqual(9, len(result.varSetProperties))
+        self.assertEqual("Parameters", result.varSetProperties["VarSet001.Label"].value)
+        self.assertEqual("4", result.varSetProperties["VarSet001.Base"].value)
         self.assertEqual("", result.varSetProperties["VarSet001.Base"].unit)
-        self.assertAlmostEqual(1000.0, result.varSetProperties["VarSet001.Length"].value)
+        self.assertEqual("1000", result.varSetProperties["VarSet001.Length"].value)
         self.assertEqual("mm", result.varSetProperties["VarSet001.Length"].unit)
-        self.assertAlmostEqual(90.0, result.varSetProperties["VarSet001.Angle"].value)
+        self.assertEqual("90", result.varSetProperties["VarSet001.Angle"].value)
         self.assertEqual("deg", result.varSetProperties["VarSet001.Angle"].unit)
-        self.assertAlmostEqual(1000000.0, result.varSetProperties["VarSet001.Area"].value)
+        self.assertEqual("widget", result.varSetProperties["VarSet001.Name"].value)
+        self.assertEqual("true", result.varSetProperties["VarSet001.Visible"].value)
+        self.assertEqual("1000000", result.varSetProperties["VarSet001.Area"].value)
         self.assertEqual("mm^2", result.varSetProperties["VarSet001.Area"].unit)
-        self.assertNotIn("VarSet001.Name", result.varSetProperties)
 
     def test_geometry_result_exposes_overridden_varset_properties(self):
         result = Engine.solve_to_geometry(
@@ -234,9 +239,9 @@ class TestEvaluatedVarSetProperties(unittest.TestCase):
             "Sketch",
             parameters={"Parameters.Base": "6"},
         )
-        self.assertAlmostEqual(6.0, result.varSetProperties["VarSet001.Base"].value)
-        self.assertAlmostEqual(12.0, result.varSetProperties["VarSet001.DoubleBase"].value)
-        self.assertAlmostEqual(13.0, result.varSetProperties["VarSet001.Width"].value)
+        self.assertEqual("6", result.varSetProperties["VarSet001.Base"].value)
+        self.assertEqual("12", result.varSetProperties["VarSet001.DoubleBase"].value)
+        self.assertEqual("13", result.varSetProperties["VarSet001.Width"].value)
 
 
 class TestV1025ExpressionDrivenConstraint(unittest.TestCase):

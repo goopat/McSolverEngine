@@ -24,10 +24,10 @@ enum class ImportErrorCode
     VarSetExpressionUnsupportedSubset = 1001,
 };
 
-struct EvaluatedVarSetProperty
+struct VarSetPropertyValue
 {
     std::string key;
-    double value {};
+    std::string value;
     std::string unit;
 };
 
@@ -38,7 +38,7 @@ struct ImportResult
     Compat::SketchModel model;
     std::string sketchName;
     std::vector<std::string> messages;
-    std::vector<EvaluatedVarSetProperty> evaluatedVarSetProperties;
+    std::vector<VarSetPropertyValue> varSetProperties;
     std::size_t skippedConstraints {0};
 
     [[nodiscard]] bool imported() const noexcept

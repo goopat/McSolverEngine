@@ -13,7 +13,7 @@ public sealed class PlacementDto
 
 public sealed class VarSetPropertyValueDto
 {
-    public double Value { get; set; }
+    public string Value { get; set; } = string.Empty;
     public string Unit { get; set; } = string.Empty;
 }
 

@@ -113,17 +113,17 @@ typedef struct McSolverEngineBSplineKnot {
 } McSolverEngineBSplineKnot;
 ```
 
-### 2.4.1 VarSet evaluated property record
+### 2.4.1 VarSet property record
 
 ```c
 typedef struct McSolverEngineVarSetProperty {
     const char* keyUtf8;   // UTF-8, always ObjectName.PropertyName
-    double value;          // numeric value converted to canonical unit
-    const char* unitUtf8;  // UTF-8, "" | "mm" | "deg" | "mm^2"
+    const char* valueUtf8; // UTF-8 value string
+    const char* unitUtf8;  // UTF-8 unit, or "" when not applicable
 } McSolverEngineVarSetProperty;
 ```
 
-`varSetProperties` returns **all numerically evaluable `App::VarSet` properties** after API overrides and VarSet expression evaluation. Canonical units are length=`mm`, angle=`deg`, area=`mm^2`, and dimensionless=`""`. Keys always use the real object name, never the `Label` alias.
+`varSetProperties` returns **all scalar `App::VarSet` properties** after API overrides and VarSet expression evaluation. Numerically evaluable values are normalized to canonical units (length=`mm`, angle=`deg`, area=`mm^2`, dimensionless=`""`). String/bool-style properties are returned as raw text with `unitUtf8=""`. Keys always use the real object name, never the `Label` alias.
 
 ### 2.5 Geometry Record
 

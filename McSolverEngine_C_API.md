@@ -113,21 +113,22 @@ typedef struct McSolverEngineBSplineKnot {
 } McSolverEngineBSplineKnot;
 ```
 
-### 2.4.1 VarSet 参数结果
+### 2.4.1 VarSet 属性结果
 
 ```c
 typedef struct McSolverEngineVarSetProperty {
     const char* keyUtf8;   // UTF-8，固定使用 ObjectName.PropertyName
-    double value;          // 已按规范单位换算后的数值
-    const char* unitUtf8;  // UTF-8，"" | "mm" | "deg" | "mm^2"
+    const char* valueUtf8; // UTF-8 值字符串
+    const char* unitUtf8;  // UTF-8 单位；非数值或无单位时为 ""
 } McSolverEngineVarSetProperty;
 ```
 
-`varSetProperties` 仅返回 **所有可数值求值的 `App::VarSet` 属性**：
+`varSetProperties` 返回 **所有标量 `App::VarSet` 属性**：
 
 - 先应用 API `parameters` 覆盖
 - 再执行 VarSet 表达式求值
-- 最终按规范单位输出：长度=`mm`，角度=`deg`，面积=`mm^2`，无量纲=`""`
+- 对可数值求值的结果按规范单位输出：长度=`mm`，角度=`deg`，面积=`mm^2`，无量纲=`""`
+- 对字符串、布尔等非数值属性，`valueUtf8` 直接返回属性内容，`unitUtf8=""`
 - 键始终使用真实对象名，不使用 `Label` 别名
 
 ### 2.5 几何记录

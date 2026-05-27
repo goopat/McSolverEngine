@@ -43,7 +43,7 @@ class ConstraintRef:
 
 @dataclass
 class VarSetPropertyValue:
-    value: float
+    value: str
     unit: str = ""
 
 @dataclass
@@ -133,7 +133,7 @@ def _varset_properties(ptr, count: int) -> dict[str, VarSetPropertyValue]:
     for i in range(count):
         item = ptr[i]
         values[_decode(item.keyUtf8)] = VarSetPropertyValue(
-            value=float(item.value),
+            value=_decode(item.valueUtf8),
             unit=_decode(item.unitUtf8),
         )
     return values

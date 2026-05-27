@@ -76,7 +76,7 @@
 - 生成基础 BREP 几何结果
 - 提供文件输出能力（如 `.brep`）或内存中的等价 BREP 表达
 - 提供精确几何导出接口，便于下游不依赖 OCCT/BREP 文本消费解析几何
-- 在 `SolveToGeometry` / `SolveToBRep` 及其带参数重载结果中，额外返回全部可数值求值的 VarSet 属性结果（`ObjectName.PropertyName -> value: double + unit: string`）
+- 在 `SolveToGeometry` / `SolveToBRep` 及其带参数重载结果中，额外返回全部 VarSet 标量属性结果（`ObjectName.PropertyName -> value: string + unit: string`）
 
 ### 3.2 后续阶段范围（可选）
 
@@ -299,8 +299,8 @@ FreeCAD 中真正把“草图数据”翻译成 GCS 参数和约束的是：
 - 参数覆盖时优先匹配全名键（如 `Config.Width`），查不到时再匹配短名键（如 `Width`）
 - 因此当多个 `VarSet` 含有同名属性时，短名覆盖存在歧义；当前推荐调用方使用全名键
 - 若多个 `VarSet` 使用相同 `Label`，当前按首次出现的别名映射生效，后续同名 `Label` 不会覆盖前者
-- 对 4 个对外求解接口（`SolveToGeometry` / `SolveToGeometryWithParameters` / `SolveToBRep` / `SolveToBRepWithParameters`），结果中会返回全部**可数值求值**的 VarSet 属性表；输出键固定使用真实对象名（`ObjectName.PropertyName`），不使用 `Label` 别名
-- VarSet 结果表中的 `value` 使用 `double`，`unit` 使用字符串；当前规范单位为：长度=`mm`、角度=`deg`、面积=`mm^2`、无量纲=`""`
+- 对 4 个对外求解接口（`SolveToGeometry` / `SolveToGeometryWithParameters` / `SolveToBRep` / `SolveToBRepWithParameters`），结果中会返回全部 VarSet 标量属性表；输出键固定使用真实对象名（`ObjectName.PropertyName`），不使用 `Label` 别名
+- VarSet 结果表中的 `value` / `unit` 都使用字符串；可数值求值的结果按当前规范单位输出：长度=`mm`、角度=`deg`、面积=`mm^2`、无量纲=`""`；字符串/布尔等非数值属性保持原始文本并返回空单位
 - `Constraints` 当前同时兼容 FreeCAD 保存的两套元素字段：
   - 新格式：`ElementIds` / `ElementPositions`
   - 旧格式：`First / FirstPos / Second / SecondPos / Third / ThirdPos`

@@ -114,7 +114,7 @@ public class WrapperRegressionTests
             </Objects>
             <ObjectData Count="2">
                 <Object name="VarSet001">
-                    <Properties Count="8" TransientCount="0">
+                    <Properties Count="10" TransientCount="0">
                         <Property name="Label" type="App::PropertyString">
                             <String value="Parameters"/>
                         </Property>
@@ -129,6 +129,9 @@ public class WrapperRegressionTests
                         </Property>
                         <Property name="Name" type="App::PropertyString">
                             <String value="widget"/>
+                        </Property>
+                        <Property name="Visible" type="App::PropertyBool">
+                            <Bool value="true"/>
                         </Property>
                         <Property name="DoubleBase" type="App::PropertyFloat">
                             <Float value="0.0"/>
@@ -486,19 +489,24 @@ public class WrapperRegressionTests
         var result = McSolverEngineClient.SolveGeometryFromDocumentXml(EvaluatedVarSetPropertiesDocumentXml, "Sketch");
 
         Assert.AreEqual(McSolverEngineNativeStatus.Success, result.NativeStatus);
-        Assert.AreEqual(6, result.VarSetProperties.Count);
+        Assert.AreEqual(9, result.VarSetProperties.Count);
+        Assert.IsTrue(result.VarSetProperties.ContainsKey("VarSet001.Label"));
         Assert.IsTrue(result.VarSetProperties.ContainsKey("VarSet001.Base"));
         Assert.IsTrue(result.VarSetProperties.ContainsKey("VarSet001.Length"));
         Assert.IsTrue(result.VarSetProperties.ContainsKey("VarSet001.Angle"));
         Assert.IsTrue(result.VarSetProperties.ContainsKey("VarSet001.Area"));
-        Assert.IsFalse(result.VarSetProperties.ContainsKey("VarSet001.Name"));
-        Assert.AreEqual(4.0, result.VarSetProperties["VarSet001.Base"].Value, 1e-9);
+        Assert.IsTrue(result.VarSetProperties.ContainsKey("VarSet001.Name"));
+        Assert.IsTrue(result.VarSetProperties.ContainsKey("VarSet001.Visible"));
+        Assert.AreEqual("Parameters", result.VarSetProperties["VarSet001.Label"].Value);
+        Assert.AreEqual("4", result.VarSetProperties["VarSet001.Base"].Value);
         Assert.AreEqual(string.Empty, result.VarSetProperties["VarSet001.Base"].Unit);
-        Assert.AreEqual(1000.0, result.VarSetProperties["VarSet001.Length"].Value, 1e-9);
+        Assert.AreEqual("1000", result.VarSetProperties["VarSet001.Length"].Value);
         Assert.AreEqual("mm", result.VarSetProperties["VarSet001.Length"].Unit);
-        Assert.AreEqual(90.0, result.VarSetProperties["VarSet001.Angle"].Value, 1e-9);
+        Assert.AreEqual("90", result.VarSetProperties["VarSet001.Angle"].Value);
         Assert.AreEqual("deg", result.VarSetProperties["VarSet001.Angle"].Unit);
-        Assert.AreEqual(1000000.0, result.VarSetProperties["VarSet001.Area"].Value, 1e-6);
+        Assert.AreEqual("widget", result.VarSetProperties["VarSet001.Name"].Value);
+        Assert.AreEqual("true", result.VarSetProperties["VarSet001.Visible"].Value);
+        Assert.AreEqual("1000000", result.VarSetProperties["VarSet001.Area"].Value);
         Assert.AreEqual("mm^2", result.VarSetProperties["VarSet001.Area"].Unit);
     }
 
@@ -512,9 +520,9 @@ public class WrapperRegressionTests
         );
 
         Assert.AreEqual(McSolverEngineNativeStatus.Success, result.NativeStatus);
-        Assert.AreEqual(6.0, result.VarSetProperties["VarSet001.Base"].Value, 1e-9);
-        Assert.AreEqual(12.0, result.VarSetProperties["VarSet001.DoubleBase"].Value, 1e-9);
-        Assert.AreEqual(13.0, result.VarSetProperties["VarSet001.Width"].Value, 1e-9);
+        Assert.AreEqual("6", result.VarSetProperties["VarSet001.Base"].Value);
+        Assert.AreEqual("12", result.VarSetProperties["VarSet001.DoubleBase"].Value);
+        Assert.AreEqual("13", result.VarSetProperties["VarSet001.Width"].Value);
     }
 
     [TestMethod]
@@ -523,10 +531,10 @@ public class WrapperRegressionTests
         var result = McSolverEngineClient.SolveBRepFromDocumentXml(EvaluatedVarSetPropertiesDocumentXml, "Sketch");
 
         Assert.AreEqual(McSolverEngineNativeStatus.Success, result.NativeStatus);
-        Assert.AreEqual(6, result.VarSetProperties.Count);
-        Assert.AreEqual(9.0, result.VarSetProperties["VarSet001.Width"].Value, 1e-9);
+        Assert.AreEqual(9, result.VarSetProperties.Count);
+        Assert.AreEqual("9", result.VarSetProperties["VarSet001.Width"].Value);
         Assert.AreEqual("", result.VarSetProperties["VarSet001.Width"].Unit);
-        Assert.AreEqual(1000000.0, result.VarSetProperties["VarSet001.Area"].Value, 1e-6);
+        Assert.AreEqual("1000000", result.VarSetProperties["VarSet001.Area"].Value);
         Assert.AreEqual("mm^2", result.VarSetProperties["VarSet001.Area"].Unit);
     }
 

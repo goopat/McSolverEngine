@@ -1213,7 +1213,7 @@ int main()
     </Objects>
     <ObjectData Count="2">
         <Object name="VarSet001">
-            <Properties Count="8" TransientCount="0">
+            <Properties Count="10" TransientCount="0">
                 <Property name="Label" type="App::PropertyString">
                     <String value="Parameters"/>
                 </Property>
@@ -1228,6 +1228,9 @@ int main()
                 </Property>
                 <Property name="Name" type="App::PropertyString">
                     <String value="widget"/>
+                </Property>
+                <Property name="Visible" type="App::PropertyBool">
+                    <Bool value="true"/>
                 </Property>
                 <Property name="DoubleBase" type="App::PropertyFloat">
                     <Float value="0.0"/>
@@ -1273,10 +1276,10 @@ int main()
     </ObjectData>
 </Document>)";
 
-    const auto findEvaluatedVarSetProperty = [](
-                                               const std::vector<McSolverEngine::DocumentXml::EvaluatedVarSetProperty>& properties,
-                                               std::string_view key
-                                           ) -> const McSolverEngine::DocumentXml::EvaluatedVarSetProperty* {
+    const auto findVarSetProperty = [](
+                                        const std::vector<McSolverEngine::DocumentXml::VarSetPropertyValue>& properties,
+                                        std::string_view key
+                                    ) -> const McSolverEngine::DocumentXml::VarSetPropertyValue* {
         for (const auto& property : properties) {
             if (property.key == key) {
                 return &property;
@@ -1285,15 +1288,14 @@ int main()
         return nullptr;
     };
 
-    const auto expectEvaluatedVarSetProperty = [&](
-                                                   const std::vector<McSolverEngine::DocumentXml::EvaluatedVarSetProperty>& properties,
-                                                   std::string_view key,
-                                                   double expectedValue,
-                                                   std::string_view expectedUnit
-                                               ) {
-        const auto* property = findEvaluatedVarSetProperty(properties, key);
-        return property != nullptr && std::abs(property->value - expectedValue) <= 1e-9
-            && property->unit == expectedUnit;
+    const auto expectVarSetProperty = [&](
+                                          const std::vector<McSolverEngine::DocumentXml::VarSetPropertyValue>& properties,
+                                          std::string_view key,
+                                          std::string_view expectedValue,
+                                          std::string_view expectedUnit
+                                      ) {
+        const auto* property = findVarSetProperty(properties, key);
+        return property != nullptr && property->value == expectedValue && property->unit == expectedUnit;
     };
 
     auto importedEvaluatedVarSetProperties = McSolverEngine::DocumentXml::importSketchFromDocumentXml(
@@ -1305,52 +1307,65 @@ int main()
         std::cerr << "Expected evaluated VarSet property import to succeed.\n";
         return 1;
     }
-    if (importedEvaluatedVarSetProperties.evaluatedVarSetProperties.size() != 6) {
-        std::cerr << "Expected only numerically evaluable VarSet properties to be returned.\n";
+    if (importedEvaluatedVarSetProperties.varSetProperties.size() != 9) {
+        std::cerr << "Expected all scalar VarSet properties to be returned.\n";
         return 1;
     }
-    if (!expectEvaluatedVarSetProperty(
-            importedEvaluatedVarSetProperties.evaluatedVarSetProperties,
-            "VarSet001.Base",
-            4.0,
+    if (!expectVarSetProperty(
+            importedEvaluatedVarSetProperties.varSetProperties,
+            "VarSet001.Label",
+            "Parameters",
             ""
         )
-        || !expectEvaluatedVarSetProperty(
-            importedEvaluatedVarSetProperties.evaluatedVarSetProperties,
+        || !expectVarSetProperty(
+            importedEvaluatedVarSetProperties.varSetProperties,
+            "VarSet001.Base",
+            "4",
+            ""
+        )
+        || !expectVarSetProperty(
+            importedEvaluatedVarSetProperties.varSetProperties,
             "VarSet001.Length",
-            1000.0,
+            "1000",
             "mm"
         )
-        || !expectEvaluatedVarSetProperty(
-            importedEvaluatedVarSetProperties.evaluatedVarSetProperties,
+        || !expectVarSetProperty(
+            importedEvaluatedVarSetProperties.varSetProperties,
             "VarSet001.Angle",
-            90.0,
+            "90",
             "deg"
         )
-        || !expectEvaluatedVarSetProperty(
-            importedEvaluatedVarSetProperties.evaluatedVarSetProperties,
+        || !expectVarSetProperty(
+            importedEvaluatedVarSetProperties.varSetProperties,
+            "VarSet001.Name",
+            "widget",
+            ""
+        )
+        || !expectVarSetProperty(
+            importedEvaluatedVarSetProperties.varSetProperties,
+            "VarSet001.Visible",
+            "true",
+            ""
+        )
+        || !expectVarSetProperty(
+            importedEvaluatedVarSetProperties.varSetProperties,
             "VarSet001.DoubleBase",
-            8.0,
+            "8",
             ""
         )
-        || !expectEvaluatedVarSetProperty(
-            importedEvaluatedVarSetProperties.evaluatedVarSetProperties,
+        || !expectVarSetProperty(
+            importedEvaluatedVarSetProperties.varSetProperties,
             "VarSet001.Width",
-            9.0,
+            "9",
             ""
         )
-        || !expectEvaluatedVarSetProperty(
-            importedEvaluatedVarSetProperties.evaluatedVarSetProperties,
+        || !expectVarSetProperty(
+            importedEvaluatedVarSetProperties.varSetProperties,
             "VarSet001.Area",
-            1000000.0,
+            "1000000",
             "mm^2"
         )) {
-        std::cerr << "Evaluated VarSet properties did not expose canonical key/value/unit results.\n";
-        return 1;
-    }
-    if (findEvaluatedVarSetProperty(importedEvaluatedVarSetProperties.evaluatedVarSetProperties, "VarSet001.Name")
-        != nullptr) {
-        std::cerr << "Expected non-numeric VarSet properties to be skipped.\n";
+        std::cerr << "VarSet properties did not expose expected key/value/unit results.\n";
         return 1;
     }
 
@@ -1364,25 +1379,25 @@ int main()
         std::cerr << "Expected evaluated VarSet property override import to succeed.\n";
         return 1;
     }
-    if (!expectEvaluatedVarSetProperty(
-            importedEvaluatedVarSetPropertiesOverride.evaluatedVarSetProperties,
+    if (!expectVarSetProperty(
+            importedEvaluatedVarSetPropertiesOverride.varSetProperties,
             "VarSet001.Base",
-            6.0,
+            "6",
             ""
         )
-        || !expectEvaluatedVarSetProperty(
-            importedEvaluatedVarSetPropertiesOverride.evaluatedVarSetProperties,
+        || !expectVarSetProperty(
+            importedEvaluatedVarSetPropertiesOverride.varSetProperties,
             "VarSet001.DoubleBase",
-            12.0,
+            "12",
             ""
         )
-        || !expectEvaluatedVarSetProperty(
-            importedEvaluatedVarSetPropertiesOverride.evaluatedVarSetProperties,
+        || !expectVarSetProperty(
+            importedEvaluatedVarSetPropertiesOverride.varSetProperties,
             "VarSet001.Width",
-            13.0,
+            "13",
             ""
         )) {
-        std::cerr << "Expected canonical VarSet result export to reflect parameter overrides.\n";
+        std::cerr << "Expected VarSet result export to reflect parameter overrides.\n";
         return 1;
     }
 

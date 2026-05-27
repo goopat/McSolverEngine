@@ -54,12 +54,12 @@ bool expectVarSetProperty(
     const McSolverEngineVarSetProperty* properties,
     int count,
     std::string_view key,
-    double expectedValue,
+    std::string_view expectedValue,
     std::string_view expectedUnit
 )
 {
     const auto* property = findVarSetProperty(properties, count, key);
-    return property != nullptr && std::abs(property->value - expectedValue) <= 1e-9
+    return property != nullptr && property->valueUtf8 != nullptr && expectedValue == property->valueUtf8
         && property->unitUtf8 != nullptr && expectedUnit == property->unitUtf8;
 }
 
@@ -559,7 +559,7 @@ int main()
     </Objects>
     <ObjectData Count="2">
         <Object name="VarSet001">
-            <Properties Count="8" TransientCount="0">
+            <Properties Count="10" TransientCount="0">
                 <Property name="Label" type="App::PropertyString">
                     <String value="Parameters"/>
                 </Property>
@@ -574,6 +574,9 @@ int main()
                 </Property>
                 <Property name="Name" type="App::PropertyString">
                     <String value="widget"/>
+                </Property>
+                <Property name="Visible" type="App::PropertyBool">
+                    <Bool value="true"/>
                 </Property>
                 <Property name="DoubleBase" type="App::PropertyFloat">
                     <Float value="0.0"/>
@@ -632,12 +635,14 @@ int main()
         );
         if (!expect(geometryCode == MCSOLVERENGINE_RESULT_SUCCESS, "Expected Geometry call with evaluated VarSet properties to succeed.")
             || !expect(geometryResult != nullptr, "Expected Geometry result pointer for evaluated VarSet properties.")
-            || !expect(geometryResult->varSetPropertyCount == 6, "Expected Geometry result to expose all numerically evaluable VarSet properties.")
-            || !expectVarSetProperty(geometryResult->varSetProperties, geometryResult->varSetPropertyCount, "VarSet001.Base", 4.0, "")
-            || !expectVarSetProperty(geometryResult->varSetProperties, geometryResult->varSetPropertyCount, "VarSet001.Length", 1000.0, "mm")
-            || !expectVarSetProperty(geometryResult->varSetProperties, geometryResult->varSetPropertyCount, "VarSet001.Angle", 90.0, "deg")
-            || !expectVarSetProperty(geometryResult->varSetProperties, geometryResult->varSetPropertyCount, "VarSet001.Area", 1000000.0, "mm^2")
-            || !expect(findVarSetProperty(geometryResult->varSetProperties, geometryResult->varSetPropertyCount, "VarSet001.Name") == nullptr, "Expected Geometry result to skip non-numeric VarSet properties.")) {
+            || !expect(geometryResult->varSetPropertyCount == 9, "Expected Geometry result to expose all scalar VarSet properties.")
+            || !expectVarSetProperty(geometryResult->varSetProperties, geometryResult->varSetPropertyCount, "VarSet001.Label", "Parameters", "")
+            || !expectVarSetProperty(geometryResult->varSetProperties, geometryResult->varSetPropertyCount, "VarSet001.Base", "4", "")
+            || !expectVarSetProperty(geometryResult->varSetProperties, geometryResult->varSetPropertyCount, "VarSet001.Length", "1000", "mm")
+            || !expectVarSetProperty(geometryResult->varSetProperties, geometryResult->varSetPropertyCount, "VarSet001.Angle", "90", "deg")
+            || !expectVarSetProperty(geometryResult->varSetProperties, geometryResult->varSetPropertyCount, "VarSet001.Name", "widget", "")
+            || !expectVarSetProperty(geometryResult->varSetProperties, geometryResult->varSetPropertyCount, "VarSet001.Visible", "true", "")
+            || !expectVarSetProperty(geometryResult->varSetProperties, geometryResult->varSetPropertyCount, "VarSet001.Area", "1000000", "mm^2")) {
             McSolverEngine_FreeGeometryResult(geometryResult);
             return EXIT_FAILURE;
         }
@@ -657,9 +662,9 @@ int main()
         );
         if (!expect(geometryCode == MCSOLVERENGINE_RESULT_SUCCESS, "Expected parameterized Geometry call with evaluated VarSet properties to succeed.")
             || !expect(geometryResult != nullptr, "Expected parameterized Geometry result pointer for evaluated VarSet properties.")
-            || !expectVarSetProperty(geometryResult->varSetProperties, geometryResult->varSetPropertyCount, "VarSet001.Base", 6.0, "")
-            || !expectVarSetProperty(geometryResult->varSetProperties, geometryResult->varSetPropertyCount, "VarSet001.DoubleBase", 12.0, "")
-            || !expectVarSetProperty(geometryResult->varSetProperties, geometryResult->varSetPropertyCount, "VarSet001.Width", 13.0, "")) {
+            || !expectVarSetProperty(geometryResult->varSetProperties, geometryResult->varSetPropertyCount, "VarSet001.Base", "6", "")
+            || !expectVarSetProperty(geometryResult->varSetProperties, geometryResult->varSetPropertyCount, "VarSet001.DoubleBase", "12", "")
+            || !expectVarSetProperty(geometryResult->varSetProperties, geometryResult->varSetPropertyCount, "VarSet001.Width", "13", "")) {
             McSolverEngine_FreeGeometryResult(geometryResult);
             return EXIT_FAILURE;
         }
@@ -680,8 +685,8 @@ int main()
                 "Expected BRep call with evaluated VarSet properties to succeed or report missing OCCT."
             )
             || !expect(brepResult != nullptr, "Expected BRep result pointer for evaluated VarSet properties.")
-            || !expectVarSetProperty(brepResult->varSetProperties, brepResult->varSetPropertyCount, "VarSet001.Width", 9.0, "")
-            || !expectVarSetProperty(brepResult->varSetProperties, brepResult->varSetPropertyCount, "VarSet001.Area", 1000000.0, "mm^2")) {
+            || !expectVarSetProperty(brepResult->varSetProperties, brepResult->varSetPropertyCount, "VarSet001.Width", "9", "")
+            || !expectVarSetProperty(brepResult->varSetProperties, brepResult->varSetPropertyCount, "VarSet001.Area", "1000000", "mm^2")) {
             McSolverEngine_FreeBRepResult(brepResult);
             return EXIT_FAILURE;
         }
@@ -705,8 +710,8 @@ int main()
                 "Expected parameterized BRep call with evaluated VarSet properties to succeed or report missing OCCT."
             )
             || !expect(brepResult != nullptr, "Expected parameterized BRep result pointer for evaluated VarSet properties.")
-            || !expectVarSetProperty(brepResult->varSetProperties, brepResult->varSetPropertyCount, "VarSet001.Base", 6.0, "")
-            || !expectVarSetProperty(brepResult->varSetProperties, brepResult->varSetPropertyCount, "VarSet001.Width", 13.0, "")) {
+            || !expectVarSetProperty(brepResult->varSetProperties, brepResult->varSetPropertyCount, "VarSet001.Base", "6", "")
+            || !expectVarSetProperty(brepResult->varSetProperties, brepResult->varSetPropertyCount, "VarSet001.Width", "13", "")) {
             McSolverEngine_FreeBRepResult(brepResult);
             return EXIT_FAILURE;
         }

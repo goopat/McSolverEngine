@@ -379,7 +379,7 @@ struct ExpressionEntry
 
 [[nodiscard]] std::optional<std::string> extractPropertyScalarValue(std::string_view propertyBlock)
 {
-    for (const auto* tagName : {"Float", "Integer", "Quantity", "String"}) {
+    for (const auto* tagName : {"Float", "Integer", "Quantity", "String", "Bool"}) {
         if (const auto tag = findFirstTag(propertyBlock, tagName)) {
             if (const auto value = extractAttribute(*tag, "value")) {
                 return unescapeXmlAttribute(*value);
@@ -452,11 +452,12 @@ struct ExpressionEntry
         }
 
         for (const auto& property : collectPropertyBlocks(object.content)) {
-            if (property.name == "Label" || property.name == "ExpressionEngine") {
+            if (property.name == "ExpressionEngine") {
                 continue;
             }
             if (const auto value = extractPropertyScalarValue(property.content)) {
                 auto& varSetProperty = VarSetExpressions::ensureVarSetProperty(catalog, object.name, property.name);
+                varSetProperty.typeName = property.type;
                 varSetProperty.rawValue = *value;
                 varSetProperty.hasRawValue = true;
             }
@@ -1485,7 +1486,7 @@ ImportResult importSketchFromDocumentXml(
 
     if (!VarSetExpressions::applyApiParametersToVarSets(varSetCatalog, parsedParameters, result.messages)
         || !VarSetExpressions::evaluateVarSetExpressions(varSetCatalog, result)
-        || !VarSetExpressions::collectEvaluatedVarSetProperties(varSetCatalog, result)) {
+        || !VarSetExpressions::collectVarSetProperties(varSetCatalog, result)) {
         result.status = ImportStatus::Failed;
         return result;
     }

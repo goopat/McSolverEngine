@@ -112,8 +112,8 @@ typedef struct McSolverEngineConstraintRef
 typedef struct McSolverEngineVarSetProperty
 {
     const char* keyUtf8;          // UTF-8 canonical key: ObjectName.PropertyName
-    double value;
-    const char* unitUtf8;         // UTF-8 canonical unit, or "" for dimensionless
+    const char* valueUtf8;        // UTF-8 value string
+    const char* unitUtf8;         // UTF-8 canonical unit when available, or ""
 } McSolverEngineVarSetProperty;
 
 typedef struct McSolverEngineGeometryRecord

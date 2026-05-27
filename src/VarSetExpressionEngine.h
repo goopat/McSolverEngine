@@ -31,6 +31,7 @@ struct VarSetProperty
 {
     std::string objectName;
     std::string propertyName;
+    std::string typeName;
     std::string rawValue;
     bool hasRawValue {false};
     std::optional<std::string> expression;
@@ -79,7 +80,7 @@ void rebuildVarSetShortNameLookup(VarSetCatalog& catalog);
 );
 
 [[nodiscard]] bool evaluateVarSetExpressions(VarSetCatalog& catalog, ImportResult& result);
-[[nodiscard]] bool collectEvaluatedVarSetProperties(VarSetCatalog& catalog, ImportResult& result);
+[[nodiscard]] bool collectVarSetProperties(VarSetCatalog& catalog, ImportResult& result);
 
 [[nodiscard]] std::optional<std::string> getVarSetValueForBinding(
     const VarSetCatalog& catalog,

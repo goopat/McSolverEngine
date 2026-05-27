@@ -464,7 +464,7 @@ public static class McSolverEngineClient
             var current = IntPtr.Add(pointer, i * stride);
             var nativeProperty = (NativeVarSetProperty)Marshal.PtrToStructure(current, typeof(NativeVarSetProperty))!;
             values[ReadNativeUtf8String(nativeProperty.KeyUtf8)] = new VarSetPropertyValueDto {
-                Value = nativeProperty.Value,
+                Value = ReadNativeUtf8String(nativeProperty.ValueUtf8),
                 Unit = ReadNativeUtf8String(nativeProperty.UnitUtf8)
             };
         }
@@ -722,7 +722,7 @@ public static class McSolverEngineClient
     private struct NativeVarSetProperty
     {
         public IntPtr KeyUtf8;
-        public double Value;
+        public IntPtr ValueUtf8;
         public IntPtr UnitUtf8;
     }
 
