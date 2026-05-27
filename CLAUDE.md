@@ -11,11 +11,11 @@ cmake -B build -DMCSOLVERENGINE_WITH_OCCT=ON
 cmake --build build --config Release
 ```
 
-CMake 3.22+, C++20. pixi provides Eigen3/Boost/OCCT from `.pixi/envs/default/Library/`; CMake requires Eigen3 and Boost from that pixi environment, and when `MCSOLVERENGINE_WITH_OCCT=ON` it requires OCCT there too.
+CMake 3.22+, C++20. pixi provides Eigen3/libboost-headers/OCCT from `.pixi/envs/default/Library/`; CMake requires Eigen3 and libboost-headers from that pixi environment, and when `MCSOLVERENGINE_WITH_OCCT=ON` it requires OCCT there too.
 
 **Targets**: `McSolverEngineCore` (static lib), `McSolverEngineZip` (static lib, zlib inflate + ZipExtract), `McSolverEngineNative` (DLL, C ABI), `McSolverEngineCli` (executable).
 
-**Dependencies**: Eigen3 3.4.0 (header-only) | Boost Graph/Math (header-only) | zlib 1.3.2 inflate subset (bundled, symbols prefixed `McSolverEngine_`) | OpenCASCADE 7.9 (optional, `MCSOLVERENGINE_WITH_OCCT=ON`, BREP export only).
+**Dependencies**: Eigen3 3.4.0 (header-only) | libboost-headers 1.84.0 (Graph, Math) | zlib 1.3.2 inflate subset (bundled, symbols prefixed `McSolverEngine_`) | OpenCASCADE 7.8.1 (optional, `MCSOLVERENGINE_WITH_OCCT=ON`, BREP export only).
 
 NuGet packages: `scripts/package_nuget.ps1`, output to `artifacts/nuget/`.
 

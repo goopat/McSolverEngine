@@ -211,19 +211,19 @@ FreeCAD 中真正把“草图数据”翻译成 GCS 参数和约束的是：
 `McSolverEngine` 第一阶段允许依赖：
 
 - Eigen3
-- Boost（与 GCS 当前实现一致）
+- libboost-headers 1.84.0（与 GCS 当前实现一致）
 - OCCT（可选，仅用于 BREP 输出）
 - 轻量 XML 解析实现
 
 说明：
 
-- 当前实际的**非 C++ 标准库依赖**有四类：`Eigen3`、`Boost`、`OpenCASCADE / OCCT`、`zlib`
-- 其中 `Eigen3` 与 `Boost` 是当前求解核心的必需依赖；若只保留”`Document.xml` 导入 + 基础 2D 约束求解 + 精确几何导出”，最小非标准库依赖集就是这两项
-- `Boost` 当前主要通过 `planegcs` 使用 `Boost.Graph`、`Boost.Regex` 与 `Boost.Math constants`
+- 当前实际的**非 C++ 标准库依赖**有四类：`Eigen3`、`libboost-headers`、`OCCT`、`zlib`
+- 其中 `Eigen3` 与 `libboost-headers` 是当前求解核心的必需依赖；若只保留”`Document.xml` 导入 + 基础 2D 约束求解 + 精确几何导出”，最小非标准库依赖集就是这两项
+- `libboost-headers` 当前主要通过 `planegcs` 使用 `Boost.Graph`、`Boost.Regex` 与 `Boost.Math constants`
 - 当前链接方式并非”全部动态链接”：
   - `Eigen3` 在本项目中按 header-only 依赖使用
-  - `Boost` 当前也按头文件依赖使用，构建脚本未显式链接 Boost 二进制库
-  - `OpenCASCADE / OCCT` 在启用 BREP 导出时属于动态运行时依赖：构建期链接 `.lib`，运行期需要对应 `.dll`
+  - `libboost-headers` 当前也按头文件依赖使用，构建脚本未显式链接 Boost 二进制库
+  - `OCCT` 在启用 BREP 导出时属于动态运行时依赖：构建期链接 `.lib`，运行期需要对应 `.dll`
   - `zlib` 按**静态链接 + 符号隔离**使用：源码（1.3.2，仅 inflate 子集）位于 `src/third_party/zlib/`，通过编译级宏将全部公开符号重命名为 `McSolverEngine_<name>` 前缀，编译为目标 `McSolverEngineZip` 静态库，PRIVATE 链接进 `McSolverEngineNative` DLL，DLL 导出表不包含任何 zlib 符号，同进程内与其他 zlib 实例零冲突
   - Windows / MSVC 下当前使用动态 CRT（`/MD` / `/MDd`），不是静态 CRT
 - `MCSOLVERENGINE_WITH_OCCT=ON` 且找到 OpenCASCADE 时，启用 OCCT-backed BREP 输出

@@ -22,15 +22,15 @@ FreeCAD 是原始上游项目；本仓库不是 FreeCAD 官方仓库。
 | 库 | 版本 | 许可证 | 使用方式 |
 |---|---|---|---|
 | **Eigen 3** | 3.4.0 | MPL-2.0 | 仅头文件。线性代数（QR 分解、稠密/稀疏矩阵），被 `planegcs` 求解器使用。通过 pixi (`eigen >=3.3,<5`) 获取；CMake 只接受 `.pixi` 中的 Eigen 头文件。 |
-| **Boost** (Graph, Math) | 1.91.0 | BSL-1.0 | 仅头文件。约束图的连通分量算法 (`boost/graph/`) 和数学常量 (`boost/math/`)。通过 pixi (`libboost-devel`) 获取；CMake 只接受 `.pixi` 中的 Boost 头文件。 |
-| **OpenCASCADE (OCCT)** | 7.8 | LGPL-2.1（社区版） | **可选**。共享库链接（`TKBRep`、`TKTopAlgo`、`TKShHealing`）。仅用于 BREP 几何导出（`BRepExport.cpp`、`SketchShapeBuilder.cpp`）。通过 pixi/conda 环境中的 `occt` 获取；当 `MCSOLVERENGINE_WITH_OCCT=ON` 时，CMake 只接受 `.pixi` 中的 OCCT。`MCSOLVERENGINE_WITH_OCCT=OFF` 时完全不依赖。 |
+| **libboost-headers** (Graph, Math) | 1.84.0 | BSL-1.0 | 仅头文件。约束图的连通分量算法 (`boost/graph/`) 和数学常量 (`boost/math/`)。通过 pixi (`libboost-headers`) 获取；CMake 只接受 `.pixi` 中的 Boost 头文件。 |
+| **OCCT** | 7.8.1 | LGPL-2.1（社区版） | **可选**。共享库链接（`TKBRep`、`TKTopAlgo`、`TKShHealing`）。仅用于 BREP 几何导出（`BRepExport.cpp`、`SketchShapeBuilder.cpp`）。通过 pixi/conda 环境中的 `occt` 获取；当 `MCSOLVERENGINE_WITH_OCCT=ON` 时，CMake 只接受 `.pixi` 中的 OCCT。`MCSOLVERENGINE_WITH_OCCT=OFF` 时完全不依赖。 |
 
 ### 内置源码（直接包含在本仓库中）
 
 | 库 | 版本 | 许可证 | 使用方式 |
 |---|---|---|---|
 | **zlib** | 1.3.2 | zlib License | 部分源码编译进 `McSolverEngineZip` 静态库（仅 inflate 解压路径，6 个 `.c` 文件：`adler32.c`、`crc32.c`、`inffast.c`、`inflate.c`、`inftrees.c`、`zutil.c`）。所有公开符号通过 `mse_zlib_prefix.h` 加 `McSolverEngine_` 前缀，避免符号冲突。用于解压 `.FCStd`（ZIP）格式文档。源码位于 `src/third_party/zlib/`。 |
-| **FreeCAD PlanGCS** | （移植自 FreeCAD） | LGPL-2.1-or-later | 约束求解器核心（`src/core/planegcs/` 下 9 个文件），移植自 FreeCAD Sketcher。版权：Konstantinos Poulios (2011)、Victor Titov / DeepSOIC (2014)。 |
+| **FreeCAD PlanGCS** | （移植自 FreeCAD 1.1.1） | LGPL-2.1-or-later | 约束求解器核心（`src/core/planegcs/` 下 9 个文件），移植自 FreeCAD Sketcher。版权：Konstantinos Poulios (2011)、Victor Titov / DeepSOIC (2014)。 |
 
 ### 测试依赖（不影响库本身）
 

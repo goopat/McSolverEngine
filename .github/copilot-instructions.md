@@ -38,12 +38,12 @@ cmake -S . -B build -DMCSOLVERENGINE_BUILD_TESTS=ON -DMCSOLVERENGINE_WITH_OCCT=O
 Dependency notes:
 
 - `Eigen3` is required and must come from `.pixi`.
-- `Boost` is required by the extracted `planegcs` solver code and must come from `.pixi`.
+- `libboost-headers` is required by the extracted `planegcs` solver code and must come from `.pixi`.
 - `OpenCASCADE` is optional only when `MCSOLVERENGINE_WITH_OCCT=OFF`; when that option is `ON`, CMake requires OCCT from `.pixi`.
 - `CMakeLists.txt` auto-probes `..\.pixi\envs\default\Library\...` for Eigen, Boost, and OCCT; these dependencies do not fall back outside `.pixi`.
 - Current linkage is mixed, not fully dynamic:
   - `Eigen3` is consumed as a header-only dependency in this project.
-  - `Boost` is currently consumed via headers only (`Boost.Graph`, `Boost.Regex`, `Boost.Math constants`); the build does not explicitly link Boost binary libraries.
+  - `libboost-headers` is currently consumed via headers only (`Boost.Graph`, `Boost.Regex`, `Boost.Math constants`); the build does not explicitly link Boost binary libraries.
   - `OpenCASCADE` is a runtime dynamic dependency when enabled: the build links `.lib` import libraries and the resulting binaries require the matching OCCT `.dll` files on `PATH`.
   - On Windows, the generated projects use the dynamic MSVC runtime (`/MD` and `/MDd`), not static CRT linkage.
 
