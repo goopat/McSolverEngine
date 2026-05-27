@@ -8,3 +8,4 @@ fcstdDoc/*.solver.brp
 
 __pycache__/
 
+/pixi.lock
