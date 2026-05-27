@@ -6,6 +6,7 @@
 #include <string>
 #include <string_view>
 #include <variant>
+#include <vector>
 
 #include <BRep_Builder.hxx>
 #include <BRepBuilderAPI_MakeEdge.hxx>
@@ -221,8 +222,7 @@ namespace
                 knots,
                 multiplicities,
                 spline.degree,
-                spline.periodic,
-                true
+                spline.periodic
             );
             BRepBuilderAPI_MakeEdge makeSpline(curve);
             return appendMadeEdge(makeSpline, edges, error, "Failed to build BSpline edge.");
@@ -233,38 +233,79 @@ namespace
     return false;
 }
 
-[[nodiscard]] TopoDS_Wire fixWire(const TopoDS_Wire& wire)
+void fixWire(TopoDS_Wire& wire)
 {
     // Match FreeCAD's Part::TopoShape::fix() behavior for each assembled wire.
     BRepBuilderAPI_Copy copyBuilder(wire);
     if (!copyBuilder.IsDone()) {
-        return wire;
+        return;
     }
 
     const TopoDS_Shape copiedWire = copyBuilder.Shape();
     ShapeFix_Shape fixCopy(copiedWire);
     fixCopy.Perform();
     if (fixCopy.Shape().IsSame(copiedWire)) {
-        return wire;
+        return;
     }
 
     BRepCheck_Analyzer checker(fixCopy.Shape());
     if (!checker.IsValid()) {
-        return wire;
+        return;
     }
 
     ShapeFix_Shape fixOriginal(wire);
     fixOriginal.Perform();
     checker.Init(fixOriginal.Shape());
     if (checker.IsValid() && fixOriginal.Shape().ShapeType() == TopAbs_WIRE) {
-        return TopoDS::Wire(fixOriginal.Shape());
+        wire = TopoDS::Wire(fixOriginal.Shape());
+        return;
     }
 
     if (fixCopy.Shape().ShapeType() == TopAbs_WIRE) {
-        return TopoDS::Wire(fixCopy.Shape());
+        wire = TopoDS::Wire(fixCopy.Shape());
+    }
+}
+
+[[nodiscard]] TopoDS_Wire rebuildWireFromEdges(const std::vector<TopoDS_Edge>& edges)
+{
+    if (edges.empty()) {
+        return {};
     }
 
-    return wire;
+    BRepBuilderAPI_MakeWire makeWire;
+    for (const auto& edge : edges) {
+        makeWire.Add(edge);
+    }
+
+    if (!makeWire.IsDone()) {
+        return {};
+    }
+
+    return makeWire.Wire();
+}
+
+[[nodiscard]] TopoDS_Shape makeShapeOrCompound(
+    const std::vector<TopoDS_Wire>& wires,
+    const std::list<TopoDS_Vertex>& vertices
+)
+{
+    if (wires.size() == 1 && vertices.empty()) {
+        return wires.front();
+    }
+
+    BRep_Builder builder;
+    TopoDS_Compound compound;
+    builder.MakeCompound(compound);
+
+    for (const auto& wire : wires) {
+        builder.Add(compound, wire);
+    }
+
+    for (const auto& vertex : vertices) {
+        builder.Add(compound, vertex);
+    }
+
+    return compound;
 }
 
 }  // namespace
@@ -284,7 +325,7 @@ TopoDS_Shape buildSketchShape(const Compat::SketchModel& model, std::string& err
     try {
         std::list<TopoDS_Edge> edgeList;
         std::list<TopoDS_Vertex> vertexList;
-        std::list<TopoDS_Wire> wires;
+        std::vector<TopoDS_Wire> wires;
 
         for (const auto& geometry : model.geometries()) {
             if (!appendGeometry(geometry, edgeList, vertexList, error)) {
@@ -294,7 +335,11 @@ TopoDS_Shape buildSketchShape(const Compat::SketchModel& model, std::string& err
 
         while (!edgeList.empty()) {
             BRepBuilderAPI_MakeWire makeWire;
-            makeWire.Add(edgeList.front());
+            std::vector<TopoDS_Edge> wireEdges;
+            wireEdges.reserve(edgeList.size());
+            wireEdges.push_back(edgeList.front());
+            makeWire.Add(wireEdges.back());
+            wireEdges.back() = makeWire.Edge();
             edgeList.pop_front();
 
             TopoDS_Wire newWire = makeWire.Wire();
@@ -305,6 +350,8 @@ TopoDS_Shape buildSketchShape(const Compat::SketchModel& model, std::string& err
                     makeWire.Add(*edgeIt);
                     if (makeWire.Error() != BRepBuilderAPI_DisconnectedWire) {
                         found = true;
+                        wireEdges.push_back(*edgeIt);
+                        wireEdges.back() = makeWire.Edge();
                         edgeList.erase(edgeIt);
                         newWire = makeWire.Wire();
                         break;
@@ -312,26 +359,15 @@ TopoDS_Shape buildSketchShape(const Compat::SketchModel& model, std::string& err
                 }
             } while (found);
 
-            wires.push_back(fixWire(newWire));
+            if (const TopoDS_Wire rebuiltWire = rebuildWireFromEdges(wireEdges); !rebuiltWire.IsNull()) {
+                newWire = rebuiltWire;
+            }
+
+            wires.push_back(newWire);
+            fixWire(wires.back());
         }
 
-    if (wires.size() == 1 && vertexList.empty()) {
-        return *wires.begin();
-    }
-
-    BRep_Builder builder;
-    TopoDS_Compound compound;
-    builder.MakeCompound(compound);
-
-    for (auto& wire : wires) {
-        builder.Add(compound, wire);
-    }
-
-    for (auto& vertex : vertexList) {
-        builder.Add(compound, vertex);
-    }
-
-    return compound;
+    return makeShapeOrCompound(wires, vertexList);
     }
     catch (const Standard_Failure& e) {
         error = std::string("OCCT error: ") + e.GetMessageString();

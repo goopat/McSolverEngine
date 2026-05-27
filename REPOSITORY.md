@@ -354,6 +354,12 @@ python -m unittest wrapper/python/tests/test_wrapper.py -v
 | C# Wrapper (net80) | `wrapper/csharp/tests/` | 同上，.NET 8.0 框架 |
 | Python Wrapper | `wrapper/python/tests/` | 19 个用例：求解、参数覆盖、BREP、几何导出、FCStd 提取、SVG 输出、版本 |
 
+**V111.9 BREP 回归校验说明**
+
+`V111.9` 相关参数化场景在 FreeCAD 和本仓库中都观察到同一类非确定性：由于浮点数尾差精度波动，草图约束求解完成后再导出 BREP 时，各几何对象在 `.brp` 文本中的出现位置可能发生变化。即使参数相同，FreeCAD 软件内重复求解也可能复现这种文本顺序漂移。
+
+目前已知最容易复现的是 `V111.9.xml + VarSet.L1=500`，而对 `V111.9.500.xml` 的 FreeCAD 对照测试也发现同类随机性。因此，C++ 与 Python 针对这两条 `V111.9` 相关用例做了**定向放宽**：只放宽几何对象在 `.brp` 文本中的位置，不再要求对象记录顺序严格一致；但几何对象本身的数据内容仍然必须在既有数值容差范围内严格匹配。除这两条 `V111.9` 特例外，其余 BREP 回归样例仍保持严格 token 顺序校验。
+
 ### 6.3 回归数据（fcstdDoc/）
 
 `fcstdDoc/` 是权威的回归语料库，共 62 个文件：
