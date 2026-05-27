@@ -11,7 +11,7 @@ cmake -B build -DMCSOLVERENGINE_WITH_OCCT=ON
 cmake --build build --config Release
 ```
 
-CMake 3.22+, C++20. pixi provides Eigen3/Boost headers (auto-detected from `.pixi/envs/default/Library/include/`, falls back to `find_package`).
+CMake 3.22+, C++20. pixi provides Eigen3/Boost/OCCT from `.pixi/envs/default/Library/`; CMake requires Eigen3 and Boost from that pixi environment, and when `MCSOLVERENGINE_WITH_OCCT=ON` it requires OCCT there too.
 
 **Targets**: `McSolverEngineCore` (static lib), `McSolverEngineZip` (static lib, zlib inflate + ZipExtract), `McSolverEngineNative` (DLL, C ABI), `McSolverEngineCli` (executable).
 

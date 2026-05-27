@@ -53,10 +53,20 @@ def _find_dll() -> str:
 def _find_occt_runtime() -> "str | None":
     """Locate the OCCT runtime binary directory."""
     home = os.environ.get("USERPROFILE", "")
+    conda_prefix = os.environ.get("CONDA_PREFIX", "")
+    package_root = os.path.dirname(os.path.abspath(__file__))
+    repo_root = os.path.abspath(os.path.join(package_root, "..", "..", ".."))
     candidates = [
+        os.path.join(conda_prefix, "Library", "bin"),
+        os.path.join(conda_prefix, "bin"),
+        os.path.join(repo_root, ".pixi", "envs", "default", "Library", "bin"),
         os.path.join(home, ".nuget", "packages", "opencascade.7.9-native", "1.0.0", "lib", "build", "bin"),
     ]
+    seen = set()
     for p in candidates:
+        if not p or p in seen:
+            continue
+        seen.add(p)
         tkbrep = os.path.join(p, "TKBRep.dll")
         if os.path.isfile(tkbrep):
             return os.path.abspath(p)

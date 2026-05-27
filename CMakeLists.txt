@@ -8,10 +8,46 @@ if(CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
     project(McSolverEngine LANGUAGES CXX)
     option(MCSOLVERENGINE_BUILD_TESTS "Build McSolverEngine tests" ON)
     include(CTest)
-    if(NOT EIGEN3_INCLUDE_DIR)
-        set(_mcsolverengine_eigen_candidates
-            "${CMAKE_CURRENT_SOURCE_DIR}/.pixi/envs/default/Library/include/eigen3"
-        )
+    set(_mcsolverengine_pixi_env_dir "${CMAKE_CURRENT_SOURCE_DIR}/.pixi/envs/default")
+    set(_mcsolverengine_pixi_library_dir "${_mcsolverengine_pixi_env_dir}/Library")
+    set(_mcsolverengine_eigen_candidates
+        "${_mcsolverengine_pixi_library_dir}/include/eigen3"
+    )
+    get_filename_component(
+        _mcsolverengine_boost_candidate
+        "${_mcsolverengine_pixi_library_dir}/include"
+        ABSOLUTE
+    )
+
+    if(EIGEN3_INCLUDE_DIR)
+        get_filename_component(EIGEN3_INCLUDE_DIR "${EIGEN3_INCLUDE_DIR}" ABSOLUTE)
+        set(_mcsolverengine_eigen_dir_allowed OFF)
+        foreach(_mcsolverengine_eigen_candidate IN LISTS _mcsolverengine_eigen_candidates)
+            get_filename_component(
+                _mcsolverengine_eigen_candidate
+                "${_mcsolverengine_eigen_candidate}"
+                ABSOLUTE
+            )
+            get_filename_component(
+                _mcsolverengine_eigen_candidate_parent
+                "${_mcsolverengine_eigen_candidate}"
+                DIRECTORY
+            )
+            if(
+                EIGEN3_INCLUDE_DIR STREQUAL "${_mcsolverengine_eigen_candidate}"
+                OR EIGEN3_INCLUDE_DIR STREQUAL "${_mcsolverengine_eigen_candidate_parent}"
+            )
+                set(_mcsolverengine_eigen_dir_allowed ON)
+                break()
+            endif()
+        endforeach()
+        if(NOT _mcsolverengine_eigen_dir_allowed)
+            message(FATAL_ERROR
+                "Eigen3 must come from .pixi/envs/default. "
+                "Set EIGEN3_INCLUDE_DIR to the Eigen headers inside .pixi or run `pixi install`."
+            )
+        endif()
+    else()
         foreach(_mcsolverengine_eigen_candidate IN LISTS _mcsolverengine_eigen_candidates)
             if(EXISTS "${_mcsolverengine_eigen_candidate}/Eigen/Core")
                 set(EIGEN3_INCLUDE_DIR "${_mcsolverengine_eigen_candidate}")
@@ -31,88 +67,135 @@ if(CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
         endforeach()
     endif()
 
-    if(NOT BOOST_INCLUDEDIR)
-        set(_mcsolverengine_boost_candidate
-            "${CMAKE_CURRENT_SOURCE_DIR}/.pixi/envs/default/Library/include"
+    if(NOT EIGEN3_INCLUDE_DIR)
+        message(FATAL_ERROR
+            "Eigen3 headers were not found in .pixi/envs/default. Run `pixi install`."
         )
-        if(EXISTS "${_mcsolverengine_boost_candidate}/boost/graph/graph_concepts.hpp")
-            set(BOOST_INCLUDEDIR "${_mcsolverengine_boost_candidate}")
+    endif()
+
+    if(BOOST_INCLUDEDIR)
+        get_filename_component(BOOST_INCLUDEDIR "${BOOST_INCLUDEDIR}" ABSOLUTE)
+        if(NOT BOOST_INCLUDEDIR STREQUAL "${_mcsolverengine_boost_candidate}")
+            message(FATAL_ERROR
+                "Boost headers must come from .pixi/envs/default. "
+                "Set BOOST_INCLUDEDIR to the Boost headers inside .pixi or run `pixi install`."
+            )
         endif()
+    elseif(EXISTS "${_mcsolverengine_boost_candidate}/boost/graph/graph_concepts.hpp")
+        set(BOOST_INCLUDEDIR "${_mcsolverengine_boost_candidate}")
     endif()
 
-    if(MCSOLVERENGINE_WITH_OCCT AND OpenCASCADE_DIR AND NOT EXISTS "${OpenCASCADE_DIR}")
-        set(OpenCASCADE_DIR "")
+    if(NOT BOOST_INCLUDEDIR)
+        message(FATAL_ERROR
+            "Boost headers were not found in .pixi/envs/default. Run `pixi install`."
+        )
     endif()
 
-    if(MCSOLVERENGINE_WITH_OCCT AND NOT OpenCASCADE_DIR AND NOT OCC_INCLUDE_DIR)
+    if(MCSOLVERENGINE_WITH_OCCT)
         set(_mcsolverengine_occt_config_candidates
-            "$ENV{USERPROFILE}/.nuget/packages/opencascade.7.9-native/1.0.0/lib/cmake/opencascade"
+            "${_mcsolverengine_pixi_library_dir}/lib/cmake/opencascade"
+            "${_mcsolverengine_pixi_env_dir}/lib/cmake/opencascade"
         )
-        foreach(_mcsolverengine_occt_config_candidate IN LISTS _mcsolverengine_occt_config_candidates)
-            if(EXISTS "${_mcsolverengine_occt_config_candidate}/OpenCASCADEConfig.cmake")
-                set(OpenCASCADE_DIR "${_mcsolverengine_occt_config_candidate}")
-                break()
-            endif()
-        endforeach()
-    endif()
-
-    if(MCSOLVERENGINE_WITH_OCCT AND NOT OpenCASCADE_DIR AND NOT OCC_INCLUDE_DIR)
         set(_mcsolverengine_occt_roots
-            "$ENV{USERPROFILE}/.nuget/packages/opencascade.7.9-native/1.0.0/lib"
-            "$ENV{USERPROFILE}/.nuget/packages/opencascade.7.9-native/1.0.0"
+            "${_mcsolverengine_pixi_library_dir}"
+            "${_mcsolverengine_pixi_env_dir}"
         )
-        foreach(_mcsolverengine_occt_root IN LISTS _mcsolverengine_occt_roots)
-            if(WIN32)
-                if(
-                    EXISTS "${_mcsolverengine_occt_root}/build/lib/TKBRep.lib"
-                    AND EXISTS "${_mcsolverengine_occt_root}/build/bin/TKBRep.dll"
-                    AND EXISTS "${_mcsolverengine_occt_root}/../content/inc/BRepTools_ShapeSet.hxx"
+
+        if(OpenCASCADE_DIR)
+            get_filename_component(OpenCASCADE_DIR "${OpenCASCADE_DIR}" ABSOLUTE)
+            set(_mcsolverengine_occt_dir_allowed OFF)
+            foreach(_mcsolverengine_occt_config_candidate IN LISTS _mcsolverengine_occt_config_candidates)
+                get_filename_component(
+                    _mcsolverengine_occt_config_candidate
+                    "${_mcsolverengine_occt_config_candidate}"
+                    ABSOLUTE
                 )
-                    file(GLOB _mcsolverengine_occ_libs "${_mcsolverengine_occt_root}/build/lib/*.lib")
-                    list(SORT _mcsolverengine_occ_libs)
-                    set(OCC_INCLUDE_DIR "${_mcsolverengine_occt_root}/../content/inc")
-                    set(OCC_LIBRARY_DIR "${_mcsolverengine_occt_root}/build/lib")
-                    set(OpenCASCADE_BINARY_DIR "${_mcsolverengine_occt_root}/build/bin")
-                    set(OCC_LIBRARIES ${_mcsolverengine_occ_libs})
-                    break()
-                elseif(
-                    EXISTS "${_mcsolverengine_occt_root}/lib/build/lib/TKBRep.lib"
-                    AND EXISTS "${_mcsolverengine_occt_root}/lib/build/bin/TKBRep.dll"
-                    AND EXISTS "${_mcsolverengine_occt_root}/content/inc/BRepTools_ShapeSet.hxx"
-                )
-                    file(GLOB _mcsolverengine_occ_libs "${_mcsolverengine_occt_root}/lib/build/lib/*.lib")
-                    list(SORT _mcsolverengine_occ_libs)
-                    set(OCC_INCLUDE_DIR "${_mcsolverengine_occt_root}/content/inc")
-                    set(OCC_LIBRARY_DIR "${_mcsolverengine_occt_root}/lib/build/lib")
-                    set(OpenCASCADE_BINARY_DIR "${_mcsolverengine_occt_root}/lib/build/bin")
-                    set(OCC_LIBRARIES ${_mcsolverengine_occ_libs})
+                if(OpenCASCADE_DIR STREQUAL "${_mcsolverengine_occt_config_candidate}")
+                    set(_mcsolverengine_occt_dir_allowed ON)
                     break()
                 endif()
-            else()
-                if(
-                    EXISTS "${_mcsolverengine_occt_root}/lib/libTKBRep.so"
-                    AND EXISTS "${_mcsolverengine_occt_root}/include/opencascade/BRepTools_ShapeSet.hxx"
+            endforeach()
+            if(NOT _mcsolverengine_occt_dir_allowed)
+                message(FATAL_ERROR
+                    "MCSOLVERENGINE_WITH_OCCT=ON only supports OCCT from .pixi. "
+                    "Set OpenCASCADE_DIR to a .pixi opencascade config directory or run `pixi install`."
                 )
-                    file(GLOB _mcsolverengine_occ_libs "${_mcsolverengine_occt_root}/lib/lib*.so")
-                    list(SORT _mcsolverengine_occ_libs)
-                    set(OCC_INCLUDE_DIR "${_mcsolverengine_occt_root}/include/opencascade")
-                    set(OCC_LIBRARY_DIR "${_mcsolverengine_occt_root}/lib")
-                    set(OpenCASCADE_BINARY_DIR "${_mcsolverengine_occt_root}/lib")
-                    set(OCC_LIBRARIES ${_mcsolverengine_occ_libs})
-                    break()
-                elseif(
-                    EXISTS "${_mcsolverengine_occt_root}/lib/libTKBRep.a"
-                    AND EXISTS "${_mcsolverengine_occt_root}/include/opencascade/BRepTools_ShapeSet.hxx"
-                )
-                    file(GLOB _mcsolverengine_occ_libs "${_mcsolverengine_occt_root}/lib/lib*.a")
-                    list(SORT _mcsolverengine_occ_libs)
-                    set(OCC_INCLUDE_DIR "${_mcsolverengine_occt_root}/include/opencascade")
-                    set(OCC_LIBRARY_DIR "${_mcsolverengine_occt_root}/lib")
-                    set(OCC_LIBRARIES ${_mcsolverengine_occ_libs})
-                    break()
-                endif()
             endif()
-        endforeach()
+            if(NOT EXISTS "${OpenCASCADE_DIR}/OpenCASCADEConfig.cmake")
+                message(FATAL_ERROR
+                    "OpenCASCADEConfig.cmake was not found under `${OpenCASCADE_DIR}`. "
+                    "Run `pixi install` to provision OCCT in .pixi."
+                )
+            endif()
+        else()
+            foreach(_mcsolverengine_occt_config_candidate IN LISTS _mcsolverengine_occt_config_candidates)
+                if(EXISTS "${_mcsolverengine_occt_config_candidate}/OpenCASCADEConfig.cmake")
+                    set(OpenCASCADE_DIR "${_mcsolverengine_occt_config_candidate}")
+                    break()
+                endif()
+            endforeach()
+        endif()
+
+        if(OpenCASCADE_DIR)
+            if(EXISTS "${_mcsolverengine_pixi_library_dir}/bin")
+                set(OpenCASCADE_BINARY_DIR "${_mcsolverengine_pixi_library_dir}/bin")
+            elseif(EXISTS "${_mcsolverengine_pixi_env_dir}/bin")
+                set(OpenCASCADE_BINARY_DIR "${_mcsolverengine_pixi_env_dir}/bin")
+            endif()
+            find_package(OpenCASCADE CONFIG REQUIRED
+                PATHS "${OpenCASCADE_DIR}"
+                NO_DEFAULT_PATH
+                COMPONENTS FoundationClasses ModelingData ModelingAlgorithms
+            )
+        else()
+            foreach(_mcsolverengine_occt_root IN LISTS _mcsolverengine_occt_roots)
+                if(WIN32)
+                    if(
+                        EXISTS "${_mcsolverengine_occt_root}/lib/TKBRep.lib"
+                        AND EXISTS "${_mcsolverengine_occt_root}/bin/TKBRep.dll"
+                        AND EXISTS "${_mcsolverengine_occt_root}/include/opencascade/BRepTools_ShapeSet.hxx"
+                    )
+                        file(GLOB _mcsolverengine_occ_libs "${_mcsolverengine_occt_root}/lib/*.lib")
+                        list(SORT _mcsolverengine_occ_libs)
+                        set(OCC_INCLUDE_DIR "${_mcsolverengine_occt_root}/include/opencascade")
+                        set(OCC_LIBRARY_DIR "${_mcsolverengine_occt_root}/lib")
+                        set(OpenCASCADE_BINARY_DIR "${_mcsolverengine_occt_root}/bin")
+                        set(OCC_LIBRARIES ${_mcsolverengine_occ_libs})
+                        break()
+                    endif()
+                else()
+                    if(
+                        EXISTS "${_mcsolverengine_occt_root}/lib/libTKBRep.so"
+                        AND EXISTS "${_mcsolverengine_occt_root}/include/opencascade/BRepTools_ShapeSet.hxx"
+                    )
+                        file(GLOB _mcsolverengine_occ_libs "${_mcsolverengine_occt_root}/lib/lib*.so")
+                        list(SORT _mcsolverengine_occ_libs)
+                        set(OCC_INCLUDE_DIR "${_mcsolverengine_occt_root}/include/opencascade")
+                        set(OCC_LIBRARY_DIR "${_mcsolverengine_occt_root}/lib")
+                        set(OpenCASCADE_BINARY_DIR "${_mcsolverengine_occt_root}/lib")
+                        set(OCC_LIBRARIES ${_mcsolverengine_occ_libs})
+                        break()
+                    elseif(
+                        EXISTS "${_mcsolverengine_occt_root}/lib/libTKBRep.a"
+                        AND EXISTS "${_mcsolverengine_occt_root}/include/opencascade/BRepTools_ShapeSet.hxx"
+                    )
+                        file(GLOB _mcsolverengine_occ_libs "${_mcsolverengine_occt_root}/lib/lib*.a")
+                        list(SORT _mcsolverengine_occ_libs)
+                        set(OCC_INCLUDE_DIR "${_mcsolverengine_occt_root}/include/opencascade")
+                        set(OCC_LIBRARY_DIR "${_mcsolverengine_occt_root}/lib")
+                        set(OCC_LIBRARIES ${_mcsolverengine_occ_libs})
+                        break()
+                    endif()
+                endif()
+            endforeach()
+        endif()
+
+        if(NOT OpenCASCADE_FOUND AND NOT TARGET TKBRep AND NOT OCC_INCLUDE_DIR)
+            message(FATAL_ERROR
+                "MCSOLVERENGINE_WITH_OCCT=ON requires OCCT from .pixi/envs/default. "
+                "Run `pixi install` and ensure the `occt` package is present."
+            )
+        endif()
     endif()
 
     if(MCSOLVERENGINE_WITH_OCCT AND OCC_LIBRARY_DIR AND NOT OpenCASCADE_BINARY_DIR)
@@ -131,13 +214,6 @@ if(CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
         set(OCC_LIBRARIES ${_mcsolverengine_occ_libs})
     endif()
 
-    if(NOT EIGEN3_INCLUDE_DIR)
-        find_package(Eigen3 REQUIRED)
-    endif()
-
-    if(MCSOLVERENGINE_WITH_OCCT)
-        find_package(OpenCASCADE CONFIG QUIET COMPONENTS FoundationClasses ModelingData ModelingAlgorithms)
-    endif()
 else()
     if(NOT DEFINED MCSOLVERENGINE_BUILD_TESTS)
         set(MCSOLVERENGINE_BUILD_TESTS ${ENABLE_DEVELOPER_TESTS})
@@ -146,8 +222,6 @@ endif()
 
 if(MCSOLVERENGINE_WITH_OCCT AND (OpenCASCADE_FOUND OR TARGET TKBRep OR OCC_INCLUDE_DIR))
     set(MCSOLVERENGINE_HAS_OCCT ON)
-elseif(MCSOLVERENGINE_WITH_OCCT)
-    message(STATUS "OpenCASCADE not found; building McSolverEngine without BREP export support.")
 endif()
 
 set(MCSOLVERENGINE_RUNTIME_PATH "")
@@ -200,11 +274,20 @@ target_include_directories(McSolverEngineZip
         $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
         $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>
 )
-target_compile_options(McSolverEngineZip PRIVATE
-    $<$<C_COMPILER_ID:MSVC>:/FI "${CMAKE_CURRENT_SOURCE_DIR}/src/third_party/zlib/mse_zlib_prefix.h">
-    $<$<NOT:$<C_COMPILER_ID:MSVC>>:-include "${CMAKE_CURRENT_SOURCE_DIR}/src/third_party/zlib/mse_zlib_prefix.h">
-    $<$<C_COMPILER_ID:MSVC>:/wd4127 /wd4131>
+set(_mcsolverengine_zlib_prefix_header
+    "${CMAKE_CURRENT_SOURCE_DIR}/src/third_party/zlib/mse_zlib_prefix.h"
 )
+if(MSVC)
+    target_compile_options(McSolverEngineZip PRIVATE
+        /FI"${_mcsolverengine_zlib_prefix_header}"
+        /wd4127
+        /wd4131
+    )
+else()
+    target_compile_options(McSolverEngineZip PRIVATE
+        -include "${_mcsolverengine_zlib_prefix_header}"
+    )
+endif()
 
 add_library(McSolverEngine::Zip ALIAS McSolverEngineZip)
 

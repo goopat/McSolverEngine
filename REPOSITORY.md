@@ -169,9 +169,9 @@ cmake --build build --config Release
 
 CMake 按以下优先级自动发现依赖：
 
-1. **Eigen3**: 先查 `.pixi/envs/default/Library/include/eigen3/`，再走 `find_package`
-2. **Boost**: 先查 `.pixi/envs/default/Library/include/`，再走 `find_package`
-3. **OCCT**: 先查 NuGet 缓存 `~/.nuget/packages/opencascade.7.9-native/`，再走 `find_package(OpenCASCADE)`
+1. **Eigen3**: 仅查 `.pixi/envs/default/Library/include/eigen3/`；若未找到，则直接配置失败
+2. **Boost**: 仅查 `.pixi/envs/default/Library/include/`；若未找到，则直接配置失败
+3. **OCCT**: 仅查 `.pixi/envs/default/Library/`（`include/opencascade`、`lib`、`bin` 或其 CMake config）；若 `MCSOLVERENGINE_WITH_OCCT=ON` 且未找到，则直接配置失败
 4. **zlib**: 不依赖系统 zlib，始终使用内置 `src/third_party/zlib/`
 
 ### 3.5 编译标准

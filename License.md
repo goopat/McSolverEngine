@@ -21,9 +21,9 @@ FreeCAD 是原始上游项目；本仓库不是 FreeCAD 官方仓库。
 
 | 库 | 版本 | 许可证 | 使用方式 |
 |---|---|---|---|
-| **Eigen 3** | 3.4.0 | MPL-2.0 | 仅头文件。线性代数（QR 分解、稠密/稀疏矩阵），被 `planegcs` 求解器使用。通过 pixi (`eigen >=3.3,<5`) 或 `find_package(Eigen3)` 获取。 |
-| **Boost** (Graph, Math) | 1.91.0 | BSL-1.0 | 仅头文件。约束图的连通分量算法 (`boost/graph/`) 和数学常量 (`boost/math/`)。通过 pixi (`libboost-devel`) 获取。 |
-| **OpenCASCADE (OCCT)** | 7.9 | LGPL-2.1（社区版） | **可选**。共享库链接（`TKBRep`、`TKTopAlgo`、`TKShHealing`）。仅用于 BREP 几何导出（`BRepExport.cpp`、`SketchShapeBuilder.cpp`）。通过 NuGet 包或 `find_package(OpenCASCADE)` 获取。`MCSOLVERENGINE_WITH_OCCT=OFF` 时完全不依赖。 |
+| **Eigen 3** | 3.4.0 | MPL-2.0 | 仅头文件。线性代数（QR 分解、稠密/稀疏矩阵），被 `planegcs` 求解器使用。通过 pixi (`eigen >=3.3,<5`) 获取；CMake 只接受 `.pixi` 中的 Eigen 头文件。 |
+| **Boost** (Graph, Math) | 1.91.0 | BSL-1.0 | 仅头文件。约束图的连通分量算法 (`boost/graph/`) 和数学常量 (`boost/math/`)。通过 pixi (`libboost-devel`) 获取；CMake 只接受 `.pixi` 中的 Boost 头文件。 |
+| **OpenCASCADE (OCCT)** | 7.8 | LGPL-2.1（社区版） | **可选**。共享库链接（`TKBRep`、`TKTopAlgo`、`TKShHealing`）。仅用于 BREP 几何导出（`BRepExport.cpp`、`SketchShapeBuilder.cpp`）。通过 pixi/conda 环境中的 `occt` 获取；当 `MCSOLVERENGINE_WITH_OCCT=ON` 时，CMake 只接受 `.pixi` 中的 OCCT。`MCSOLVERENGINE_WITH_OCCT=OFF` 时完全不依赖。 |
 
 ### 内置源码（直接包含在本仓库中）
 
