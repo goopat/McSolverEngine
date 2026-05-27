@@ -416,6 +416,9 @@ BRepTokenComparison compareBrepSectionLinesUnordered(
         std::string line;
         const std::string prefix = std::string(sectionName) + " ";
         while (std::getline(stream, line)) {
+            if (!line.empty() && line.back() == '\r') {
+                line.pop_back();
+            }
             if (!line.starts_with(prefix)) {
                 continue;
             }
@@ -431,6 +434,9 @@ BRepTokenComparison compareBrepSectionLinesUnordered(
             for (long index = 0; index < count; ++index) {
                 if (!std::getline(stream, line)) {
                     return false;
+                }
+                if (!line.empty() && line.back() == '\r') {
+                    line.pop_back();
                 }
                 sectionLines.push_back(line);
             }
