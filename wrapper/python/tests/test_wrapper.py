@@ -319,12 +319,12 @@ class TestV1024WithParameters(unittest.TestCase):
         with open(cls.xml_path, "r", encoding="utf-8") as f:
             cls.xml = f.read()
         cls.parameters = {
-            "D1": "61",
-            "L1": "41",
-            "L2": "61",
-            "L3": "11",
-            "L4": "16",
-            "L5": "21",
+            "VarSet.D1": "61",
+            "VarSet.L1": "41",
+            "VarSet.L2": "61",
+            "VarSet.L3": "11",
+            "VarSet.L4": "16",
+            "VarSet.L5": "21",
         }
 
     def test_solve_with_parameters_succeeds(self):

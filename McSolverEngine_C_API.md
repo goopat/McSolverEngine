@@ -126,7 +126,7 @@ typedef struct McSolverEngineVarSetProperty {
 `varSetProperties` 返回 **所有标量 `App::VarSet` 属性**：
 
 - 先应用 API `parameters` 覆盖
-- 再执行 VarSet 表达式求值
+- 再执行精简版 Sketch / VarSet 表达式求值
 - 对可数值求值的结果按规范单位输出：长度=`mm`，角度=`deg`，面积=`mm^2`，无量纲=`""`
 - 对字符串、布尔等非数值属性，`valueUtf8` 直接返回属性内容，`unitUtf8=""`
 - 键始终使用真实对象名，不使用 `Label` 别名
@@ -354,7 +354,7 @@ McSolverEngineResultCode McSolverEngine_SolveToGeometryWithParameters(
 
 **参数规则**：
 - `parameterKeysUtf8` / `parameterValuesUtf8` — 各含 `parameterCount` 个条目的并行数组
-- 键格式：`"VarSetName.PropertyName"`（全名键，推荐）或 `"PropertyName"`（短名键，多个 VarSet 共享同名属性时存在歧义）
+- 键格式只接受 `"VarSetObjectNameOrLabel.PropertyName"`；裸属性名会被拒绝，并为后续 Sketch Property 覆盖预留
 - 值必须为**纯数值字符串**（如 `"8.5"`、`"45"`）— 不接受单位后缀（`"8.5 mm"` 会被拒绝）
 - 长度约束（DistanceX/Y/Distance/Radius/Diameter）：值按 **mm** 解析
 - 角度约束（Angle）：值按 **degree** 解析（内部转换为弧度）
@@ -412,7 +412,7 @@ McSolverEngineResultCode McSolverEngine_InspectDocumentXml(
 
 - 输入仅支持 `documentXmlUtf8`
 - 不做参数覆盖
-- 不做 VarSet 表达式求值
+- 不做 Sketch / VarSet 表达式求值
 - 不做约束求解
 - 成功时返回 `MCSOLVERENGINE_RESULT_SUCCESS`
 - 解析失败时返回 `MCSOLVERENGINE_RESULT_IMPORT_FAILED`，并尽量在 `result->messages` 中给出诊断信息
@@ -520,10 +520,11 @@ if (rc != MCSOLVERENGINE_FCSTD_SUCCESS) {
 
 解析 `Document.xml` 内容中指定名称的草图：
 - 识别 `App::VarSet` 对象、其属性及 `ExpressionEngine`
+- 收集可数值求值的 Sketch 标量 Property，以及 Sketch 自身 `ExpressionEngine` 中指向这些 Property 的条目
 - 解析草图几何（`Geometry`、`ExternalGeo`）和约束（`Constraints`）
 - 映射非 XY 平面草图的 `Placement`
-- 求值 VarSet 表达式，应用调用方提供的参数覆盖
-- 将表达式驱动的维度约束绑定到 VarSet 参数
+- 先应用调用方提供的 VarSet 参数覆盖，再按依赖顺序求值精简版 Sketch/VarSet 表达式子集
+- 将表达式驱动的维度约束绑定到直接 VarSet 参数，或绑定到由 VarSet + Sketch 标量 Property 求值出的结果
 
 **导入状态**：
 - `"Success"` — 全部数据正常导入
@@ -614,24 +615,30 @@ OCCT 在启用构建中属于**运行时依赖**：除链接期 `.lib` 文件外
 
 ### 键格式
 
-- **全名键**（推荐）：`"VarSetName.PropertyName"` — 例如 `"Config.Width"`
-- **短名键**：`"PropertyName"` — 例如 `"Width"`（多个 VarSet 共享同名属性时存在歧义，先匹配到的生效）
+- **唯一支持的形式**：`"VarSetObjectNameOrLabel.PropertyName"` — 例如 `"Config.Width"` 或 `"Parameters.Width"`
+- 裸短名（如 `"Width"`）会被拒绝
 
 ### 查找顺序
 
-1. 全名键匹配（`VarSetName.PropertyName`）
-2. 短名键匹配
-3. 回退到导入的默认值（来自 VarSet 默认值或 Document.xml ExpressionEngine）
+1. 显式对象名或 Label 键匹配（`VarSetObjectNameOrLabel.PropertyName`）
+2. 回退到导入的默认值（来自 VarSet / Sketch Property 默认值或 Document.xml `ExpressionEngine`）
 
-### VarSet 表达式
+### 精简版 Sketch / VarSet 表达式
 
-Document.xml 中 VarSet 的 `ExpressionEngine` 值在导入阶段求值。支持的表达式子集包括：
+导入阶段会求值两类 `ExpressionEngine`：
+- `App::VarSet` 自身的 Property
+- Sketch 标量 Property（由 Sketch 对象自己的 `ExpressionEngine` 驱动）
+
+支持的精简表达式子集包括：
 - 算术运算：`+`、`-`、`*`、`/`、`%`、`^`（左结合）
 - 数学函数：`sin`、`cos`、`tan`、`asin`、`acos`、`atan`、`atan2`、`sinh`、`cosh`、`tanh`、`sqrt`、`cbrt`、`pow`、`hypot`、`exp`、`log`、`log10`、`floor`、`ceil`、`round`、`trunc`、`abs`、`min`、`max`、`sum`、`average`、`count`、`mod`
 - 常量：`pi`、`e`（区分大小写）
-- VarSet 引用：`Param`（同 VarSet 内）、`VarSetName.Param`、`<<Label>>.Param`
+- 引用形式：
+  - `Param`（同一 VarSet 或同一 Sketch 对象内）
+  - `VarSetName.Param` / `<<Label>>.Param`
+  - `SketchObjectName.Prop` / `<<Sketch Label>>.Prop`
 - 有限单位支持：长度（`mm`、`cm`、`m`、`km`、`um`、`nm`、`in`、`ft`）和角度（`deg`、`degree`、`degrees`、`rad`、`radian`、`radians`）
-- VarSet 参数循环引用检测
+- Sketch / VarSet 联合属性图的循环引用检测
 
 如果表达式使用了超出此子集的 FreeCAD 特性（电子表格引用、几何属性、完整 Quantity/Unit 运算、条件/逻辑表达式等），导入返回 `MCSOLVERENGINE_RESULT_VARSET_EXPRESSION_UNSUPPORTED_SUBSET`，并在诊断消息中附带标签 `MCSOLVERENGINE_IMPORT_VARSET_EXPRESSION_UNSUPPORTED_SUBSET`。
 

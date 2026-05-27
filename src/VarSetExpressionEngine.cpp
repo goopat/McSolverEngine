@@ -16,6 +16,14 @@ namespace McSolverEngine::DocumentXml::VarSetExpressions
 namespace
 {
 
+enum class PropertyValueHint
+{
+    Auto,
+    Dimensionless,
+    Length,
+    Angle,
+};
+
 [[nodiscard]] std::string makeString(std::string_view value)
 {
     return std::string(value.begin(), value.end());
@@ -166,21 +174,59 @@ struct VarSetPropertyExportValue
     };
 }
 
+[[nodiscard]] bool isStringPropertyType(std::string_view typeName) noexcept
+{
+    return typeName.find("PropertyString") != std::string_view::npos;
+}
+
+[[nodiscard]] bool isBoolPropertyType(std::string_view typeName) noexcept
+{
+    return typeName.find("PropertyBool") != std::string_view::npos;
+}
+
 [[nodiscard]] bool preserveRawVarSetValue(const VarSetProperty& property) noexcept
 {
-    return property.typeName.find("PropertyString") != std::string::npos
-        || property.typeName.find("PropertyBool") != std::string::npos;
+    return isStringPropertyType(property.typeName) || isBoolPropertyType(property.typeName);
+}
+
+[[nodiscard]] PropertyValueHint propertyValueHint(std::string_view typeName) noexcept
+{
+    if (typeName.find("PropertyAngle") != std::string_view::npos) {
+        return PropertyValueHint::Angle;
+    }
+    if (typeName.find("PropertyLength") != std::string_view::npos
+        || typeName.find("PropertyDistance") != std::string_view::npos) {
+        return PropertyValueHint::Length;
+    }
+    if (typeName.find("PropertyFloat") != std::string_view::npos
+        || typeName.find("PropertyInteger") != std::string_view::npos
+        || typeName.find("PropertyPercent") != std::string_view::npos) {
+        return PropertyValueHint::Dimensionless;
+    }
+    return PropertyValueHint::Auto;
+}
+
+[[nodiscard]] std::string propertyKindLabel(const VarSetProperty& property) noexcept
+{
+    return property.ownerKind == PropertyOwnerKind::Sketch ? "Sketch property" : "VarSet parameter";
+}
+
+[[nodiscard]] std::string propertyLabel(const VarSetProperty& property, std::string_view key)
+{
+    return propertyKindLabel(property) + " '" + makeString(key) + "'";
 }
 
 [[nodiscard]] std::optional<QuantityValue> parseRawQuantityLiteral(
     std::string_view value,
     std::string& error,
-    std::string_view key
+    std::string_view key,
+    PropertyValueHint hint,
+    std::string_view propertyKind
 )
 {
     value = trim(value);
     if (value.empty()) {
-        error = "VarSet parameter '" + makeString(key) + "' has an empty value.";
+        error = makeString(propertyKind) + " '" + makeString(key) + "' has an empty value.";
         return std::nullopt;
     }
 
@@ -188,7 +234,7 @@ struct VarSetPropertyExportValue
     double parsed = 0.0;
     stream >> parsed;
     if (stream.fail() || !std::isfinite(parsed)) {
-        error = "VarSet parameter '" + makeString(key)
+        error = makeString(propertyKind) + " '" + makeString(key)
             + "' is not a numeric or supported length/angle quantity value.";
         return std::nullopt;
     }
@@ -196,16 +242,89 @@ struct VarSetPropertyExportValue
     std::string suffix;
     std::getline(stream, suffix);
     suffix = makeString(trim(suffix));
+    if (suffix.empty()) {
+        switch (hint) {
+            case PropertyValueHint::Length:
+                return makeQuantity(parsed, QuantityDimension::Length);
+            case PropertyValueHint::Angle:
+                return makeQuantity(parsed, QuantityDimension::Angle);
+            case PropertyValueHint::Dimensionless:
+            case PropertyValueHint::Auto:
+                return makeQuantity(parsed);
+        }
+    }
     if (const auto quantity = makeSupportedUnitQuantity(parsed, suffix)) {
         return quantity;
     }
 
     error = makeVarSetExpressionUnsupportedSubsetMessage(
-        "VarSet parameter '" + makeString(key)
+        makeString(propertyKind) + " '" + makeString(key)
         + "' uses unsupported unit '" + suffix
         + "'; only length and angle units are supported."
     );
     return std::nullopt;
+}
+
+[[nodiscard]] std::optional<QuantityValue> coerceValueForPropertyType(
+    const VarSetProperty& property,
+    std::string_view key,
+    QuantityValue value,
+    std::string& error
+)
+{
+    switch (propertyValueHint(property.typeName)) {
+        case PropertyValueHint::Length:
+            if (value.dimension == QuantityDimension::Dimensionless) {
+                value.dimension = QuantityDimension::Length;
+                return value;
+            }
+            if (value.dimension != QuantityDimension::Length) {
+                error = propertyLabel(property, key)
+                    + " expects a length value but expression produced "
+                    + std::string(dimensionName(value.dimension)) + ".";
+                return std::nullopt;
+            }
+            return value;
+        case PropertyValueHint::Angle:
+            if (value.dimension == QuantityDimension::Dimensionless) {
+                value.dimension = QuantityDimension::Angle;
+                return value;
+            }
+            if (value.dimension != QuantityDimension::Angle) {
+                error = propertyLabel(property, key)
+                    + " expects an angle value but expression produced "
+                    + std::string(dimensionName(value.dimension)) + ".";
+                return std::nullopt;
+            }
+            return value;
+        case PropertyValueHint::Auto:
+        case PropertyValueHint::Dimensionless:
+            return value;
+    }
+    return value;
+}
+
+[[nodiscard]] std::optional<QuantityValue> parseStoredPropertyValue(
+    const VarSetProperty& property,
+    std::string_view key,
+    std::string& error
+)
+{
+    if (!property.hasRawValue) {
+        error = propertyLabel(property, key) + " has no value.";
+        return std::nullopt;
+    }
+    if (preserveRawVarSetValue(property)) {
+        error = propertyLabel(property, key) + " is not numeric.";
+        return std::nullopt;
+    }
+    return parseRawQuantityLiteral(
+        property.rawValue,
+        error,
+        key,
+        propertyValueHint(property.typeName),
+        propertyKindLabel(property)
+    );
 }
 
 class VarSetExpressionParser
@@ -217,11 +336,13 @@ public:
         std::string_view expression,
         const VarSetCatalog& catalog,
         std::string_view currentObjectName,
+        PropertyOwnerKind currentOwnerKind,
         Resolver resolver
     )
         : expression_(expression)
         , catalog_(catalog)
         , currentObjectName_(currentObjectName)
+        , currentOwnerKind_(currentOwnerKind)
         , resolver_(std::move(resolver))
     {}
 
@@ -915,13 +1036,30 @@ private:
         const auto alias = catalog_.aliases.find(objectRef);
         if (alias == catalog_.aliases.end()) {
             return fail(makeVarSetExpressionUnsupportedSubsetMessage(
-                "expression references non-VarSet object '" + objectRef + "'."
+                "expression references unsupported object '" + objectRef
+                + "' outside the reduced Sketch/VarSet subset."
+            ));
+        }
+
+        const auto objectKindIt = catalog_.objectKinds.find(alias->second);
+        if (objectKindIt == catalog_.objectKinds.end()) {
+            return fail("Expression references unknown object '" + alias->second + "'.");
+        }
+        if (currentOwnerKind_ == PropertyOwnerKind::VarSet
+            && objectKindIt->second != PropertyOwnerKind::VarSet) {
+            return fail(makeVarSetExpressionUnsupportedSubsetMessage(
+                "VarSet expression references non-VarSet object '" + objectRef + "'."
             ));
         }
 
         const std::string key = alias->second + "." + propertyName;
-        if (catalog_.properties.find(key) == catalog_.properties.end()) {
-            return fail("Expression references unknown VarSet parameter '" + key + "'.");
+        const auto propertyIt = catalog_.properties.find(key);
+        if (propertyIt == catalog_.properties.end()) {
+            const auto kindLabel =
+                objectKindIt->second == PropertyOwnerKind::Sketch
+                ? "Sketch property"
+                : "VarSet parameter";
+            return fail("Expression references unknown " + std::string(kindLabel) + " '" + key + "'.");
         }
         return resolveProperty(key);
     }
@@ -947,6 +1085,7 @@ private:
     std::string_view expression_;
     const VarSetCatalog& catalog_;
     std::string currentObjectName_;
+    PropertyOwnerKind currentOwnerKind_ {PropertyOwnerKind::VarSet};
     Resolver resolver_;
     std::size_t position_ {0};
     std::string error_;
@@ -962,12 +1101,13 @@ enum class VarSetVisitState
     VarSetCatalog& catalog,
     const std::string& key,
     std::map<std::string, VarSetVisitState>& states,
+    std::vector<std::string>& evaluationOrder,
     std::string& error
 )
 {
     auto propertyIt = catalog.properties.find(key);
     if (propertyIt == catalog.properties.end()) {
-        error = "Expression references unknown VarSet parameter '" + key + "'.";
+        error = "Expression references unknown property '" + key + "'.";
         return std::nullopt;
     }
 
@@ -979,7 +1119,7 @@ enum class VarSetVisitState
     const auto stateIt = states.find(key);
     if (stateIt != states.end()) {
         if (stateIt->second == VarSetVisitState::Visiting) {
-            error = "VarSet expression dependency cycle detected at '" + key + "'.";
+            error = "Expression dependency cycle detected at '" + key + "'.";
             return std::nullopt;
         }
         if (stateIt->second == VarSetVisitState::Done && property.evaluatedValue) {
@@ -994,29 +1134,34 @@ enum class VarSetVisitState
             *property.expression,
             catalog,
             property.objectName,
+            property.ownerKind,
             [&](const std::string& dependencyKey, std::string& dependencyError) -> std::optional<QuantityValue> {
-                return evaluateVarSetProperty(catalog, dependencyKey, states, dependencyError);
+                return evaluateVarSetProperty(catalog, dependencyKey, states, evaluationOrder, dependencyError);
             }
         );
         value = parser.parse(error);
+        if (value) {
+            value = coerceValueForPropertyType(property, key, *value, error);
+        }
     }
     else if (property.hasRawValue) {
-        value = parseRawQuantityLiteral(property.rawValue, error, key);
+        value = parseStoredPropertyValue(property, key, error);
     }
     else {
-        error = "VarSet parameter '" + key + "' has no value.";
+        error = propertyLabel(property, key) + " has no value.";
     }
 
     if (!value) {
         return std::nullopt;
     }
     if (!std::isfinite(value->value)) {
-        error = "VarSet parameter '" + key + "' evaluated to a non-finite value.";
+        error = propertyLabel(property, key) + " evaluated to a non-finite value.";
         return std::nullopt;
     }
 
     property.evaluatedValue = *value;
     states[key] = VarSetVisitState::Done;
+    evaluationOrder.push_back(key);
     return *value;
 }
 
@@ -1055,7 +1200,7 @@ enum class VarSetVisitState
 std::string makeVarSetExpressionUnsupportedSubsetMessage(std::string_view detail)
 {
     return "[" + std::string(VarSetExpressionUnsupportedSubsetCode)
-        + "] VarSet expression support is a reduced FreeCAD subset; " + std::string(detail);
+        + "] Sketch/VarSet expression support is a reduced FreeCAD subset; " + std::string(detail);
 }
 
 void rebuildVarSetShortNameLookup(VarSetCatalog& catalog)
@@ -1097,27 +1242,20 @@ bool applyApiParametersToVarSets(
     bool success = true;
     for (const auto& [rawKey, value] : parameters) {
         bool applied = false;
-        const auto separator = rawKey.find('.');
-        if (separator != std::string::npos) {
-            const auto objectRef = rawKey.substr(0, separator);
-            const auto parameterName = rawKey.substr(separator + 1);
-            const auto alias = catalog.aliases.find(objectRef);
-            if (alias != catalog.aliases.end() && !parameterName.empty()) {
-                applied = setVarSetRawValue(catalog, alias->second + "." + parameterName, value, false);
-            }
-        }
-        else {
-            const auto shortNameIt = catalog.keysByPropertyName.find(rawKey);
-            if (shortNameIt != catalog.keysByPropertyName.end()) {
-                if (shortNameIt->second.size() > 1) {
-                    messages.push_back(
-                        "Parameter override '" + rawKey
-                        + "' is ambiguous across multiple VarSet parameters; use an explicit VarSet.Property key."
+
+        const auto qualifiedKey = McSolverEngine::Detail::splitQualifiedApiParameterKey(rawKey);
+        if (qualifiedKey) {
+            const auto alias = catalog.aliases.find(qualifiedKey->objectRef);
+            if (alias != catalog.aliases.end()) {
+                const auto kindIt = catalog.objectKinds.find(alias->second);
+                if (kindIt != catalog.objectKinds.end() && kindIt->second == PropertyOwnerKind::VarSet) {
+                    applied = setVarSetRawValue(
+                        catalog,
+                        alias->second + "." + qualifiedKey->parameterName,
+                        value,
+                        false
                     );
-                    success = false;
-                    continue;
                 }
-                applied = setVarSetRawValue(catalog, shortNameIt->second.front(), value, false);
             }
         }
 
@@ -1134,16 +1272,18 @@ bool applyApiParametersToVarSets(
     return success;
 }
 
-bool evaluateVarSetExpressions(VarSetCatalog& catalog, ImportResult& result)
+bool evaluateExpressionProperties(VarSetCatalog& catalog, ImportResult& result)
 {
     std::map<std::string, VarSetVisitState> states;
+    std::vector<std::string> evaluationOrder;
+    evaluationOrder.reserve(catalog.properties.size());
     for (const auto& [key, property] : catalog.properties) {
         if (!property.expression) {
             continue;
         }
 
         std::string error;
-        if (!evaluateVarSetProperty(catalog, key, states, error)) {
+        if (!evaluateVarSetProperty(catalog, key, states, evaluationOrder, error)) {
             if (!error.empty()
                 && error.find(VarSetExpressionUnsupportedSubsetCode) != std::string::npos) {
                 result.errorCode = ImportErrorCode::VarSetExpressionUnsupportedSubset;
@@ -1161,12 +1301,17 @@ bool collectVarSetProperties(VarSetCatalog& catalog, ImportResult& result)
 {
     result.varSetProperties.clear();
     std::map<std::string, VarSetVisitState> states;
+    std::vector<std::string> evaluationOrder;
+    evaluationOrder.reserve(catalog.properties.size());
 
     for (auto& [key, property] : catalog.properties) {
+        if (property.ownerKind != PropertyOwnerKind::VarSet) {
+            continue;
+        }
         std::optional<VarSetPropertyExportValue> exportedValue;
         if (property.expression) {
             std::string error;
-            const auto value = evaluateVarSetProperty(catalog, key, states, error);
+            const auto value = evaluateVarSetProperty(catalog, key, states, evaluationOrder, error);
             if (!value) {
                 if (!error.empty()
                     && error.find(VarSetExpressionUnsupportedSubsetCode) != std::string::npos) {
@@ -1188,7 +1333,7 @@ bool collectVarSetProperties(VarSetCatalog& catalog, ImportResult& result)
             }
             else {
                 std::string ignoredError;
-                const auto value = parseRawQuantityLiteral(property.rawValue, ignoredError, key);
+                const auto value = parseStoredPropertyValue(property, key, ignoredError);
                 if (value) {
                     property.evaluatedValue = *value;
                     exportedValue = exportQuantityValue(*value);
@@ -1236,27 +1381,25 @@ std::optional<std::string> getVarSetValueForBinding(
 std::optional<std::string> evaluateExpressionValueForBinding(
     std::string_view expression,
     const VarSetCatalog& catalog,
+    std::string_view currentObjectName,
     std::string& error
 )
 {
     VarSetExpressionParser parser(
         expression,
         catalog,
-        {},
+        currentObjectName,
+        PropertyOwnerKind::Sketch,
         [&](const std::string& dependencyKey, std::string& dependencyError) -> std::optional<QuantityValue> {
             const auto propertyIt = catalog.properties.find(dependencyKey);
             if (propertyIt == catalog.properties.end()) {
-                dependencyError = "Expression references unknown VarSet parameter '" + dependencyKey + "'.";
+                dependencyError = "Expression references unknown property '" + dependencyKey + "'.";
                 return std::nullopt;
             }
             if (propertyIt->second.evaluatedValue) {
                 return *propertyIt->second.evaluatedValue;
             }
-            if (propertyIt->second.hasRawValue) {
-                return parseRawQuantityLiteral(propertyIt->second.rawValue, dependencyError, dependencyKey);
-            }
-            dependencyError = "VarSet parameter '" + dependencyKey + "' has no value.";
-            return std::nullopt;
+            return parseStoredPropertyValue(propertyIt->second, dependencyKey, dependencyError);
         }
     );
 
@@ -1307,11 +1450,17 @@ ParameterBindingParseResult parseParameterBindingExpression(
             .binding = std::nullopt,
             .externalReference = true,
             .error = makeVarSetExpressionUnsupportedSubsetMessage(
-                "constraint expression references non-VarSet object '" + objectRef + "'."
+                "constraint expression references unsupported object '" + objectRef
+                + "' outside the reduced Sketch/VarSet subset."
             ),
         };
     }
     if (!isSimplePropertyPath(parameterName)) {
+        return {};
+    }
+
+    const auto kindIt = catalog.objectKinds.find(alias->second);
+    if (kindIt == catalog.objectKinds.end() || kindIt->second != PropertyOwnerKind::VarSet) {
         return {};
     }
 

@@ -123,7 +123,7 @@ typedef struct McSolverEngineVarSetProperty {
 } McSolverEngineVarSetProperty;
 ```
 
-`varSetProperties` returns **all scalar `App::VarSet` properties** after API overrides and VarSet expression evaluation. Numerically evaluable values are normalized to canonical units (length=`mm`, angle=`deg`, area=`mm^2`, dimensionless=`""`). String/bool-style properties are returned as raw text with `unitUtf8=""`. Keys always use the real object name, never the `Label` alias.
+`varSetProperties` returns **all scalar `App::VarSet` properties** after API overrides and reduced Sketch / VarSet expression evaluation. Numerically evaluable values are normalized to canonical units (length=`mm`, angle=`deg`, area=`mm^2`, dimensionless=`""`). String/bool-style properties are returned as raw text with `unitUtf8=""`. Keys always use the real object name, never the `Label` alias.
 
 ### 2.4.2 Document.xml inspection records
 
@@ -348,7 +348,7 @@ Same as `SolveToGeometry` but with VarSet parameter overrides.
 
 **Parameter rules**:
 - `parameterKeysUtf8` / `parameterValuesUtf8` — parallel arrays of `parameterCount` entries
-- Key format: `"VarSetName.PropertyName"` (full key, recommended) or `"PropertyName"` (short key, ambiguous if multiple VarSets share the property)
+- Key format: `"VarSetObjectNameOrLabel.PropertyName"` only; bare property names are rejected and reserved for future Sketch-property overrides
 - Values must be **pure numeric strings** (e.g. `"8.5"`, `"45"`) — no unit suffixes (`"8.5 mm"` is rejected)
 - Length constraints (DistanceX/Y/Distance/Radius/Diameter): values interpreted as **mm**
 - Angle constraints (Angle): values interpreted as **degrees** (converted to radians internally)
@@ -406,7 +406,7 @@ Parses `Document.xml` object metadata only and returns all Sketch summaries plus
 
 - Input is `documentXmlUtf8` only
 - No parameter overrides
-- No VarSet expression evaluation
+- No Sketch / VarSet expression evaluation
 - No constraint solving
 - Returns `MCSOLVERENGINE_RESULT_SUCCESS` on success
 - Returns `MCSOLVERENGINE_RESULT_IMPORT_FAILED` on parse failure and, when possible, populates `result->messages` with diagnostics
@@ -514,10 +514,11 @@ If the caller already has `Document.xml` content (e.g. from an external extracti
 
 Parses `Document.xml` content for the named sketch:
 - Recognizes `App::VarSet` objects, their properties, and their `ExpressionEngine`
+- Collects numerically evaluable Sketch scalar properties and the Sketch `ExpressionEngine` entries that target those properties
 - Parses sketch geometry (`Geometry`, `ExternalGeo`) and constraints (`Constraints`)
 - Maps `Placement` for non-XY-plane sketches
-- Evaluates VarSet expressions, applies caller-provided parameter overrides
-- Binds expression-driven dimensional constraints to VarSet parameters
+- Applies caller-provided VarSet overrides, then evaluates the reduced Sketch/VarSet expression subset in dependency order
+- Binds dimensional constraints either to direct VarSet parameters or to reduced-subset expressions resolved from VarSet + Sketch scalar properties
 
 **Import states**:
 - `"Success"` — all data imported cleanly
@@ -608,24 +609,30 @@ Rejected: `"8.5 mm"`, `"45 deg"`, `"1 cm"`.
 
 ### Key format
 
-- **Full key** (recommended): `"VarSetName.PropertyName"` — e.g. `"Config.Width"`
-- **Short key**: `"PropertyName"` — e.g. `"Width"` (ambiguous if multiple VarSets share the property; first match wins)
+- **Only supported form**: `"VarSetObjectNameOrLabel.PropertyName"` — e.g. `"Config.Width"` or `"Parameters.Width"`
+- Bare short keys such as `"Width"` are rejected
 
 ### Lookup order
 
-1. Full key match (`VarSetName.PropertyName`)
-2. Short property name match
-3. Fall back to imported default (from VarSet default or Document.xml ExpressionEngine)
+1. Explicit object-name or label key match (`VarSetObjectNameOrLabel.PropertyName`)
+2. Fall back to imported default (from VarSet / Sketch property defaults or Document.xml `ExpressionEngine`)
 
-### VarSet expressions
+### Reduced Sketch / VarSet expressions
 
-Document.xml VarSet `ExpressionEngine` values are evaluated during import. The expression subset includes:
+Document.xml `ExpressionEngine` values are evaluated during import for:
+- `App::VarSet` properties
+- Sketch scalar properties targeted by the Sketch object's own `ExpressionEngine`
+
+The reduced expression subset includes:
 - Arithmetic: `+`, `-`, `*`, `/`, `%`, `^` (left-associative)
 - Math functions: `sin`, `cos`, `tan`, `asin`, `acos`, `atan`, `atan2`, `sinh`, `cosh`, `tanh`, `sqrt`, `cbrt`, `pow`, `hypot`, `exp`, `log`, `log10`, `floor`, `ceil`, `round`, `trunc`, `abs`, `min`, `max`, `sum`, `average`, `count`, `mod`
 - Constants: `pi`, `e` (case-sensitive)
-- VarSet references: `Param` (within same VarSet), `VarSetName.Param`, `<<Label>>.Param`
+- References:
+  - `Param` within the same VarSet or the same Sketch object
+  - `VarSetName.Param` / `<<Label>>.Param`
+  - `SketchObjectName.Prop` / `<<Sketch Label>>.Prop`
 - Limited units: length (`mm`, `cm`, `m`, `km`, `um`, `nm`, `in`, `ft`) and angle (`deg`, `degree`, `degrees`, `rad`, `radian`, `radians`)
-- Cycle detection for VarSet parameter references
+- Cycle detection for the combined Sketch/VarSet property graph
 
 If an expression uses FreeCAD features beyond this subset (spreadsheet refs, geometry properties, complex Quantity/Unit, conditional/logic, etc.), import returns `MCSOLVERENGINE_RESULT_VARSET_EXPRESSION_UNSUPPORTED_SUBSET` with diagnostic message tag `MCSOLVERENGINE_IMPORT_VARSET_EXPRESSION_UNSUPPORTED_SUBSET`.
 

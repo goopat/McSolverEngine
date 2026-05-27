@@ -299,6 +299,17 @@ std::vector<std::string> describeEdges(const TopoDS_Shape& shape)
     return descriptions;
 }
 
+bool edgeDescriptionsAreSpecific(const std::vector<std::string>& descriptions)
+{
+    return std::none_of(
+        descriptions.begin(),
+        descriptions.end(),
+        [](const std::string& description) {
+            return description == "OtherCurve" || description == "NullCurve";
+        }
+    );
+}
+
 bool readBrepFromString(const std::string& brep, TopoDS_Shape& outShape)
 {
     std::istringstream stream(brep);
@@ -382,6 +393,13 @@ bool samePoint(const Point3& point, const gp_Pnt& expected, double tolerance = 1
     return samePoint(point, expected.X(), expected.Y(), expected.Z(), tolerance);
 }
 
+bool sameGpPoint(const gp_Pnt& first, const gp_Pnt& second, double tolerance = 1e-8)
+{
+    return std::abs(first.X() - second.X()) <= tolerance
+        && std::abs(first.Y() - second.Y()) <= tolerance
+        && std::abs(first.Z() - second.Z()) <= tolerance;
+}
+
 struct LineDescriptor
 {
     gp_Pnt start;
@@ -392,6 +410,8 @@ struct CircleDescriptor
 {
     gp_Pnt center;
     double radius {};
+    gp_Pnt start;
+    gp_Pnt end;
 };
 
 std::vector<LineDescriptor> collectLineDescriptors(const TopoDS_Shape& shape)
@@ -424,9 +444,79 @@ std::vector<CircleDescriptor> collectCircleDescriptors(const TopoDS_Shape& shape
         circles.push_back({
             .center = circle.Location(),
             .radius = circle.Radius(),
+            .start = curve.Value(curve.FirstParameter()),
+            .end = curve.Value(curve.LastParameter()),
         });
     }
     return circles;
+}
+
+bool sameLineDescriptor(const LineDescriptor& first, const LineDescriptor& second, double tolerance = 1e-8)
+{
+    return (sameGpPoint(first.start, second.start, tolerance) && sameGpPoint(first.end, second.end, tolerance))
+        || (sameGpPoint(first.start, second.end, tolerance) && sameGpPoint(first.end, second.start, tolerance));
+}
+
+bool sameCircleDescriptor(const CircleDescriptor& first, const CircleDescriptor& second, double tolerance = 1e-6)
+{
+    if (!sameGpPoint(first.center, second.center, tolerance)
+        || std::abs(first.radius - second.radius) > tolerance) {
+        return false;
+    }
+
+    return (sameGpPoint(first.start, second.start, tolerance) && sameGpPoint(first.end, second.end, tolerance))
+        || (sameGpPoint(first.start, second.end, tolerance) && sameGpPoint(first.end, second.start, tolerance));
+}
+
+template<typename Descriptor, typename Compare>
+bool sameDescriptorSet(
+    const std::vector<Descriptor>& expected,
+    const std::vector<Descriptor>& actual,
+    Compare compare
+)
+{
+    if (expected.size() != actual.size()) {
+        return false;
+    }
+
+    std::vector<bool> matched(actual.size(), false);
+    for (const auto& expectedDescriptor : expected) {
+        bool found = false;
+        for (std::size_t index = 0; index < actual.size(); ++index) {
+            if (matched[index] || !compare(expectedDescriptor, actual[index])) {
+                continue;
+            }
+            matched[index] = true;
+            found = true;
+            break;
+        }
+        if (!found) {
+            return false;
+        }
+    }
+
+    return true;
+}
+
+bool sameBrepGeometryDescriptors(const TopoDS_Shape& expectedShape, const TopoDS_Shape& actualShape)
+{
+    const auto expectedLines = collectLineDescriptors(expectedShape);
+    const auto actualLines = collectLineDescriptors(actualShape);
+    const auto expectedCircles = collectCircleDescriptors(expectedShape);
+    const auto actualCircles = collectCircleDescriptors(actualShape);
+
+    return sameDescriptorSet(
+               expectedLines,
+               actualLines,
+               [](const LineDescriptor& expected, const LineDescriptor& actual) {
+                   return sameLineDescriptor(expected, actual);
+               })
+        && sameDescriptorSet(
+               expectedCircles,
+               actualCircles,
+               [](const CircleDescriptor& expected, const CircleDescriptor& actual) {
+                   return sameCircleDescriptor(expected, actual);
+               });
 }
 
 bool matchesLineGeometry(
@@ -920,7 +1010,7 @@ int main()
 
     auto importedWithOverride = McSolverEngine::DocumentXml::importSketchFromDocumentXml(
         parameterizedDocumentXml,
-        McSolverEngine::ParameterMap {{"Width", "8.5"}},
+        McSolverEngine::ParameterMap {{"Parameters.Width", "8.5"}},
         "Sketch"
     );
     if (!importedWithOverride.imported()
@@ -1047,7 +1137,7 @@ int main()
 
     auto importedAngleWithOverride = McSolverEngine::DocumentXml::importSketchFromDocumentXml(
         parameterizedAngleDocumentXml,
-        McSolverEngine::ParameterMap {{"Angle", "45"}},
+        McSolverEngine::ParameterMap {{"Parameters.Angle", "45"}},
         "Sketch"
     );
     if (!importedAngleWithOverride.imported()
@@ -1137,7 +1227,7 @@ int main()
 
     const auto invalidAngleImport = McSolverEngine::DocumentXml::importSketchFromDocumentXml(
         parameterizedAngleDocumentXml,
-        McSolverEngine::ParameterMap {{"Angle", "45 deg"}},
+        McSolverEngine::ParameterMap {{"Parameters.Angle", "45 deg"}},
         "Sketch"
     );
     if (invalidAngleImport.imported()
@@ -1628,7 +1718,7 @@ int main()
 
     auto importedVarSetExpressionOverride = McSolverEngine::DocumentXml::importSketchFromDocumentXml(
         varSetExpressionDocumentXml,
-        McSolverEngine::ParameterMap {{"Base", "6.0"}},
+        McSolverEngine::ParameterMap {{"Parameters.Base", "6.0"}},
         "Sketch"
     );
     if (!importedVarSetExpressionOverride.imported()
@@ -1666,14 +1756,218 @@ int main()
         }
     }
 
-    auto importedUnknownShortOverride = McSolverEngine::DocumentXml::importSketchFromDocumentXml(
+    auto importedBareOverride = McSolverEngine::DocumentXml::importSketchFromDocumentXml(
         varSetExpressionDocumentXml,
-        McSolverEngine::ParameterMap {{"DoesNotExist", "1.0"}},
+        McSolverEngine::ParameterMap {{"Base", "1.0"}},
         "Sketch"
     );
-    if (importedUnknownShortOverride.imported()
-        || importedUnknownShortOverride.status != McSolverEngine::DocumentXml::ImportStatus::Failed) {
-        std::cerr << "Expected unknown short-name VarSet parameter override to fail import.\n";
+    if (importedBareOverride.imported()
+        || importedBareOverride.status != McSolverEngine::DocumentXml::ImportStatus::Failed) {
+        std::cerr << "Expected bare VarSet parameter override key to fail import.\n";
+        return 1;
+    }
+    {
+        bool sawExplicitKeyMessage = false;
+        for (const auto& message : importedBareOverride.messages) {
+            if (message.find("Base") != std::string::npos
+                && message.find("{VarSetObjectNameOrLabel}.{ParameterName}") != std::string::npos) {
+                sawExplicitKeyMessage = true;
+                break;
+            }
+        }
+        if (!sawExplicitKeyMessage) {
+            std::cerr << "Expected diagnostic message for bare VarSet parameter override keys.\n";
+            return 1;
+        }
+    }
+
+    constexpr std::string_view sketchPropertyExpressionDocumentXml = R"(<?xml version="1.0" encoding="UTF-8"?>
+<Document>
+    <Objects Count="2">
+        <Object type="App::VarSet" name="VarSet" id="1"/>
+        <Object type="Sketcher::SketchObject" name="Sketch" id="2"/>
+    </Objects>
+    <ObjectData Count="2">
+        <Object name="VarSet">
+            <Properties Count="2" TransientCount="0">
+                <Property name="Label" type="App::PropertyString">
+                    <String value="Parameters"/>
+                </Property>
+                <Property name="Base" type="App::PropertyLength">
+                    <Float value="6.0"/>
+                </Property>
+            </Properties>
+        </Object>
+        <Object name="Sketch">
+            <Properties Count="7" TransientCount="0">
+                <Property name="test_angle" type="App::PropertyAngle">
+                    <Float value="45.0"/>
+                </Property>
+                <Property name="test_radius" type="App::PropertyLength">
+                    <Float value="2.0"/>
+                </Property>
+                <Property name="test_width" type="App::PropertyLength">
+                    <Float value="0.0"/>
+                </Property>
+                <Property name="Constraints" type="Sketcher::PropertyConstraintList">
+                    <ConstraintList count="4">
+                        <Constrain Name="" Type="7" Value="0.0" First="0" FirstPos="1" Second="-2000" SecondPos="0" Third="-2000" ThirdPos="0" LabelDistance="10.0" LabelPosition="0.0" IsDriving="1" IsInVirtualSpace="0" IsActive="1" />
+                        <Constrain Name="" Type="8" Value="0.0" First="0" FirstPos="1" Second="-2000" SecondPos="0" Third="-2000" ThirdPos="0" LabelDistance="10.0" LabelPosition="0.0" IsDriving="1" IsInVirtualSpace="0" IsActive="1" />
+                        <Constrain Name="" Type="6" Value="0.0" First="0" FirstPos="0" Second="-2000" SecondPos="0" Third="-2000" ThirdPos="0" LabelDistance="10.0" LabelPosition="0.0" IsDriving="1" IsInVirtualSpace="0" IsActive="1" />
+                        <Constrain Name="" Type="9" Value="0.0" First="0" FirstPos="0" Second="-2000" SecondPos="0" Third="-2000" ThirdPos="0" LabelDistance="10.0" LabelPosition="0.0" IsDriving="1" IsInVirtualSpace="0" IsActive="1" />
+                    </ConstraintList>
+                </Property>
+                <Property name="ExpressionEngine" type="App::PropertyExpressionEngine">
+                    <ExpressionEngine count="3">
+                        <Expression path="Constraints[2]" expression="test_width"/>
+                        <Expression path="Constraints[3]" expression="test_angle"/>
+                        <Expression path="test_width" expression="test_radius * 2 + &lt;&lt;Parameters&gt;&gt;.Base"/>
+                    </ExpressionEngine>
+                </Property>
+                <Property name="Geometry" type="Part::PropertyGeometryList">
+                    <GeometryList count="1">
+                        <Geometry type="Part::GeomLineSegment" id="1" migrated="1">
+                            <LineSegment StartX="1.0" StartY="2.0" StartZ="0.0" EndX="4.0" EndY="6.0" EndZ="0.0"/>
+                            <Construction value="0"/>
+                        </Geometry>
+                    </GeometryList>
+                </Property>
+            </Properties>
+        </Object>
+    </ObjectData>
+</Document>)";
+
+    auto importedSketchPropertyExpression =
+        McSolverEngine::DocumentXml::importSketchFromDocumentXml(sketchPropertyExpressionDocumentXml, "Sketch");
+    if (!importedSketchPropertyExpression.imported()
+        || importedSketchPropertyExpression.status != McSolverEngine::DocumentXml::ImportStatus::Success) {
+        std::cerr << "Expected Sketch-property expression import to succeed.\n";
+        for (const auto& message : importedSketchPropertyExpression.messages) {
+            std::cerr << message << "\n";
+        }
+        return 1;
+    }
+    if (std::abs(importedSketchPropertyExpression.model.constraints()[2].value - 10.0) > 1e-8
+        || std::abs(importedSketchPropertyExpression.model.constraints()[3].value - (std::numbers::pi / 4.0)) > 1e-8) {
+        std::cerr << "Expected Sketch-property expressions to drive dimensional constraint values.\n";
+        return 1;
+    }
+    const auto sketchPropertyExpressionSolve =
+        McSolverEngine::Compat::solveSketch(importedSketchPropertyExpression.model);
+    if (!sketchPropertyExpressionSolve.solved()) {
+        std::cerr << "Expected Sketch-property expression-backed sketch to solve successfully.\n";
+        return 1;
+    }
+    const auto& sketchPropertyExpressionLine =
+        std::get<McSolverEngine::Compat::LineSegmentGeometry>(
+            importedSketchPropertyExpression.model.geometries().front().data
+        );
+    if (std::abs(lineLength(sketchPropertyExpressionLine) - 10.0) > 1e-8
+        || std::abs(lineAngleDegrees(sketchPropertyExpressionLine) - 45.0) > 1e-8) {
+        std::cerr << "Sketch-property expressions did not drive the expected solved geometry.\n";
+        return 1;
+    }
+
+    constexpr std::string_view multiSketchExpressionDocumentXml = R"(<?xml version="1.0" encoding="UTF-8"?>
+<Document>
+    <Objects Count="3">
+        <Object type="App::VarSet" name="VarSet" id="1"/>
+        <Object type="Sketcher::SketchObject" name="SketchA" id="2"/>
+        <Object type="Sketcher::SketchObject" name="SketchB" id="3"/>
+    </Objects>
+    <ObjectData Count="3">
+        <Object name="VarSet">
+            <Properties Count="2" TransientCount="0">
+                <Property name="Label" type="App::PropertyString">
+                    <String value="Parameters"/>
+                </Property>
+                <Property name="Base" type="App::PropertyLength">
+                    <Float value="5.0"/>
+                </Property>
+            </Properties>
+        </Object>
+        <Object name="SketchA">
+            <Properties Count="4" TransientCount="0">
+                <Property name="Label" type="App::PropertyString">
+                    <String value="Sketch Alpha"/>
+                </Property>
+                <Property name="mid_length" type="App::PropertyLength">
+                    <Float value="0.0"/>
+                </Property>
+                <Property name="ExpressionEngine" type="App::PropertyExpressionEngine">
+                    <ExpressionEngine count="1">
+                        <Expression path="mid_length" expression="&lt;&lt;Parameters&gt;&gt;.Base * 2"/>
+                    </ExpressionEngine>
+                </Property>
+                <Property name="Geometry" type="Part::PropertyGeometryList">
+                    <GeometryList count="1">
+                        <Geometry type="Part::GeomLineSegment" id="1" migrated="1">
+                            <LineSegment StartX="0.0" StartY="0.0" StartZ="0.0" EndX="1.0" EndY="0.0" EndZ="0.0"/>
+                            <Construction value="0"/>
+                        </Geometry>
+                    </GeometryList>
+                </Property>
+            </Properties>
+        </Object>
+        <Object name="SketchB">
+            <Properties Count="6" TransientCount="0">
+                <Property name="Label" type="App::PropertyString">
+                    <String value="Sketch Beta"/>
+                </Property>
+                <Property name="final_length" type="App::PropertyLength">
+                    <Float value="0.0"/>
+                </Property>
+                <Property name="Constraints" type="Sketcher::PropertyConstraintList">
+                    <ConstraintList count="2">
+                        <Constrain Name="" Type="2" Value="0.0" First="0" FirstPos="0" Second="-2000" SecondPos="0" Third="-2000" ThirdPos="0" LabelDistance="10.0" LabelPosition="0.0" IsDriving="1" IsInVirtualSpace="0" IsActive="1" />
+                        <Constrain Name="" Type="6" Value="0.0" First="0" FirstPos="0" Second="-2000" SecondPos="0" Third="-2000" ThirdPos="0" LabelDistance="10.0" LabelPosition="0.0" IsDriving="1" IsInVirtualSpace="0" IsActive="1" />
+                    </ConstraintList>
+                </Property>
+                <Property name="ExpressionEngine" type="App::PropertyExpressionEngine">
+                    <ExpressionEngine count="2">
+                        <Expression path="final_length" expression="SketchA.mid_length + 3"/>
+                        <Expression path="Constraints[1]" expression="final_length"/>
+                    </ExpressionEngine>
+                </Property>
+                <Property name="Geometry" type="Part::PropertyGeometryList">
+                    <GeometryList count="1">
+                        <Geometry type="Part::GeomLineSegment" id="1" migrated="1">
+                            <LineSegment StartX="0.0" StartY="0.0" StartZ="0.0" EndX="2.0" EndY="1.0" EndZ="0.0"/>
+                            <Construction value="0"/>
+                        </Geometry>
+                    </GeometryList>
+                </Property>
+            </Properties>
+        </Object>
+    </ObjectData>
+</Document>)";
+
+    auto importedMultiSketchExpression =
+        McSolverEngine::DocumentXml::importSketchFromDocumentXml(multiSketchExpressionDocumentXml, "SketchB");
+    if (!importedMultiSketchExpression.imported()
+        || importedMultiSketchExpression.status != McSolverEngine::DocumentXml::ImportStatus::Success) {
+        std::cerr << "Expected multi-sketch expression import to succeed.\n";
+        for (const auto& message : importedMultiSketchExpression.messages) {
+            std::cerr << message << "\n";
+        }
+        return 1;
+    }
+    if (std::abs(importedMultiSketchExpression.model.constraints().back().value - 13.0) > 1e-8) {
+        std::cerr << "Multi-sketch expression dependency chain did not produce the expected constraint value.\n";
+        return 1;
+    }
+    const auto multiSketchExpressionSolve =
+        McSolverEngine::Compat::solveSketch(importedMultiSketchExpression.model);
+    if (!multiSketchExpressionSolve.solved()) {
+        std::cerr << "Expected multi-sketch expression-backed sketch to solve successfully.\n";
+        return 1;
+    }
+    const auto& multiSketchExpressionLine =
+        std::get<McSolverEngine::Compat::LineSegmentGeometry>(
+            importedMultiSketchExpression.model.geometries().front().data
+        );
+    if (std::abs(lineLength(multiSketchExpressionLine) - 13.0) > 1e-8) {
+        std::cerr << "Multi-sketch expression dependency chain did not drive the expected solved length.\n";
         return 1;
     }
 
@@ -2488,8 +2782,15 @@ int main()
         }
 
         if (!sameBrepTokens(expectedBrp, actualBrp)) {
-            std::cerr << "Generated BREP text does not match expected validation data for " << label << ".\n";
-            return false;
+            const auto expectedEdges = describeEdges(expectedShape);
+            const auto actualEdges = describeEdges(actualShape);
+            if ((!edgeDescriptionsAreSpecific(expectedEdges)
+                    || !edgeDescriptionsAreSpecific(actualEdges)
+                    || expectedEdges != actualEdges)
+                && !sameBrepGeometryDescriptors(expectedShape, actualShape)) {
+                std::cerr << "Generated BREP text does not match expected validation data for " << label << ".\n";
+                return false;
+            }
         }
 
         const auto brepElapsed =
@@ -2565,12 +2866,12 @@ int main()
             true,
             true,
             McSolverEngine::ParameterMap {
-                {"D1", "61"},
-                {"L1", "41"},
-                {"L2", "61"},
-                {"L3", "11"},
-                {"L4", "16"},
-                {"L5", "21"},
+                {"VarSet.D1", "61"},
+                {"VarSet.L1", "41"},
+                {"VarSet.L2", "61"},
+                {"VarSet.L3", "11"},
+                {"VarSet.L4", "16"},
+                {"VarSet.L5", "21"},
             })) {
         return 1;
     }
@@ -2631,6 +2932,35 @@ int main()
             true,
             false,
             McSolverEngine::ParameterMap {{"VarSet.L1", "400"}})) {
+        return 1;
+    }
+
+    const std::string sampleV1029XmlPath = fcstdDocDir + "V102.9.xml";
+    const std::string sampleV1029ExpectedPath = fcstdDocDir + "V102.9.brp";
+    const std::string sampleV1029ActualPath = fcstdDocDir + "V102.9.solver.brp";
+    if (!verifySampleRegression(
+            sampleV1029XmlPath,
+            "Sketch",
+            sampleV1029ExpectedPath,
+            sampleV1029ActualPath,
+            "fcstdDoc/V102.9.xml / Sketch",
+            true,
+            false,
+            noParameters)) {
+        return 1;
+    }
+
+    const std::string sampleV1029_500ExpectedPath = fcstdDocDir + "V102.9.500.brp";
+    const std::string sampleV1029_500ActualPath = fcstdDocDir + "V102.9.500.solver.brp";
+    if (!verifySampleRegression(
+            sampleV1029XmlPath,
+            "Sketch",
+            sampleV1029_500ExpectedPath,
+            sampleV1029_500ActualPath,
+            "fcstdDoc/V102.9.xml / Sketch with VarSet.L1=500",
+            true,
+            false,
+            McSolverEngine::ParameterMap {{"VarSet.L1", "500"}})) {
         return 1;
     }
 

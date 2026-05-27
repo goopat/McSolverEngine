@@ -21,6 +21,12 @@ enum class QuantityDimension
     Area,
 };
 
+enum class PropertyOwnerKind
+{
+    VarSet,
+    Sketch,
+};
+
 struct QuantityValue
 {
     double value {};
@@ -32,6 +38,7 @@ struct VarSetProperty
     std::string objectName;
     std::string propertyName;
     std::string typeName;
+    PropertyOwnerKind ownerKind {PropertyOwnerKind::VarSet};
     std::string rawValue;
     bool hasRawValue {false};
     std::optional<std::string> expression;
@@ -42,6 +49,7 @@ struct VarSetCatalog
 {
     std::map<std::string, VarSetProperty> properties;
     std::unordered_map<std::string, std::string> aliases;
+    std::unordered_map<std::string, PropertyOwnerKind> objectKinds;
     std::unordered_map<std::string, std::vector<std::string>> keysByPropertyName;
 };
 
@@ -79,7 +87,7 @@ void rebuildVarSetShortNameLookup(VarSetCatalog& catalog);
     std::vector<std::string>& messages
 );
 
-[[nodiscard]] bool evaluateVarSetExpressions(VarSetCatalog& catalog, ImportResult& result);
+[[nodiscard]] bool evaluateExpressionProperties(VarSetCatalog& catalog, ImportResult& result);
 [[nodiscard]] bool collectVarSetProperties(VarSetCatalog& catalog, ImportResult& result);
 
 [[nodiscard]] std::optional<std::string> getVarSetValueForBinding(
@@ -90,6 +98,7 @@ void rebuildVarSetShortNameLookup(VarSetCatalog& catalog);
 [[nodiscard]] std::optional<std::string> evaluateExpressionValueForBinding(
     std::string_view expression,
     const VarSetCatalog& catalog,
+    std::string_view currentObjectName,
     std::string& error
 );
 

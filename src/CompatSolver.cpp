@@ -130,9 +130,6 @@ void storeGeometryParameter(SolveContext& context, int geometryIndex, double* pa
     if (const auto exact = tryResolve(constraint.parameterKey)) {
         return exact;
     }
-    if (const auto shortName = tryResolve(constraint.parameterName)) {
-        return shortName;
-    }
     if (constraint.hasParameterDefaultValue) {
         return constraint.parameterDefaultValue;
     }

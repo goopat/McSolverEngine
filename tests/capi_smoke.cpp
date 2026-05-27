@@ -717,7 +717,7 @@ int main()
         McSolverEngine_FreeGeometryResult(defaultAngleGeometry);
     }
 
-    const char* angleParameterKeys[] = {"Angle"};
+    const char* angleParameterKeys[] = {"Parameters.Angle"};
     const char* angleParameterValues[] = {"45"};
     {
         ScopedTestTimer timer("SolveToGeometryWithParameters angle override");

@@ -244,7 +244,7 @@ MCSOLVERENGINE_CAPI_EXPORT McSolverEngineResultCode McSolverEngine_SolveToGeomet
     McSolverEngineGeometryResult** result
 );
 
-// parameterKeysUtf8 / parameterValuesUtf8 — VarSet property overrides (UTF-8)
+// parameterKeysUtf8 / parameterValuesUtf8 — VarSet property overrides (UTF-8, ObjectOrLabel.Property)
 MCSOLVERENGINE_CAPI_EXPORT McSolverEngineResultCode McSolverEngine_SolveToGeometryWithParameters(
     const char* documentXmlUtf8,
     const char* sketchNameUtf8,

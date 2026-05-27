@@ -599,12 +599,12 @@ public class WrapperRegressionTests
             documentXml,
             "Sketch",
             new Dictionary<string, string> {
-                ["D1"] = "61",
-                ["L1"] = "41",
-                ["L2"] = "61",
-                ["L3"] = "11",
-                ["L4"] = "16",
-                ["L5"] = "21",
+                ["VarSet.D1"] = "61",
+                ["VarSet.L1"] = "41",
+                ["VarSet.L2"] = "61",
+                ["VarSet.L3"] = "11",
+                ["VarSet.L4"] = "16",
+                ["VarSet.L5"] = "21",
             }
         );
 
@@ -618,8 +618,8 @@ public class WrapperRegressionTests
         var geometryResult = McSolverEngineClient.SolveGeometryFromDocumentXml(
             documentXml, "Sketch",
             new Dictionary<string, string> {
-                ["D1"] = "61", ["L1"] = "41", ["L2"] = "61",
-                ["L3"] = "11", ["L4"] = "16", ["L5"] = "21",
+                ["VarSet.D1"] = "61", ["VarSet.L1"] = "41", ["VarSet.L2"] = "61",
+                ["VarSet.L3"] = "11", ["VarSet.L4"] = "16", ["VarSet.L5"] = "21",
             });
         Assert.AreEqual(McSolverEngineNativeStatus.Success, geometryResult.NativeStatus);
         Assert.AreEqual(ParseGeometryCount(documentXml, "Sketch"), geometryResult.Geometries.Count,
@@ -773,7 +773,7 @@ public class WrapperRegressionTests
         var result = McSolverEngineClient.SolveGeometryFromDocumentXml(
             ParameterizedDocumentXml,
             "Sketch",
-            new Dictionary<string, string> { ["Width"] = "8.5" }
+            new Dictionary<string, string> { ["Parameters.Width"] = "8.5" }
         );
 
         Assert.AreEqual(McSolverEngineNativeStatus.Success, result.NativeStatus);
@@ -813,7 +813,7 @@ public class WrapperRegressionTests
         var overriddenResult = McSolverEngineClient.SolveGeometryFromDocumentXml(
             ParameterizedAngleDocumentXml,
             "Sketch",
-            new Dictionary<string, string> { ["Angle"] = "45" }
+            new Dictionary<string, string> { ["Parameters.Angle"] = "45" }
         );
 
         Assert.AreEqual(McSolverEngineNativeStatus.Success, defaultResult.NativeStatus);
@@ -830,7 +830,7 @@ public class WrapperRegressionTests
         var result = McSolverEngineClient.SolveGeometryFromDocumentXml(
             ParameterizedAngleDocumentXml,
             "Sketch",
-            new Dictionary<string, string> { ["Angle"] = "45 deg" }
+            new Dictionary<string, string> { ["Parameters.Angle"] = "45 deg" }
         );
 
         Assert.AreEqual(McSolverEngineNativeStatus.ImportFailed, result.NativeStatus);

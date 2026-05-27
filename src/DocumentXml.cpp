@@ -441,43 +441,58 @@ struct ExpressionEntry
     return entries;
 }
 
-[[nodiscard]] VarSetCatalog collectVarSetCatalog(const std::vector<ObjectBlock>& objects)
+void appendObjectPropertiesToCatalog(
+    VarSetCatalog& catalog,
+    const ObjectBlock& object,
+    VarSetExpressions::PropertyOwnerKind ownerKind
+)
 {
-    VarSetCatalog catalog;
-    for (const auto& object : objects) {
-        if (object.type != "App::VarSet") {
-            continue;
-        }
-
-        catalog.aliases.emplace(object.name, object.name);
-        if (const auto labelProperty = findPropertyBlock(object.content, "Label")) {
-            if (const auto label = extractPropertyStringValue(*labelProperty); label && !label->empty()) {
-                catalog.aliases.emplace(*label, object.name);
-            }
-        }
-
-        for (const auto& property : collectPropertyBlocks(object.content)) {
-            if (property.name == "ExpressionEngine") {
-                continue;
-            }
-            if (const auto value = extractPropertyScalarValue(property.content)) {
-                auto& varSetProperty = VarSetExpressions::ensureVarSetProperty(catalog, object.name, property.name);
-                varSetProperty.typeName = property.type;
-                varSetProperty.rawValue = *value;
-                varSetProperty.hasRawValue = true;
-            }
-        }
-
-        for (const auto& expression : collectExpressionEntries(object.content)) {
-            const auto propertyName = VarSetExpressions::parseVarSetExpressionPath(expression.path);
-            if (!propertyName) {
-                continue;
-            }
-            auto& varSetProperty = VarSetExpressions::ensureVarSetProperty(catalog, object.name, *propertyName);
-            varSetProperty.expression = expression.expression;
+    catalog.objectKinds.emplace(object.name, ownerKind);
+    catalog.aliases.emplace(object.name, object.name);
+    if (const auto labelProperty = findPropertyBlock(object.content, "Label")) {
+        if (const auto label = extractPropertyStringValue(*labelProperty); label && !label->empty()) {
+            catalog.aliases.emplace(*label, object.name);
         }
     }
 
+    for (const auto& property : collectPropertyBlocks(object.content)) {
+        if (property.name == "ExpressionEngine") {
+            continue;
+        }
+        if (const auto value = extractPropertyScalarValue(property.content)) {
+            auto& expressionProperty =
+                VarSetExpressions::ensureVarSetProperty(catalog, object.name, property.name);
+            expressionProperty.typeName = property.type;
+            expressionProperty.ownerKind = ownerKind;
+            expressionProperty.rawValue = *value;
+            expressionProperty.hasRawValue = true;
+        }
+    }
+
+    for (const auto& expression : collectExpressionEntries(object.content)) {
+        const auto propertyName = VarSetExpressions::parseVarSetExpressionPath(expression.path);
+        if (!propertyName) {
+            continue;
+        }
+        auto& expressionProperty =
+            VarSetExpressions::ensureVarSetProperty(catalog, object.name, *propertyName);
+        expressionProperty.ownerKind = ownerKind;
+        expressionProperty.expression = expression.expression;
+    }
+}
+
+[[nodiscard]] VarSetCatalog collectExpressionCatalog(const std::vector<ObjectBlock>& objects)
+{
+    VarSetCatalog catalog;
+    for (const auto& object : objects) {
+        if (object.type == "App::VarSet") {
+            appendObjectPropertiesToCatalog(catalog, object, VarSetExpressions::PropertyOwnerKind::VarSet);
+            continue;
+        }
+        if (isSketchLikeObject(object)) {
+            appendObjectPropertiesToCatalog(catalog, object, VarSetExpressions::PropertyOwnerKind::Sketch);
+        }
+    }
     VarSetExpressions::rebuildVarSetShortNameLookup(catalog);
     return catalog;
 }
@@ -636,6 +651,7 @@ void applyConstraintExpressionBindings(
     const ImportedConstraintLookup& lookup,
     const std::vector<ConstraintExpressionBinding>& bindings,
     const VarSetCatalog& catalog,
+    std::string_view sketchObjectName,
     std::vector<std::string>& messages,
     bool& hadBindingGaps,
     bool& hadFatalBindingError,
@@ -690,7 +706,12 @@ void applyConstraintExpressionBindings(
             }
             std::string expressionError;
             if (const auto expressionValue =
-                    VarSetExpressions::evaluateExpressionValueForBinding(binding.expression, catalog, expressionError)) {
+                    VarSetExpressions::evaluateExpressionValueForBinding(
+                        binding.expression,
+                        catalog,
+                        sketchObjectName,
+                        expressionError
+                    )) {
                 if (const auto constantValue =
                         McSolverEngine::Detail::parseDocumentParameterValue(*expressionValue, constraint.kind)) {
                     constraint.value = *constantValue;
@@ -1531,15 +1552,28 @@ ImportResult importSketchFromDocumentXml(
     ImportResult result;
     ParsedApiParameterMap parsedParameters;
     std::string invalidParameterKey;
+    McSolverEngine::Detail::ApiParameterParseErrorKind parameterErrorKind {
+        McSolverEngine::Detail::ApiParameterParseErrorKind::None
+    };
     if (!McSolverEngine::Detail::tryParseApiParameters(
             parameters,
             parsedParameters,
-            &invalidParameterKey)) {
+            &invalidParameterKey,
+            &parameterErrorKind)) {
         result.status = ImportStatus::Failed;
-        result.messages.push_back(
-            "Parameter '" + invalidParameterKey
-            + "' must be a numeric value. API parameter units are fixed to mm for length constraints and degree for angle constraints."
-        );
+        if (parameterErrorKind == McSolverEngine::Detail::ApiParameterParseErrorKind::InvalidKeyFormat) {
+            result.messages.push_back(
+                "Parameter '" + invalidParameterKey
+                + "' must use an explicit {VarSetObjectNameOrLabel}.{ParameterName} key. "
+                  "Bare parameter names are reserved for future sketch-property overrides."
+            );
+        }
+        else {
+            result.messages.push_back(
+                "Parameter '" + invalidParameterKey
+                + "' must be a numeric value. API parameter units are fixed to mm for length constraints and degree for angle constraints."
+            );
+        }
         return result;
     }
 
@@ -1565,11 +1599,11 @@ ImportResult importSketchFromDocumentXml(
     std::vector<int> internalGeometryMap;
     std::unordered_map<int, int> externalGeometryMap;
     ImportedConstraintLookup importedConstraints;
-    auto varSetCatalog = collectVarSetCatalog(objectBlocks);
+    auto varSetCatalog = collectExpressionCatalog(objectBlocks);
     std::string error;
 
     if (!VarSetExpressions::applyApiParametersToVarSets(varSetCatalog, parsedParameters, result.messages)
-        || !VarSetExpressions::evaluateVarSetExpressions(varSetCatalog, result)
+        || !VarSetExpressions::evaluateExpressionProperties(varSetCatalog, result)
         || !VarSetExpressions::collectVarSetProperties(varSetCatalog, result)) {
         result.status = ImportStatus::Failed;
         return result;
@@ -1654,6 +1688,7 @@ ImportResult importSketchFromDocumentXml(
             importedConstraints,
             collectConstraintExpressionBindings(object->content),
             varSetCatalog,
+            object->name,
             result.messages,
             hadBindingGaps,
             hadFatalBindingError,

@@ -283,12 +283,13 @@ FreeCAD 中真正把“草图数据”翻译成 GCS 参数和约束的是：
 
 当前参数化能力的边界与限制：
 
-- 当前不实现完整 FreeCAD 表达式求值器；只实现 **VarSet 参数表达式的数学 + 有限长度/角度单位子集**
+- 当前不实现完整 FreeCAD 表达式求值器；只实现 **Sketch / VarSet 标量 Property 表达式的数学 + 有限长度/角度单位子集**
 - 导入阶段的参数链顺序为：
   1. 解析 `Document.xml` 中全部 `App::VarSet` 的标量属性、`Label` 与 VarSet 自身 `ExpressionEngine`
-  2. 若调用方提供 `parameters`，先应用到 VarSet 数据结构
-  3. 解析 VarSet 参数表达式的引用链，按依赖顺序计算全部可计算 VarSet 参数
-  4. 草图 `ExpressionEngine` 再把最终 VarSet 数值或可在 VarSet 子集中求值的表达式绑定到维度约束
+  2. 解析目标 Sketch 对象上可数值求值的标量 Property 及其 `ExpressionEngine`
+  3. 若调用方提供 `parameters`，先应用到 VarSet 数据结构
+  4. 解析 Sketch / VarSet Property 表达式的引用链，按依赖顺序计算全部可计算结果
+  5. 草图 `ExpressionEngine` 再把最终 VarSet 数值、Sketch Property 数值或可在当前精简子集中求值的表达式绑定到维度约束
 - 对**调用方显式传入的 `parameters`**，当前 API 层要求值必须是**纯数值字符串**；不接受 `mm` / `deg` 等单位后缀
 - 对 API 参数值，当前固定约定：
   - 长度类约束（`DistanceX / DistanceY / Distance / Radius / Diameter`）按 **mm**
@@ -296,9 +297,8 @@ FreeCAD 中真正把“草图数据”翻译成 GCS 参数和约束的是：
   - 进入求解器前会自动换算到内部单位，其中角度会换成 **radian**
 - 多个不同名称的 `VarSet` 会分别收集，不会合并到同一命名空间
 - `<<Label>>.Param` 形式当前通过 `VarSet` 的 `Label` 映射回真实对象名
-- VarSet 表达式中也支持同样的 `<<Label>>.Param` 引用，以及 `VarSetName.Param` 引用；在同一个 VarSet 内可用短名 `Param` 引用本 VarSet 参数
-- 参数覆盖时优先匹配全名键（如 `Config.Width`），查不到时再匹配短名键（如 `Width`）
-- 因此当多个 `VarSet` 含有同名属性时，短名覆盖存在歧义；当前推荐调用方使用全名键
+- 精简表达式中支持 `<<Label>>.Param`、`VarSetName.Param`、`SketchObjectName.Prop`、`<<Sketch Label>>.Prop`；在同一个 VarSet / Sketch 对象内可用短名 `Param` / `Prop` 引用本对象标量 Property
+- 参数覆盖只接受显式全名键（如 `Config.Width` 或 `Parameters.Width`），不再接受裸短名键（如 `Width`）
 - 若多个 `VarSet` 使用相同 `Label`，当前按首次出现的别名映射生效，后续同名 `Label` 不会覆盖前者
 - 对 4 个对外求解接口（`SolveToGeometry` / `SolveToGeometryWithParameters` / `SolveToBRep` / `SolveToBRepWithParameters`），结果中会返回全部 VarSet 标量属性表；输出键固定使用真实对象名（`ObjectName.PropertyName`），不使用 `Label` 别名
 - VarSet 结果表中的 `value` / `unit` 都使用字符串；可数值求值的结果按当前规范单位输出：长度=`mm`、角度=`deg`、面积=`mm^2`、无量纲=`""`；字符串/布尔等非数值属性保持原始文本并返回空单位
@@ -447,12 +447,12 @@ FreeCAD 中真正把“草图数据”翻译成 GCS 参数和约束的是：
 
 ### 10.1 已落地的参数化求解能力
 
-当前已打通一条“`VarSet` -> VarSet 参数表达式求值 -> 维度约束 -> 参数覆盖 -> 重新求解”链路：
+当前已打通一条“`VarSet/Sketch 标量 Property` -> 精简表达式求值 -> 维度约束 -> 参数覆盖 -> 重新求解”链路：
 
 - 导入阶段会扫描文档中的全部 `App::VarSet`
-- 导入阶段会解析 `App::VarSet` 自身的 `ExpressionEngine`，先在 VarSet 内部完成数学表达式、有限长度/角度单位和参数引用链传递
-- 若调用方提供 `std::map<std::string, std::string>` 参数表，当前会先校验每个参数值都是纯数值，并在 VarSet 表达式求值前写入 VarSet 数据结构
-- 草图导入阶段会解析 `ExpressionEngine`，识别指向 `Constraints[index]` 的约束绑定；绑定表达式既可以是直接 `VarSet.Param` 引用，也可以是当前 VarSet 子集可求值的表达式（如 `VarSet.L1 * 3`）
+- 导入阶段会解析 `App::VarSet` 自身的 `ExpressionEngine`，以及目标 Sketch 对象上可数值求值的标量 Property 表达式
+- 若调用方提供 `std::map<std::string, std::string>` 参数表，当前会先校验参数键必须是显式 `VarSetObjectNameOrLabel.PropertyName`，参数值必须是纯数值，并在表达式求值前写入 VarSet 数据结构
+- 草图导入阶段会解析 `ExpressionEngine`，识别指向 `Constraints[index]` 的约束绑定；绑定表达式既可以是直接 `VarSet.Param` 引用，也可以是当前 Sketch / VarSet 精简子集可求值的表达式（如 `test_radius * 2 + VarSet.L1`）
 - 绑定成功后，内部 `Compat::Constraint` 会保留：
   - `originalIndex`
   - `parameterName`
@@ -472,9 +472,10 @@ FreeCAD 中真正把“草图数据”翻译成 GCS 参数和约束的是：
 - 直接使用 `VarSet` 默认值驱动角度约束求解，并完成 degree / rad 到内部弧度值的换算
 - 在导入阶段通过 `parameters` 覆盖参数值
 - 在求解阶段通过 `parameters` 覆盖参数值
-- 同时支持短名键（如 `Width`）与全名键（如 `VarSet.Width`）的参数覆盖，其中推荐优先使用全名键
+- 只支持显式全名键（如 `VarSet.Width`、`Parameters.Width`）的参数覆盖
 - 对 API `parameters`，当前会拒绝 `8.5 mm`、`45 deg` 这类带单位后缀的输入，要求调用方直接传 `8.5`、`45`
 - VarSet 参数表达式链，例如 `DoubleWidth = Base * 2`、`Width = max(DoubleWidth, <<Parameters>>.MinWidth) + Offset`
+- Sketch 自定义标量 Property 表达式链，例如 `test_width = test_radius * 2 + <<Parameters>>.Base`
 - VarSet 有限单位表达式，例如 `1 cm + 2 mm`、`hypot(3 cm, 40 mm)`、`sin(90 deg)`、`cos(pi rad)`、`30 deg + 0.5 rad`、`(L1 + 1 m) * (L1 + 1 m) / 1 m`
 - FreeCAD 表达式语法一致性专项用例：`1 + 2`、`sqrt(4)`、`sqrt(2 + Var)`、`2 ^ 3 ^ 2 == 64`、`-2 ^ 2 == 4`、`sin(pi / 2)`、函数名和常量大小写敏感
 - 非 VarSet 对象引用（如 `Spreadsheet.Width`）按精简子集不支持场景报专用错误码

@@ -16,6 +16,19 @@ namespace McSolverEngine::Detail
 
 using ParsedApiParameterMap = std::unordered_map<std::string, double>;
 
+enum class ApiParameterParseErrorKind
+{
+    None,
+    InvalidKeyFormat,
+    InvalidNumericValue,
+};
+
+struct QualifiedApiParameterKey
+{
+    std::string objectRef;
+    std::string parameterName;
+};
+
 [[nodiscard]] inline std::string_view trim(std::string_view value)
 {
     while (!value.empty() && std::isspace(static_cast<unsigned char>(value.front())) != 0) {
@@ -87,24 +100,65 @@ using ParsedApiParameterMap = std::unordered_map<std::string, double>;
     return parsed;
 }
 
+[[nodiscard]] inline std::optional<QualifiedApiParameterKey> splitQualifiedApiParameterKey(std::string_view key)
+{
+    const auto trimmedKey = trim(key);
+    const auto separator = trimmedKey.rfind('.');
+    if (separator == std::string_view::npos || separator == 0 || separator == trimmedKey.size() - 1) {
+        return std::nullopt;
+    }
+
+    const auto objectRef = trim(trimmedKey.substr(0, separator));
+    const auto parameterName = trim(trimmedKey.substr(separator + 1));
+    if (objectRef.empty() || parameterName.empty()) {
+        return std::nullopt;
+    }
+
+    return QualifiedApiParameterKey {
+        .objectRef = std::string(objectRef),
+        .parameterName = std::string(parameterName),
+    };
+}
+
 [[nodiscard]] inline bool tryParseApiParameters(
     const McSolverEngine::ParameterMap& parameters,
     ParsedApiParameterMap& parsedParameters,
-    std::string* invalidKey = nullptr
+    std::string* invalidKey = nullptr,
+    ApiParameterParseErrorKind* errorKind = nullptr
 )
 {
     parsedParameters.clear();
     parsedParameters.reserve(parameters.size());
+    if (errorKind) {
+        *errorKind = ApiParameterParseErrorKind::None;
+    }
 
     for (const auto& [key, value] : parameters) {
+        const auto qualifiedKey = splitQualifiedApiParameterKey(key);
+        if (!qualifiedKey) {
+            if (invalidKey) {
+                *invalidKey = key;
+            }
+            if (errorKind) {
+                *errorKind = ApiParameterParseErrorKind::InvalidKeyFormat;
+            }
+            return false;
+        }
+
         const auto parsed = parseStrictNumeric(value);
         if (!parsed) {
             if (invalidKey) {
                 *invalidKey = key;
             }
+            if (errorKind) {
+                *errorKind = ApiParameterParseErrorKind::InvalidNumericValue;
+            }
             return false;
         }
-        parsedParameters.insert_or_assign(key, *parsed);
+        parsedParameters.insert_or_assign(
+            qualifiedKey->objectRef + "." + qualifiedKey->parameterName,
+            *parsed
+        );
     }
 
     return true;
