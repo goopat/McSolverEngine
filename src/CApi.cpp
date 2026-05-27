@@ -214,6 +214,13 @@ void resetOutput(McSolverEngineBRepResult** out)
     }
 }
 
+void resetOutput(McSolverEngineDocumentInfo** out)
+{
+    if (out) {
+        *out = nullptr;
+    }
+}
+
 [[nodiscard]] McSolverEnginePoint2 toCApiPoint2(const Point2& point) noexcept
 {
     return McSolverEnginePoint2 {.x = point.x, .y = point.y};
@@ -270,6 +277,87 @@ void freeVarSetProperties(int count, const McSolverEngineVarSetProperty* values)
         delete[] properties[i].unitUtf8;
     }
     delete[] properties;
+}
+
+void freeScalarPropertyInfos(int count, const McSolverEngineScalarPropertyInfo* values) noexcept
+{
+    auto* properties = const_cast<McSolverEngineScalarPropertyInfo*>(values);
+    if (!properties) {
+        return;
+    }
+
+    for (int i = 0; i < count; ++i) {
+        delete[] properties[i].nameUtf8;
+        delete[] properties[i].typeUtf8;
+        delete[] properties[i].scalarValueUtf8;
+        delete[] properties[i].propertyXmlUtf8;
+    }
+    delete[] properties;
+}
+
+void freeVarSetParameterInfos(int count, const McSolverEngineVarSetParameterInfo* values) noexcept
+{
+    auto* parameters = const_cast<McSolverEngineVarSetParameterInfo*>(values);
+    if (!parameters) {
+        return;
+    }
+
+    for (int i = 0; i < count; ++i) {
+        delete[] parameters[i].nameUtf8;
+        delete[] parameters[i].typeUtf8;
+        delete[] parameters[i].rawValueUtf8;
+        delete[] parameters[i].expressionUtf8;
+        delete[] parameters[i].propertyXmlUtf8;
+    }
+    delete[] parameters;
+}
+
+void freeSketchInfos(int count, const McSolverEngineSketchInfo* values) noexcept
+{
+    auto* sketches = const_cast<McSolverEngineSketchInfo*>(values);
+    if (!sketches) {
+        return;
+    }
+
+    for (int i = 0; i < count; ++i) {
+        delete[] sketches[i].labelUtf8;
+        delete[] sketches[i].objectNameUtf8;
+        freeScalarPropertyInfos(sketches[i].propertyCount, sketches[i].properties);
+    }
+    delete[] sketches;
+}
+
+void freeVarSetInfos(int count, const McSolverEngineVarSetInfo* values) noexcept
+{
+    auto* varSets = const_cast<McSolverEngineVarSetInfo*>(values);
+    if (!varSets) {
+        return;
+    }
+
+    for (int i = 0; i < count; ++i) {
+        delete[] varSets[i].labelUtf8;
+        delete[] varSets[i].objectNameUtf8;
+        freeVarSetParameterInfos(varSets[i].parameterCount, varSets[i].parameters);
+    }
+    delete[] varSets;
+}
+
+void freeDocumentInfo(McSolverEngineDocumentInfo* value) noexcept
+{
+    if (!value) {
+        return;
+    }
+
+    auto* messages = value->messages;
+    if (messages) {
+        for (int i = 0; i < value->messageCount; ++i) {
+            delete[] messages[i];
+        }
+        delete[] messages;
+    }
+    freeSketchInfos(value->sketchCount, value->sketches);
+    freeVarSetInfos(value->varSetCount, value->varSets);
+    delete value;
 }
 
 void freeGeometryResult(McSolverEngineGeometryResult* value) noexcept
@@ -437,6 +525,186 @@ void freeBRepResult(McSolverEngineBRepResult* value) noexcept
 
     *count = static_cast<int>(values.size());
     *out = array;
+    return true;
+}
+
+[[nodiscard]] bool assignScalarPropertyInfos(
+    const std::vector<McSolverEngine::DocumentXml::ScalarPropertyInfo>& values,
+    int* count,
+    const McSolverEngineScalarPropertyInfo** out
+)
+{
+    if (!count || !out) {
+        return false;
+    }
+
+    *count = 0;
+    *out = nullptr;
+    if (values.size() > static_cast<std::size_t>(std::numeric_limits<int>::max())) {
+        return false;
+    }
+    if (values.empty()) {
+        return true;
+    }
+
+    auto* array = new (std::nothrow) McSolverEngineScalarPropertyInfo[values.size()] {};
+    if (!array) {
+        return false;
+    }
+
+    for (std::size_t i = 0; i < values.size(); ++i) {
+        if (!assignOwnedString(values[i].name, &array[i].nameUtf8)
+            || !assignOwnedString(values[i].type, &array[i].typeUtf8)
+            || !assignOwnedString(values[i].scalarValue, &array[i].scalarValueUtf8)
+            || !assignOwnedString(values[i].propertyXml, &array[i].propertyXmlUtf8)) {
+            freeScalarPropertyInfos(static_cast<int>(values.size()), array);
+            return false;
+        }
+    }
+
+    *count = static_cast<int>(values.size());
+    *out = array;
+    return true;
+}
+
+[[nodiscard]] bool assignVarSetParameterInfos(
+    const std::vector<McSolverEngine::DocumentXml::VarSetParameterInfo>& values,
+    int* count,
+    const McSolverEngineVarSetParameterInfo** out
+)
+{
+    if (!count || !out) {
+        return false;
+    }
+
+    *count = 0;
+    *out = nullptr;
+    if (values.size() > static_cast<std::size_t>(std::numeric_limits<int>::max())) {
+        return false;
+    }
+    if (values.empty()) {
+        return true;
+    }
+
+    auto* array = new (std::nothrow) McSolverEngineVarSetParameterInfo[values.size()] {};
+    if (!array) {
+        return false;
+    }
+
+    for (std::size_t i = 0; i < values.size(); ++i) {
+        if (!assignOwnedString(values[i].name, &array[i].nameUtf8)
+            || !assignOwnedString(values[i].type, &array[i].typeUtf8)
+            || !assignOwnedString(values[i].rawValue, &array[i].rawValueUtf8)
+            || !assignOwnedString(values[i].expression, &array[i].expressionUtf8)
+            || !assignOwnedString(values[i].propertyXml, &array[i].propertyXmlUtf8)) {
+            freeVarSetParameterInfos(static_cast<int>(values.size()), array);
+            return false;
+        }
+    }
+
+    *count = static_cast<int>(values.size());
+    *out = array;
+    return true;
+}
+
+[[nodiscard]] bool assignSketchInfos(
+    const std::vector<McSolverEngine::DocumentXml::SketchInfo>& values,
+    int* count,
+    const McSolverEngineSketchInfo** out
+)
+{
+    if (!count || !out) {
+        return false;
+    }
+
+    *count = 0;
+    *out = nullptr;
+    if (values.size() > static_cast<std::size_t>(std::numeric_limits<int>::max())) {
+        return false;
+    }
+    if (values.empty()) {
+        return true;
+    }
+
+    auto* array = new (std::nothrow) McSolverEngineSketchInfo[values.size()] {};
+    if (!array) {
+        return false;
+    }
+
+    for (std::size_t i = 0; i < values.size(); ++i) {
+        if (!assignOwnedString(values[i].label, &array[i].labelUtf8)
+            || !assignOwnedString(values[i].objectName, &array[i].objectNameUtf8)
+            || !assignScalarPropertyInfos(values[i].properties, &array[i].propertyCount, &array[i].properties)) {
+            freeSketchInfos(static_cast<int>(values.size()), array);
+            return false;
+        }
+    }
+
+    *count = static_cast<int>(values.size());
+    *out = array;
+    return true;
+}
+
+[[nodiscard]] bool assignVarSetInfos(
+    const std::vector<McSolverEngine::DocumentXml::VarSetInfo>& values,
+    int* count,
+    const McSolverEngineVarSetInfo** out
+)
+{
+    if (!count || !out) {
+        return false;
+    }
+
+    *count = 0;
+    *out = nullptr;
+    if (values.size() > static_cast<std::size_t>(std::numeric_limits<int>::max())) {
+        return false;
+    }
+    if (values.empty()) {
+        return true;
+    }
+
+    auto* array = new (std::nothrow) McSolverEngineVarSetInfo[values.size()] {};
+    if (!array) {
+        return false;
+    }
+
+    for (std::size_t i = 0; i < values.size(); ++i) {
+        if (!assignOwnedString(values[i].label, &array[i].labelUtf8)
+            || !assignOwnedString(values[i].objectName, &array[i].objectNameUtf8)
+            || !assignVarSetParameterInfos(values[i].parameters, &array[i].parameterCount, &array[i].parameters)) {
+            freeVarSetInfos(static_cast<int>(values.size()), array);
+            return false;
+        }
+    }
+
+    *count = static_cast<int>(values.size());
+    *out = array;
+    return true;
+}
+
+[[nodiscard]] bool assignDocumentInfo(
+    const McSolverEngine::DocumentXml::InspectResult& inspected,
+    McSolverEngineDocumentInfo** out
+)
+{
+    if (!out) {
+        return false;
+    }
+
+    *out = new (std::nothrow) McSolverEngineDocumentInfo {};
+    if (!*out) {
+        return false;
+    }
+
+    if (!assignSketchInfos(inspected.sketches, &(*out)->sketchCount, &(*out)->sketches)
+        || !assignVarSetInfos(inspected.varSets, &(*out)->varSetCount, &(*out)->varSets)
+        || !assignStringArray(inspected.messages, &(*out)->messageCount, &(*out)->messages)) {
+        freeDocumentInfo(*out);
+        *out = nullptr;
+        return false;
+    }
+
     return true;
 }
 
@@ -1074,6 +1342,57 @@ void McSolverEngine_FreeGeometryResult(McSolverEngineGeometryResult* value)
 void McSolverEngine_FreeBRepResult(McSolverEngineBRepResult* value)
 {
     freeBRepResult(value);
+}
+
+McSolverEngineResultCode McSolverEngine_InspectDocumentXml(
+    const char* documentXmlUtf8,
+    McSolverEngineDocumentInfo** result
+)
+{
+    clearLastError();
+    try {
+        McSolverEngine::Detail::configureWindowsAssertMode();
+        if (!documentXmlUtf8 || !result) {
+            resetOutput(result);
+            return MCSOLVERENGINE_RESULT_INVALID_ARGUMENT;
+        }
+
+        const auto inspected = McSolverEngine::DocumentXml::inspectDocumentXml(
+            safeStringView(documentXmlUtf8)
+        );
+        if (!assignDocumentInfo(inspected, result)) {
+            resetOutput(result);
+            return MCSOLVERENGINE_RESULT_OUT_OF_MEMORY;
+        }
+
+        if (!inspected.succeeded()) {
+            if (inspected.messages.empty()) {
+                setLastError("Document.xml inspection failed.");
+            } else {
+                captureMessages(inspected.messages);
+            }
+            return MCSOLVERENGINE_RESULT_IMPORT_FAILED;
+        }
+
+        return MCSOLVERENGINE_RESULT_SUCCESS;
+    } catch (const std::bad_alloc& e) {
+        setLastError(e.what());
+        resetOutput(result);
+        return MCSOLVERENGINE_RESULT_OUT_OF_MEMORY;
+    } catch (const std::exception& e) {
+        setLastError(e.what());
+        resetOutput(result);
+        return MCSOLVERENGINE_RESULT_IMPORT_FAILED;
+    } catch (...) {
+        setLastError("unknown exception");
+        resetOutput(result);
+        return MCSOLVERENGINE_RESULT_IMPORT_FAILED;
+    }
+}
+
+void McSolverEngine_FreeDocumentInfo(McSolverEngineDocumentInfo* value)
+{
+    freeDocumentInfo(value);
 }
 
 McSolverEngineFCStdResultCode McSolverEngine_ExtractFCStdDoc(

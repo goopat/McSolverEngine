@@ -24,6 +24,56 @@ enum class ImportErrorCode
     VarSetExpressionUnsupportedSubset = 1001,
 };
 
+enum class InspectStatus
+{
+    Success = 0,
+    Failed = 1,
+};
+
+struct ScalarPropertyInfo
+{
+    std::string name;
+    std::string type;
+    std::string scalarValue;
+    std::string propertyXml;
+};
+
+struct SketchInfo
+{
+    std::string label;
+    std::string objectName;
+    std::vector<ScalarPropertyInfo> properties;
+};
+
+struct VarSetParameterInfo
+{
+    std::string name;
+    std::string type;
+    std::string rawValue;
+    std::string expression;
+    std::string propertyXml;
+};
+
+struct VarSetInfo
+{
+    std::string label;
+    std::string objectName;
+    std::vector<VarSetParameterInfo> parameters;
+};
+
+struct InspectResult
+{
+    InspectStatus status {InspectStatus::Failed};
+    std::vector<std::string> messages;
+    std::vector<SketchInfo> sketches;
+    std::vector<VarSetInfo> varSets;
+
+    [[nodiscard]] bool succeeded() const noexcept
+    {
+        return status == InspectStatus::Success;
+    }
+};
+
 struct VarSetPropertyValue
 {
     std::string key;
@@ -65,5 +115,7 @@ struct ImportResult
     const McSolverEngine::ParameterMap& parameters,
     std::string_view sketchName = {}
 );
+
+[[nodiscard]] MCSOLVERENGINE_EXPORT InspectResult inspectDocumentXml(std::string_view xml);
 
 }  // namespace McSolverEngine::DocumentXml

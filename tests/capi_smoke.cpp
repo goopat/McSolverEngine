@@ -63,6 +63,74 @@ bool expectVarSetProperty(
         && property->unitUtf8 != nullptr && expectedUnit == property->unitUtf8;
 }
 
+const McSolverEngineSketchInfo* findSketchInfo(
+    const McSolverEngineSketchInfo* sketches,
+    int count,
+    std::string_view objectName
+)
+{
+    if (!sketches || count <= 0) {
+        return nullptr;
+    }
+    for (int i = 0; i < count; ++i) {
+        if (sketches[i].objectNameUtf8 != nullptr && objectName == sketches[i].objectNameUtf8) {
+            return &sketches[i];
+        }
+    }
+    return nullptr;
+}
+
+const McSolverEngineScalarPropertyInfo* findScalarPropertyInfo(
+    const McSolverEngineScalarPropertyInfo* properties,
+    int count,
+    std::string_view name
+)
+{
+    if (!properties || count <= 0) {
+        return nullptr;
+    }
+    for (int i = 0; i < count; ++i) {
+        if (properties[i].nameUtf8 != nullptr && name == properties[i].nameUtf8) {
+            return &properties[i];
+        }
+    }
+    return nullptr;
+}
+
+const McSolverEngineVarSetInfo* findVarSetInfo(
+    const McSolverEngineVarSetInfo* varSets,
+    int count,
+    std::string_view objectName
+)
+{
+    if (!varSets || count <= 0) {
+        return nullptr;
+    }
+    for (int i = 0; i < count; ++i) {
+        if (varSets[i].objectNameUtf8 != nullptr && objectName == varSets[i].objectNameUtf8) {
+            return &varSets[i];
+        }
+    }
+    return nullptr;
+}
+
+const McSolverEngineVarSetParameterInfo* findVarSetParameterInfo(
+    const McSolverEngineVarSetParameterInfo* parameters,
+    int count,
+    std::string_view name
+)
+{
+    if (!parameters || count <= 0) {
+        return nullptr;
+    }
+    for (int i = 0; i < count; ++i) {
+        if (parameters[i].nameUtf8 != nullptr && name == parameters[i].nameUtf8) {
+            return &parameters[i];
+        }
+    }
+    return nullptr;
+}
+
 double lineLength(const McSolverEngineGeometryRecord& record)
 {
     const double dx = record.end.x - record.start.x;
@@ -140,6 +208,180 @@ int main()
         if (!expect(!documentXml.empty(), "Expected sample Document.xml content to load.")) {
             return EXIT_FAILURE;
         }
+    }
+
+    constexpr std::string_view inspectDocumentXml = R"(<?xml version="1.0" encoding="UTF-8"?>
+<Document>
+    <Objects Count="2">
+        <Object type="App::VarSet" name="VarSet001" id="1"/>
+        <Object type="Sketcher::SketchObject" name="SketchA" id="2"/>
+    </Objects>
+    <ObjectData Count="2">
+        <Object name="VarSet001">
+            <Properties Count="6" TransientCount="0">
+                <Property name="Label" type="App::PropertyString">
+                    <String value="Parameters"/>
+                </Property>
+                <Property name="Label2" type="App::PropertyString">
+                    <String value=""/>
+                </Property>
+                <Property name="Visibility" type="App::PropertyBool">
+                    <Bool value="true"/>
+                </Property>
+                <Property name="Base" type="App::PropertyFloat">
+                    <Float value="5.0"/>
+                </Property>
+                <Property name="Width" type="App::PropertyFloat">
+                    <Float value="0.0"/>
+                </Property>
+                <Property name="ExpressionEngine" type="App::PropertyExpressionEngine">
+                    <ExpressionEngine count="1">
+                        <Expression path="Width" expression="Base * 2"/>
+                    </ExpressionEngine>
+                </Property>
+            </Properties>
+        </Object>
+        <Object name="SketchA">
+            <Properties Count="6" TransientCount="0">
+                <Property name="Label" type="App::PropertyString">
+                    <String value="Sketch Alpha"/>
+                </Property>
+                <Property name="Visibility" type="App::PropertyBool">
+                    <Bool value="true"/>
+                </Property>
+                <Property name="Comment" type="App::PropertyString">
+                    <String value="demo"/>
+                </Property>
+                <Property name="Width" type="App::PropertyFloat">
+                    <Float value="12.5"/>
+                </Property>
+                <Property name="Constraints" type="Sketcher::PropertyConstraintList">
+                    <ConstraintList count="0">
+                    </ConstraintList>
+                </Property>
+                <Property name="Geometry" type="Part::PropertyGeometryList">
+                    <GeometryList count="1">
+                        <Geometry type="Part::GeomLineSegment" id="1" migrated="1">
+                            <LineSegment StartX="0.0" StartY="0.0" StartZ="0.0" EndX="1.0" EndY="0.0" EndZ="0.0"/>
+                            <Construction value="0"/>
+                        </Geometry>
+                    </GeometryList>
+                </Property>
+            </Properties>
+        </Object>
+    </ObjectData>
+</Document>)";
+
+    {
+        ScopedTestTimer timer("InspectDocumentXml");
+        McSolverEngineDocumentInfo* inspected = nullptr;
+        const auto inspectCode = McSolverEngine_InspectDocumentXml(inspectDocumentXml.data(), &inspected);
+        if (!expect(inspectCode == MCSOLVERENGINE_RESULT_SUCCESS, "Expected Document inspection to succeed.")
+            || !expect(inspected != nullptr, "Expected Document inspection result pointer.")
+            || !expect(inspected->sketchCount == 1, "Expected one sketch in inspection result.")
+            || !expect(inspected->varSetCount == 1, "Expected one varset in inspection result.")
+            || !expect(inspected->messageCount == 0, "Expected no inspection messages for valid input.")) {
+            McSolverEngine_FreeDocumentInfo(inspected);
+            return EXIT_FAILURE;
+        }
+
+        const auto* sketch = findSketchInfo(inspected->sketches, inspected->sketchCount, "SketchA");
+        if (!expect(sketch != nullptr, "Expected SketchA in inspection result.")
+            || !expect(sketch->labelUtf8 != nullptr && std::string(sketch->labelUtf8) == "Sketch Alpha", "Expected SketchA label.")
+            || !expect(sketch->propertyCount == 4, "Expected SketchA to expose only scalar properties.")) {
+            McSolverEngine_FreeDocumentInfo(inspected);
+            return EXIT_FAILURE;
+        }
+
+        const auto* visibilityProperty = findScalarPropertyInfo(sketch->properties, sketch->propertyCount, "Visibility");
+        const auto* widthProperty = findScalarPropertyInfo(sketch->properties, sketch->propertyCount, "Width");
+        if (!expect(
+                visibilityProperty != nullptr
+                    && visibilityProperty->typeUtf8 != nullptr
+                    && std::string(visibilityProperty->typeUtf8) == "App::PropertyBool"
+                    && visibilityProperty->scalarValueUtf8 != nullptr
+                    && std::string(visibilityProperty->scalarValueUtf8) == "true"
+                    && visibilityProperty->propertyXmlUtf8 != nullptr
+                    && contains(visibilityProperty->propertyXmlUtf8, "<Bool value=\"true\"/>"),
+                "Expected sketch bool property to expose type, scalar value, and property XML."
+            )
+            || !expect(
+                widthProperty != nullptr
+                    && widthProperty->scalarValueUtf8 != nullptr
+                    && std::string(widthProperty->scalarValueUtf8) == "12.5",
+                "Expected sketch float property to expose scalar value."
+            )
+            || !expect(
+                findScalarPropertyInfo(sketch->properties, sketch->propertyCount, "Geometry") == nullptr,
+                "Expected sketch inspection to ignore non-scalar Geometry property."
+            )
+            || !expect(
+                findScalarPropertyInfo(sketch->properties, sketch->propertyCount, "Constraints") == nullptr,
+                "Expected sketch inspection to ignore non-scalar Constraints property."
+            )) {
+            McSolverEngine_FreeDocumentInfo(inspected);
+            return EXIT_FAILURE;
+        }
+
+        const auto* varSet = findVarSetInfo(inspected->varSets, inspected->varSetCount, "VarSet001");
+        if (!expect(varSet != nullptr, "Expected VarSet001 in inspection result.")
+            || !expect(varSet->labelUtf8 != nullptr && std::string(varSet->labelUtf8) == "Parameters", "Expected VarSet label.")
+            || !expect(varSet->parameterCount == 5, "Expected all scalar VarSet parameters including Label/Label2/Visibility.")) {
+            McSolverEngine_FreeDocumentInfo(inspected);
+            return EXIT_FAILURE;
+        }
+
+        const auto* label2Parameter = findVarSetParameterInfo(varSet->parameters, varSet->parameterCount, "Label2");
+        const auto* widthParameter = findVarSetParameterInfo(varSet->parameters, varSet->parameterCount, "Width");
+        if (!expect(
+                label2Parameter != nullptr
+                    && label2Parameter->rawValueUtf8 != nullptr
+                    && std::string(label2Parameter->rawValueUtf8).empty()
+                    && label2Parameter->propertyXmlUtf8 != nullptr
+                    && contains(label2Parameter->propertyXmlUtf8, "Property name=\"Label2\""),
+                "Expected VarSet empty string parameters to be preserved."
+            )
+            || !expect(
+                widthParameter != nullptr
+                    && widthParameter->rawValueUtf8 != nullptr
+                    && std::string(widthParameter->rawValueUtf8) == "0.0"
+                    && widthParameter->expressionUtf8 != nullptr
+                    && std::string(widthParameter->expressionUtf8) == "Base * 2"
+                    && widthParameter->propertyXmlUtf8 != nullptr
+                    && contains(widthParameter->propertyXmlUtf8, "Property name=\"Width\""),
+                "Expected VarSet parameters to expose raw value, expression, and property XML."
+            )) {
+            McSolverEngine_FreeDocumentInfo(inspected);
+            return EXIT_FAILURE;
+        }
+
+        McSolverEngine_FreeDocumentInfo(inspected);
+    }
+
+    {
+        ScopedTestTimer timer("InspectDocumentXml invalid XML");
+        McSolverEngineDocumentInfo* inspected = nullptr;
+        const auto inspectCode = McSolverEngine_InspectDocumentXml("not valid xml", &inspected);
+        if (!expect(
+                inspectCode == MCSOLVERENGINE_RESULT_IMPORT_FAILED,
+                "Expected invalid XML inspection to fail with IMPORT_FAILED."
+            )
+            || !expect(inspected != nullptr, "Expected inspection failure to still return result metadata.")
+            || !expect(
+                inspected->messageCount == 1
+                    && inspected->messages != nullptr
+                    && inspected->messages[0] != nullptr
+                    && contains(inspected->messages[0], "ObjectData"),
+                "Expected invalid XML inspection to expose parse failure message."
+            )
+            || !expect(
+                McSolverEngine_GetLastError() != nullptr && !std::string(McSolverEngine_GetLastError()).empty(),
+                "Expected GetLastError non-empty after inspection import failure."
+            )) {
+            McSolverEngine_FreeDocumentInfo(inspected);
+            return EXIT_FAILURE;
+        }
+        McSolverEngine_FreeDocumentInfo(inspected);
     }
 
     {
@@ -1137,6 +1379,17 @@ int main()
         // Null result pointer → INVALID_ARGUMENT (SolveToBRep)
         const auto codeNullBrepResult = McSolverEngine_SolveToBRep("<doc/>", "Sketch", nullptr);
         if (!expect(codeNullBrepResult == MCSOLVERENGINE_RESULT_INVALID_ARGUMENT, "C API BRep: null result pointer → INVALID_ARGUMENT"))
+            return EXIT_FAILURE;
+
+        McSolverEngineDocumentInfo* inspectResult = nullptr;
+        const auto codeNullInspectDoc = McSolverEngine_InspectDocumentXml(nullptr, &inspectResult);
+        if (!expect(codeNullInspectDoc == MCSOLVERENGINE_RESULT_INVALID_ARGUMENT, "C API Inspect: null document → INVALID_ARGUMENT"))
+            return EXIT_FAILURE;
+        if (!expect(inspectResult == nullptr, "C API Inspect: null document → result pointer set to null"))
+            return EXIT_FAILURE;
+
+        const auto codeNullInspectResult = McSolverEngine_InspectDocumentXml("<doc/>", nullptr);
+        if (!expect(codeNullInspectResult == MCSOLVERENGINE_RESULT_INVALID_ARGUMENT, "C API Inspect: null result pointer → INVALID_ARGUMENT"))
             return EXIT_FAILURE;
 
         // Negative parameter count → INVALID_ARGUMENT (SolveToGeometryWithParameters)

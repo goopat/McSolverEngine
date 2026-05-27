@@ -125,6 +125,57 @@ typedef struct McSolverEngineVarSetProperty {
 
 `varSetProperties` returns **all scalar `App::VarSet` properties** after API overrides and VarSet expression evaluation. Numerically evaluable values are normalized to canonical units (length=`mm`, angle=`deg`, area=`mm^2`, dimensionless=`""`). String/bool-style properties are returned as raw text with `unitUtf8=""`. Keys always use the real object name, never the `Label` alias.
 
+### 2.4.2 Document.xml inspection records
+
+```c
+typedef struct McSolverEngineScalarPropertyInfo {
+    const char* nameUtf8;
+    const char* typeUtf8;
+    const char* scalarValueUtf8;
+    const char* propertyXmlUtf8;
+} McSolverEngineScalarPropertyInfo;
+
+typedef struct McSolverEngineSketchInfo {
+    const char* labelUtf8;
+    const char* objectNameUtf8;
+    int propertyCount;
+    const McSolverEngineScalarPropertyInfo* properties;
+} McSolverEngineSketchInfo;
+
+typedef struct McSolverEngineVarSetParameterInfo {
+    const char* nameUtf8;
+    const char* typeUtf8;
+    const char* rawValueUtf8;
+    const char* expressionUtf8;
+    const char* propertyXmlUtf8;
+} McSolverEngineVarSetParameterInfo;
+
+typedef struct McSolverEngineVarSetInfo {
+    const char* labelUtf8;
+    const char* objectNameUtf8;
+    int parameterCount;
+    const McSolverEngineVarSetParameterInfo* parameters;
+} McSolverEngineVarSetInfo;
+
+typedef struct McSolverEngineDocumentInfo {
+    int sketchCount;
+    const McSolverEngineSketchInfo* sketches;
+    int varSetCount;
+    const McSolverEngineVarSetInfo* varSets;
+    int messageCount;
+    char** messages;
+} McSolverEngineDocumentInfo;
+```
+
+Rules:
+
+- `InspectDocumentXml` only parses `documentXmlUtf8`; it does **not** apply parameter overrides, evaluate expressions, or solve constraints
+- `SketchInfo.properties` only includes scalar properties: `Float / Integer / Quantity / String / Bool`
+- Non-scalar properties such as `Geometry`, `Constraints`, `ExpressionEngine`, `Placement`, and `Shape` are ignored
+- `VarSetInfo.parameters` includes all scalar parameters, including `Label`, `Label2`, and `Visibility`
+- `expressionUtf8` carries the raw VarSet `ExpressionEngine` expression for the same path; it is an empty string when absent
+- `propertyXmlUtf8` preserves the original `<Property>...</Property>` snippet for forward compatibility
+
 ### 2.5 Geometry Record
 
 ```c
@@ -342,7 +393,27 @@ Same as `SolveToBRep` with VarSet parameter overrides (same parameter rules as `
 
 ---
 
-### 3.6 `McSolverEngine_FreeGeometryResult`
+### 3.6 `McSolverEngine_InspectDocumentXml`
+
+```c
+McSolverEngineResultCode McSolverEngine_InspectDocumentXml(
+    const char* documentXmlUtf8,
+    McSolverEngineDocumentInfo** result
+);
+```
+
+Parses `Document.xml` object metadata only and returns all Sketch summaries plus all VarSet summaries.
+
+- Input is `documentXmlUtf8` only
+- No parameter overrides
+- No VarSet expression evaluation
+- No constraint solving
+- Returns `MCSOLVERENGINE_RESULT_SUCCESS` on success
+- Returns `MCSOLVERENGINE_RESULT_IMPORT_FAILED` on parse failure and, when possible, populates `result->messages` with diagnostics
+
+---
+
+### 3.7 `McSolverEngine_FreeGeometryResult`
 
 ```c
 void McSolverEngine_FreeGeometryResult(McSolverEngineGeometryResult* value);
@@ -352,7 +423,7 @@ Frees a geometry result and all owned sub-objects (strings, arrays, geometry rec
 
 ---
 
-### 3.7 `McSolverEngine_FreeBRepResult`
+### 3.8 `McSolverEngine_FreeBRepResult`
 
 ```c
 void McSolverEngine_FreeBRepResult(McSolverEngineBRepResult* value);
@@ -362,7 +433,17 @@ Frees a BREP result and all owned sub-objects. Passing `NULL` is safe (no-op).
 
 ---
 
-### 3.8 `McSolverEngine_ExtractFCStdDoc`
+### 3.9 `McSolverEngine_FreeDocumentInfo`
+
+```c
+void McSolverEngine_FreeDocumentInfo(McSolverEngineDocumentInfo* value);
+```
+
+Frees a document inspection result and all owned sub-objects. Passing `NULL` is safe (no-op).
+
+---
+
+### 3.10 `McSolverEngine_ExtractFCStdDoc`
 
 ```c
 McSolverEngineFCStdResultCode McSolverEngine_ExtractFCStdDoc(

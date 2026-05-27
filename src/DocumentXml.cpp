@@ -339,6 +339,13 @@ struct ExpressionEntry
     return blocks;
 }
 
+[[nodiscard]] bool isSketchLikeObject(const ObjectBlock& object)
+{
+    return (object.type == "Sketcher::SketchObject"
+            || object.content.find("Sketcher::PropertyConstraintList") != std::string_view::npos)
+        && object.content.find("Property name=\"Geometry\"") != std::string_view::npos;
+}
+
 [[nodiscard]] std::optional<ObjectBlock> findSketchObjectBlock(
     const std::vector<ObjectBlock>& objects,
     std::string_view requestedSketchName
@@ -352,9 +359,7 @@ struct ExpressionEntry
             continue;
         }
 
-        if ((object.type == "Sketcher::SketchObject"
-             || object.content.find("Sketcher::PropertyConstraintList") != std::string_view::npos)
-            && object.content.find("Property name=\"Geometry\"") != std::string_view::npos) {
+        if (isSketchLikeObject(object)) {
             return object;
         }
     }
@@ -475,6 +480,85 @@ struct ExpressionEntry
 
     VarSetExpressions::rebuildVarSetShortNameLookup(catalog);
     return catalog;
+}
+
+[[nodiscard]] std::string extractObjectLabel(const ObjectBlock& object)
+{
+    if (const auto labelProperty = findPropertyBlock(object.content, "Label")) {
+        if (const auto label = extractPropertyStringValue(*labelProperty)) {
+            return *label;
+        }
+    }
+    return {};
+}
+
+[[nodiscard]] std::vector<ScalarPropertyInfo> collectScalarPropertyInfos(std::string_view objectBlock)
+{
+    std::vector<ScalarPropertyInfo> properties;
+    for (const auto& property : collectPropertyBlocks(objectBlock)) {
+        const auto scalarValue = extractPropertyScalarValue(property.content);
+        if (!scalarValue) {
+            continue;
+        }
+
+        properties.push_back(ScalarPropertyInfo {
+            .name = property.name,
+            .type = property.type,
+            .scalarValue = *scalarValue,
+            .propertyXml = makeString(property.content),
+        });
+    }
+    return properties;
+}
+
+[[nodiscard]] std::vector<VarSetParameterInfo> collectVarSetParameterInfos(const ObjectBlock& object)
+{
+    std::vector<VarSetParameterInfo> parameters;
+    std::unordered_map<std::string, std::size_t> indexesByName;
+
+    for (const auto& property : collectPropertyBlocks(object.content)) {
+        if (property.name == "ExpressionEngine") {
+            continue;
+        }
+
+        const auto scalarValue = extractPropertyScalarValue(property.content);
+        if (!scalarValue) {
+            continue;
+        }
+
+        indexesByName.emplace(property.name, parameters.size());
+        parameters.push_back(VarSetParameterInfo {
+            .name = property.name,
+            .type = property.type,
+            .rawValue = *scalarValue,
+            .expression = {},
+            .propertyXml = makeString(property.content),
+        });
+    }
+
+    for (const auto& expression : collectExpressionEntries(object.content)) {
+        const auto propertyName = VarSetExpressions::parseVarSetExpressionPath(expression.path);
+        if (!propertyName) {
+            continue;
+        }
+
+        const auto existing = indexesByName.find(*propertyName);
+        if (existing != indexesByName.end()) {
+            parameters[existing->second].expression = expression.expression;
+            continue;
+        }
+
+        indexesByName.emplace(*propertyName, parameters.size());
+        parameters.push_back(VarSetParameterInfo {
+            .name = *propertyName,
+            .type = {},
+            .rawValue = {},
+            .expression = expression.expression,
+            .propertyXml = {},
+        });
+    }
+
+    return parameters;
 }
 
 [[nodiscard]] std::optional<ConstraintExpressionBinding> parseConstraintExpressionBinding(
@@ -1612,6 +1696,44 @@ ImportResult importSketchFromDocumentXmlFile(
     std::ostringstream buffer;
     buffer << input.rdbuf();
     return importSketchFromDocumentXml(buffer.str(), parameters, sketchName);
+}
+
+InspectResult inspectDocumentXml(std::string_view xml)
+{
+    InspectResult result;
+    if (xml.find("<ObjectData") == std::string_view::npos) {
+        result.messages.push_back("Document.xml does not contain an ObjectData section.");
+        return result;
+    }
+
+    const auto objectTypes = collectObjectTypes(xml);
+    const auto objectBlocks = collectObjectDataBlocks(xml, objectTypes);
+    if (objectBlocks.empty()) {
+        result.messages.push_back("Document.xml does not contain any parseable object blocks.");
+        return result;
+    }
+
+    for (const auto& object : objectBlocks) {
+        if (isSketchLikeObject(object)) {
+            result.sketches.push_back(SketchInfo {
+                .label = extractObjectLabel(object),
+                .objectName = object.name,
+                .properties = collectScalarPropertyInfos(object.content),
+            });
+            continue;
+        }
+
+        if (object.type == "App::VarSet") {
+            result.varSets.push_back(VarSetInfo {
+                .label = extractObjectLabel(object),
+                .objectName = object.name,
+                .parameters = collectVarSetParameterInfos(object),
+            });
+        }
+    }
+
+    result.status = InspectStatus::Success;
+    return result;
 }
 
 }  // namespace McSolverEngine::DocumentXml

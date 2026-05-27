@@ -77,6 +77,7 @@
 - 提供文件输出能力（如 `.brep`）或内存中的等价 BREP 表达
 - 提供精确几何导出接口，便于下游不依赖 OCCT/BREP 文本消费解析几何
 - 在 `SolveToGeometry` / `SolveToBRep` 及其带参数重载结果中，额外返回全部 VarSet 标量属性结果（`ObjectName.PropertyName -> value: string + unit: string`）
+- 提供只读 Document.xml 检查接口，返回全部 Sketch 对象与 VarSet 对象的基础元数据摘要
 
 ### 3.2 后续阶段范围（可选）
 

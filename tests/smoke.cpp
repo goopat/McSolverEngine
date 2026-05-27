@@ -1205,6 +1205,147 @@ int main()
         return 1;
     }
 
+    constexpr std::string_view inspectDocumentXml = R"(<?xml version="1.0" encoding="UTF-8"?>
+<Document>
+    <Objects Count="2">
+        <Object type="App::VarSet" name="VarSet001" id="1"/>
+        <Object type="Sketcher::SketchObject" name="SketchA" id="2"/>
+    </Objects>
+    <ObjectData Count="2">
+        <Object name="VarSet001">
+            <Properties Count="6" TransientCount="0">
+                <Property name="Label" type="App::PropertyString">
+                    <String value="Parameters"/>
+                </Property>
+                <Property name="Label2" type="App::PropertyString">
+                    <String value=""/>
+                </Property>
+                <Property name="Visibility" type="App::PropertyBool">
+                    <Bool value="true"/>
+                </Property>
+                <Property name="Base" type="App::PropertyFloat">
+                    <Float value="5.0"/>
+                </Property>
+                <Property name="Width" type="App::PropertyFloat">
+                    <Float value="0.0"/>
+                </Property>
+                <Property name="ExpressionEngine" type="App::PropertyExpressionEngine">
+                    <ExpressionEngine count="1">
+                        <Expression path="Width" expression="Base * 2"/>
+                    </ExpressionEngine>
+                </Property>
+            </Properties>
+        </Object>
+        <Object name="SketchA">
+            <Properties Count="6" TransientCount="0">
+                <Property name="Label" type="App::PropertyString">
+                    <String value="Sketch Alpha"/>
+                </Property>
+                <Property name="Visibility" type="App::PropertyBool">
+                    <Bool value="true"/>
+                </Property>
+                <Property name="Comment" type="App::PropertyString">
+                    <String value="demo"/>
+                </Property>
+                <Property name="Width" type="App::PropertyFloat">
+                    <Float value="12.5"/>
+                </Property>
+                <Property name="Constraints" type="Sketcher::PropertyConstraintList">
+                    <ConstraintList count="0">
+                    </ConstraintList>
+                </Property>
+                <Property name="Geometry" type="Part::PropertyGeometryList">
+                    <GeometryList count="1">
+                        <Geometry type="Part::GeomLineSegment" id="1" migrated="1">
+                            <LineSegment StartX="0.0" StartY="0.0" StartZ="0.0" EndX="1.0" EndY="0.0" EndZ="0.0"/>
+                            <Construction value="0"/>
+                        </Geometry>
+                    </GeometryList>
+                </Property>
+            </Properties>
+        </Object>
+    </ObjectData>
+</Document>)";
+
+    const auto findScalarPropertyInfo = [](
+                                            const std::vector<McSolverEngine::DocumentXml::ScalarPropertyInfo>& properties,
+                                            std::string_view name
+                                        ) -> const McSolverEngine::DocumentXml::ScalarPropertyInfo* {
+        for (const auto& property : properties) {
+            if (property.name == name) {
+                return &property;
+            }
+        }
+        return nullptr;
+    };
+
+    const auto findVarSetParameterInfo = [](
+                                              const std::vector<McSolverEngine::DocumentXml::VarSetParameterInfo>& parameters,
+                                              std::string_view name
+                                          ) -> const McSolverEngine::DocumentXml::VarSetParameterInfo* {
+        for (const auto& parameter : parameters) {
+            if (parameter.name == name) {
+                return &parameter;
+            }
+        }
+        return nullptr;
+    };
+
+    const auto inspectedDocument = McSolverEngine::DocumentXml::inspectDocumentXml(inspectDocumentXml);
+    if (!inspectedDocument.succeeded()) {
+        std::cerr << "Expected document inspection to succeed.\n";
+        return 1;
+    }
+    if (inspectedDocument.sketches.size() != 1 || inspectedDocument.varSets.size() != 1) {
+        std::cerr << "Expected document inspection to return one sketch and one varset.\n";
+        return 1;
+    }
+    const auto& inspectedSketch = inspectedDocument.sketches.front();
+    if (inspectedSketch.objectName != "SketchA" || inspectedSketch.label != "Sketch Alpha"
+        || inspectedSketch.properties.size() != 4) {
+        std::cerr << "Expected sketch inspection to expose label, object name, and scalar-only properties.\n";
+        return 1;
+    }
+    const auto* inspectedSketchVisibility = findScalarPropertyInfo(inspectedSketch.properties, "Visibility");
+    if (inspectedSketchVisibility == nullptr
+        || inspectedSketchVisibility->type != "App::PropertyBool"
+        || inspectedSketchVisibility->scalarValue != "true"
+        || inspectedSketchVisibility->propertyXml.find("<Bool value=\"true\"/>") == std::string::npos) {
+        std::cerr << "Expected sketch bool property inspection to preserve type, value, and XML.\n";
+        return 1;
+    }
+    if (findScalarPropertyInfo(inspectedSketch.properties, "Geometry") != nullptr
+        || findScalarPropertyInfo(inspectedSketch.properties, "Constraints") != nullptr) {
+        std::cerr << "Expected sketch inspection to ignore non-scalar properties.\n";
+        return 1;
+    }
+
+    const auto& inspectedVarSet = inspectedDocument.varSets.front();
+    if (inspectedVarSet.objectName != "VarSet001" || inspectedVarSet.label != "Parameters"
+        || inspectedVarSet.parameters.size() != 5) {
+        std::cerr << "Expected varset inspection to expose all scalar parameters.\n";
+        return 1;
+    }
+    const auto* inspectedLabel2 = findVarSetParameterInfo(inspectedVarSet.parameters, "Label2");
+    const auto* inspectedWidth = findVarSetParameterInfo(inspectedVarSet.parameters, "Width");
+    if (inspectedLabel2 == nullptr || !inspectedLabel2->rawValue.empty()
+        || inspectedLabel2->propertyXml.find("Property name=\"Label2\"") == std::string::npos) {
+        std::cerr << "Expected varset inspection to preserve empty string parameters.\n";
+        return 1;
+    }
+    if (inspectedWidth == nullptr || inspectedWidth->rawValue != "0.0" || inspectedWidth->expression != "Base * 2"
+        || inspectedWidth->propertyXml.find("Property name=\"Width\"") == std::string::npos) {
+        std::cerr << "Expected varset inspection to expose raw values, expressions, and property XML.\n";
+        return 1;
+    }
+
+    const auto invalidInspectedDocument = McSolverEngine::DocumentXml::inspectDocumentXml("not valid xml");
+    if (invalidInspectedDocument.succeeded() || invalidInspectedDocument.messages.size() != 1
+        || invalidInspectedDocument.messages.front().find("ObjectData") == std::string::npos) {
+        std::cerr << "Expected invalid document inspection to fail with an ObjectData message.\n";
+        return 1;
+    }
+
     constexpr std::string_view evaluatedVarSetPropertiesDocumentXml = R"(<?xml version="1.0" encoding="UTF-8"?>
 <Document>
     <Objects Count="2">

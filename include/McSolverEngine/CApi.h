@@ -116,6 +116,49 @@ typedef struct McSolverEngineVarSetProperty
     const char* unitUtf8;         // UTF-8 canonical unit when available, or ""
 } McSolverEngineVarSetProperty;
 
+typedef struct McSolverEngineScalarPropertyInfo
+{
+    const char* nameUtf8;         // UTF-8 property name
+    const char* typeUtf8;         // UTF-8 Property type
+    const char* scalarValueUtf8;  // UTF-8 scalar payload
+    const char* propertyXmlUtf8;  // UTF-8 original <Property>...</Property> snippet
+} McSolverEngineScalarPropertyInfo;
+
+typedef struct McSolverEngineSketchInfo
+{
+    const char* labelUtf8;        // UTF-8 Label value, or ""
+    const char* objectNameUtf8;   // UTF-8 real object name
+    int propertyCount;
+    const McSolverEngineScalarPropertyInfo* properties;
+} McSolverEngineSketchInfo;
+
+typedef struct McSolverEngineVarSetParameterInfo
+{
+    const char* nameUtf8;         // UTF-8 property/parameter name
+    const char* typeUtf8;         // UTF-8 Property type, or ""
+    const char* rawValueUtf8;     // UTF-8 raw scalar value, or ""
+    const char* expressionUtf8;   // UTF-8 expression text, or ""
+    const char* propertyXmlUtf8;  // UTF-8 original <Property>...</Property> snippet, or ""
+} McSolverEngineVarSetParameterInfo;
+
+typedef struct McSolverEngineVarSetInfo
+{
+    const char* labelUtf8;        // UTF-8 Label value, or ""
+    const char* objectNameUtf8;   // UTF-8 real object name
+    int parameterCount;
+    const McSolverEngineVarSetParameterInfo* parameters;
+} McSolverEngineVarSetInfo;
+
+typedef struct McSolverEngineDocumentInfo
+{
+    int sketchCount;
+    const McSolverEngineSketchInfo* sketches;
+    int varSetCount;
+    const McSolverEngineVarSetInfo* varSets;
+    int messageCount;
+    char** messages;              // UTF-8
+} McSolverEngineDocumentInfo;
+
 typedef struct McSolverEngineGeometryRecord
 {
     int geometryIndex;
@@ -230,6 +273,13 @@ MCSOLVERENGINE_CAPI_EXPORT McSolverEngineResultCode McSolverEngine_SolveToBRepWi
 MCSOLVERENGINE_CAPI_EXPORT void McSolverEngine_FreeGeometryResult(McSolverEngineGeometryResult* value);
 
 MCSOLVERENGINE_CAPI_EXPORT void McSolverEngine_FreeBRepResult(McSolverEngineBRepResult* value);
+
+MCSOLVERENGINE_CAPI_EXPORT McSolverEngineResultCode McSolverEngine_InspectDocumentXml(
+    const char* documentXmlUtf8,
+    McSolverEngineDocumentInfo** result
+);
+
+MCSOLVERENGINE_CAPI_EXPORT void McSolverEngine_FreeDocumentInfo(McSolverEngineDocumentInfo* value);
 
 typedef enum McSolverEngineFCStdResultCode
 {

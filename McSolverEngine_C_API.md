@@ -131,6 +131,57 @@ typedef struct McSolverEngineVarSetProperty {
 - 对字符串、布尔等非数值属性，`valueUtf8` 直接返回属性内容，`unitUtf8=""`
 - 键始终使用真实对象名，不使用 `Label` 别名
 
+### 2.4.2 Document.xml 检查结果
+
+```c
+typedef struct McSolverEngineScalarPropertyInfo {
+    const char* nameUtf8;
+    const char* typeUtf8;
+    const char* scalarValueUtf8;
+    const char* propertyXmlUtf8;
+} McSolverEngineScalarPropertyInfo;
+
+typedef struct McSolverEngineSketchInfo {
+    const char* labelUtf8;
+    const char* objectNameUtf8;
+    int propertyCount;
+    const McSolverEngineScalarPropertyInfo* properties;
+} McSolverEngineSketchInfo;
+
+typedef struct McSolverEngineVarSetParameterInfo {
+    const char* nameUtf8;
+    const char* typeUtf8;
+    const char* rawValueUtf8;
+    const char* expressionUtf8;
+    const char* propertyXmlUtf8;
+} McSolverEngineVarSetParameterInfo;
+
+typedef struct McSolverEngineVarSetInfo {
+    const char* labelUtf8;
+    const char* objectNameUtf8;
+    int parameterCount;
+    const McSolverEngineVarSetParameterInfo* parameters;
+} McSolverEngineVarSetInfo;
+
+typedef struct McSolverEngineDocumentInfo {
+    int sketchCount;
+    const McSolverEngineSketchInfo* sketches;
+    int varSetCount;
+    const McSolverEngineVarSetInfo* varSets;
+    int messageCount;
+    char** messages;
+} McSolverEngineDocumentInfo;
+```
+
+规则说明：
+
+- `InspectDocumentXml` 只解析 `documentXmlUtf8`，**不做参数覆盖、不做表达式求值、不做约束求解**
+- `SketchInfo.properties` 仅返回简单标量 Property：`Float / Integer / Quantity / String / Bool`
+- `Geometry` / `Constraints` / `ExpressionEngine` / `Placement` / `Shape` 等非标量 Property 会被忽略
+- `VarSetInfo.parameters` 返回所有标量参数，包含 `Label` / `Label2` / `Visibility`
+- `expressionUtf8` 为 VarSet `ExpressionEngine` 中同名路径的原始表达式；没有表达式时返回空串
+- `propertyXmlUtf8` 保留原始 `<Property>...</Property>` 片段，便于后续扩展
+
 ### 2.5 几何记录
 
 ```c
@@ -348,7 +399,27 @@ McSolverEngineResultCode McSolverEngine_SolveToBRepWithParameters(
 
 ---
 
-### 3.6 `McSolverEngine_FreeGeometryResult`
+### 3.6 `McSolverEngine_InspectDocumentXml`
+
+```c
+McSolverEngineResultCode McSolverEngine_InspectDocumentXml(
+    const char* documentXmlUtf8,
+    McSolverEngineDocumentInfo** result
+);
+```
+
+只解析 `Document.xml` 对象元数据，返回全部 Sketch 信息与全部 VarSet 信息。
+
+- 输入仅支持 `documentXmlUtf8`
+- 不做参数覆盖
+- 不做 VarSet 表达式求值
+- 不做约束求解
+- 成功时返回 `MCSOLVERENGINE_RESULT_SUCCESS`
+- 解析失败时返回 `MCSOLVERENGINE_RESULT_IMPORT_FAILED`，并尽量在 `result->messages` 中给出诊断信息
+
+---
+
+### 3.7 `McSolverEngine_FreeGeometryResult`
 
 ```c
 void McSolverEngine_FreeGeometryResult(McSolverEngineGeometryResult* value);
@@ -358,7 +429,7 @@ void McSolverEngine_FreeGeometryResult(McSolverEngineGeometryResult* value);
 
 ---
 
-### 3.7 `McSolverEngine_FreeBRepResult`
+### 3.8 `McSolverEngine_FreeBRepResult`
 
 ```c
 void McSolverEngine_FreeBRepResult(McSolverEngineBRepResult* value);
@@ -368,7 +439,17 @@ void McSolverEngine_FreeBRepResult(McSolverEngineBRepResult* value);
 
 ---
 
-### 3.8 `McSolverEngine_ExtractFCStdDoc`
+### 3.9 `McSolverEngine_FreeDocumentInfo`
+
+```c
+void McSolverEngine_FreeDocumentInfo(McSolverEngineDocumentInfo* value);
+```
+
+释放 `InspectDocumentXml` 返回的结果及其所有子对象。传入 `NULL` 安全（无操作）。
+
+---
+
+### 3.10 `McSolverEngine_ExtractFCStdDoc`
 
 ```c
 McSolverEngineFCStdResultCode McSolverEngine_ExtractFCStdDoc(
