@@ -1,6 +1,7 @@
 """Smoke tests for McSolverEngine Python wrapper."""
 
 import os
+import platform
 import sys
 import unittest
 
@@ -24,18 +25,30 @@ from mcsolverengine_py import (
 REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
 
 
+if platform.system() == "Windows":
+    _NATIVE_LIB_NAME = "mcsolverengine_native.dll"
+elif platform.system() == "Darwin":
+    _NATIVE_LIB_NAME = "libmcsolverengine_native.dylib"
+else:
+    _NATIVE_LIB_NAME = "libmcsolverengine_native.so"
+
+
 def _find_build_dll():
-    """Locate mcsolverengine_native.dll from build output (for testing)."""
-    for config in ("Release", "Debug"):
-        for candidate in [
-            os.path.join(REPO_ROOT, "build", config, "mcsolverengine_native.dll"),
-            os.path.join(REPO_ROOT, "build", "nuget_UseOcct", config, "mcsolverengine_native.dll"),
-            os.path.join(REPO_ROOT, "build", "nuget_NoOcct", config, "mcsolverengine_native.dll"),
-        ]:
-            if os.path.isfile(candidate):
-                return candidate
+    """Locate the native library from build output (for testing)."""
+    candidates = [
+        os.path.join(REPO_ROOT, "build", _NATIVE_LIB_NAME),
+        os.path.join(REPO_ROOT, "build", "Release", _NATIVE_LIB_NAME),
+        os.path.join(REPO_ROOT, "build", "Debug", _NATIVE_LIB_NAME),
+        os.path.join(REPO_ROOT, "build", "nuget_UseOcct", "Release", _NATIVE_LIB_NAME),
+        os.path.join(REPO_ROOT, "build", "nuget_UseOcct", "Debug", _NATIVE_LIB_NAME),
+        os.path.join(REPO_ROOT, "build", "nuget_NoOcct", "Release", _NATIVE_LIB_NAME),
+        os.path.join(REPO_ROOT, "build", "nuget_NoOcct", "Debug", _NATIVE_LIB_NAME),
+    ]
+    for candidate in candidates:
+        if os.path.isfile(candidate):
+            return candidate
     raise FileNotFoundError(
-        "mcsolverengine_native.dll not found in build output. "
+        f"{_NATIVE_LIB_NAME} not found in build output. "
         "Build the project first, or set MCSOLVERENGINE_NATIVE_LIB_PATH."
     )
 

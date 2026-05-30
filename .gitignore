@@ -5,6 +5,9 @@ bin
 TestResults
 
 fcstdDoc/*.solver.brp
+fcstdDoc/*.solver.py.brp
+fcstdDoc/*.solver.py.param.nochange.brp
+fcstdDoc/*.py.svg
 
 __pycache__/
 

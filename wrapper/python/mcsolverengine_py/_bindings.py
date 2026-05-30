@@ -1,8 +1,19 @@
-"""ctypes bindings for mcsolverengine_native.dll."""
+"""ctypes bindings for mcsolverengine_native."""
 
 import ctypes
 import os
+import platform
 import sys
+
+if platform.system() == "Windows":
+    _NATIVE_LIB_NAME = "mcsolverengine_native.dll"
+    _OCCT_TKBREP_NAME = "TKBRep.dll"
+elif platform.system() == "Darwin":
+    _NATIVE_LIB_NAME = "libmcsolverengine_native.dylib"
+    _OCCT_TKBREP_NAME = "libTKBRep.dylib"
+else:
+    _NATIVE_LIB_NAME = "libmcsolverengine_native.so"
+    _OCCT_TKBREP_NAME = "libTKBRep.so"
 
 # ── DLL path configuration ─────────────────────────────────────
 
@@ -24,14 +35,14 @@ def set_native_lib_path(path: str) -> None:
 
 
 def _find_dll() -> str:
-    """Locate mcsolverengine_native.dll using 3-tier priority."""
+    """Locate the native library using 3-tier priority."""
     # 1. Explicitly set path (highest priority)
     if _explicit_dll_path:
         return _explicit_dll_path
 
     # 2. Same directory as this .py file
     py_dir = os.path.dirname(os.path.abspath(__file__))
-    candidate = os.path.join(py_dir, "mcsolverengine_native.dll")
+    candidate = os.path.join(py_dir, _NATIVE_LIB_NAME)
     if os.path.isfile(candidate):
         return candidate
 
@@ -39,27 +50,29 @@ def _find_dll() -> str:
     for path_dir in os.environ.get("PATH", "").split(os.pathsep):
         if not path_dir:
             continue
-        candidate = os.path.join(path_dir.strip(), "mcsolverengine_native.dll")
+        candidate = os.path.join(path_dir.strip(), _NATIVE_LIB_NAME)
         if os.path.isfile(candidate):
             return candidate
 
     raise FileNotFoundError(
-        "mcsolverengine_native.dll not found. "
+        f"{_NATIVE_LIB_NAME} not found. "
         "Use set_native_lib_path() to specify the path explicitly, "
-        "place the DLL next to the .py files, or add it to PATH."
+        "place the library next to the .py files, or add it to PATH."
     )
 
 
 def _find_occt_runtime() -> "str | None":
     """Locate the OCCT runtime binary directory."""
-    home = os.environ.get("USERPROFILE", "")
+    home = os.environ.get("USERPROFILE", "") or os.environ.get("HOME", "")
     conda_prefix = os.environ.get("CONDA_PREFIX", "")
     package_root = os.path.dirname(os.path.abspath(__file__))
     repo_root = os.path.abspath(os.path.join(package_root, "..", "..", ".."))
     candidates = [
         os.path.join(conda_prefix, "Library", "bin"),
         os.path.join(conda_prefix, "bin"),
+        os.path.join(conda_prefix, "lib"),
         os.path.join(repo_root, ".pixi", "envs", "default", "Library", "bin"),
+        os.path.join(repo_root, ".pixi", "envs", "default", "lib"),
         os.path.join(home, ".nuget", "packages", "opencascade.7.9-native", "1.0.0", "lib", "build", "bin"),
     ]
     seen = set()
@@ -67,7 +80,7 @@ def _find_occt_runtime() -> "str | None":
         if not p or p in seen:
             continue
         seen.add(p)
-        tkbrep = os.path.join(p, "TKBRep.dll")
+        tkbrep = os.path.join(p, _OCCT_TKBREP_NAME)
         if os.path.isfile(tkbrep):
             return os.path.abspath(p)
     return None

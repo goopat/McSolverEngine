@@ -12,12 +12,13 @@ if(CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
     set(_mcsolverengine_pixi_library_dir "${_mcsolverengine_pixi_env_dir}/Library")
     set(_mcsolverengine_eigen_candidates
         "${_mcsolverengine_pixi_library_dir}/include/eigen3"
+        "${_mcsolverengine_pixi_env_dir}/include/eigen3"
     )
-    get_filename_component(
-        _mcsolverengine_boost_candidate
-        "${_mcsolverengine_pixi_library_dir}/include"
-        ABSOLUTE
-    )
+    if(EXISTS "${_mcsolverengine_pixi_library_dir}/include/boost")
+        set(_mcsolverengine_boost_candidate "${_mcsolverengine_pixi_library_dir}/include")
+    else()
+        set(_mcsolverengine_boost_candidate "${_mcsolverengine_pixi_env_dir}/include")
+    endif()
 
     if(EIGEN3_INCLUDE_DIR)
         get_filename_component(EIGEN3_INCLUDE_DIR "${EIGEN3_INCLUDE_DIR}" ABSOLUTE)
@@ -96,10 +97,6 @@ if(CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
             "${_mcsolverengine_pixi_library_dir}/lib/cmake/opencascade"
             "${_mcsolverengine_pixi_env_dir}/lib/cmake/opencascade"
         )
-        set(_mcsolverengine_occt_roots
-            "${_mcsolverengine_pixi_library_dir}"
-            "${_mcsolverengine_pixi_env_dir}"
-        )
 
         if(OpenCASCADE_DIR)
             get_filename_component(OpenCASCADE_DIR "${OpenCASCADE_DIR}" ABSOLUTE)
@@ -136,82 +133,26 @@ if(CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
             endforeach()
         endif()
 
-        if(OpenCASCADE_DIR)
-            if(EXISTS "${_mcsolverengine_pixi_library_dir}/bin")
-                set(OpenCASCADE_BINARY_DIR "${_mcsolverengine_pixi_library_dir}/bin")
-            elseif(EXISTS "${_mcsolverengine_pixi_env_dir}/bin")
-                set(OpenCASCADE_BINARY_DIR "${_mcsolverengine_pixi_env_dir}/bin")
-            endif()
-            find_package(OpenCASCADE CONFIG REQUIRED
-                PATHS "${OpenCASCADE_DIR}"
-                NO_DEFAULT_PATH
-                COMPONENTS FoundationClasses ModelingData ModelingAlgorithms
-            )
-        else()
-            foreach(_mcsolverengine_occt_root IN LISTS _mcsolverengine_occt_roots)
-                if(WIN32)
-                    if(
-                        EXISTS "${_mcsolverengine_occt_root}/lib/TKBRep.lib"
-                        AND EXISTS "${_mcsolverengine_occt_root}/bin/TKBRep.dll"
-                        AND EXISTS "${_mcsolverengine_occt_root}/include/opencascade/BRepTools_ShapeSet.hxx"
-                    )
-                        file(GLOB _mcsolverengine_occ_libs "${_mcsolverengine_occt_root}/lib/*.lib")
-                        list(SORT _mcsolverengine_occ_libs)
-                        set(OCC_INCLUDE_DIR "${_mcsolverengine_occt_root}/include/opencascade")
-                        set(OCC_LIBRARY_DIR "${_mcsolverengine_occt_root}/lib")
-                        set(OpenCASCADE_BINARY_DIR "${_mcsolverengine_occt_root}/bin")
-                        set(OCC_LIBRARIES ${_mcsolverengine_occ_libs})
-                        break()
-                    endif()
-                else()
-                    if(
-                        EXISTS "${_mcsolverengine_occt_root}/lib/libTKBRep.so"
-                        AND EXISTS "${_mcsolverengine_occt_root}/include/opencascade/BRepTools_ShapeSet.hxx"
-                    )
-                        file(GLOB _mcsolverengine_occ_libs "${_mcsolverengine_occt_root}/lib/lib*.so")
-                        list(SORT _mcsolverengine_occ_libs)
-                        set(OCC_INCLUDE_DIR "${_mcsolverengine_occt_root}/include/opencascade")
-                        set(OCC_LIBRARY_DIR "${_mcsolverengine_occt_root}/lib")
-                        set(OpenCASCADE_BINARY_DIR "${_mcsolverengine_occt_root}/lib")
-                        set(OCC_LIBRARIES ${_mcsolverengine_occ_libs})
-                        break()
-                    elseif(
-                        EXISTS "${_mcsolverengine_occt_root}/lib/libTKBRep.a"
-                        AND EXISTS "${_mcsolverengine_occt_root}/include/opencascade/BRepTools_ShapeSet.hxx"
-                    )
-                        file(GLOB _mcsolverengine_occ_libs "${_mcsolverengine_occt_root}/lib/lib*.a")
-                        list(SORT _mcsolverengine_occ_libs)
-                        set(OCC_INCLUDE_DIR "${_mcsolverengine_occt_root}/include/opencascade")
-                        set(OCC_LIBRARY_DIR "${_mcsolverengine_occt_root}/lib")
-                        set(OCC_LIBRARIES ${_mcsolverengine_occ_libs})
-                        break()
-                    endif()
-                endif()
-            endforeach()
-        endif()
-
-        if(NOT OpenCASCADE_FOUND AND NOT TARGET TKBRep AND NOT OCC_INCLUDE_DIR)
+        if(NOT OpenCASCADE_DIR)
             message(FATAL_ERROR
                 "MCSOLVERENGINE_WITH_OCCT=ON requires OCCT from .pixi/envs/default. "
                 "Run `pixi install` and ensure the `occt` package is present."
             )
         endif()
-    endif()
 
-    if(MCSOLVERENGINE_WITH_OCCT AND OCC_LIBRARY_DIR AND NOT OpenCASCADE_BINARY_DIR)
-        if(EXISTS "${OCC_LIBRARY_DIR}/../bin")
-            get_filename_component(OpenCASCADE_BINARY_DIR "${OCC_LIBRARY_DIR}/../bin" ABSOLUTE)
+        if(EXISTS "${_mcsolverengine_pixi_library_dir}/bin")
+            set(OpenCASCADE_BINARY_DIR "${_mcsolverengine_pixi_library_dir}/bin")
+        elseif(EXISTS "${_mcsolverengine_pixi_env_dir}/bin")
+            set(OpenCASCADE_BINARY_DIR "${_mcsolverengine_pixi_env_dir}/bin")
+        elseif(EXISTS "${_mcsolverengine_pixi_env_dir}/lib")
+            set(OpenCASCADE_BINARY_DIR "${_mcsolverengine_pixi_env_dir}/lib")
         endif()
-    endif()
 
-    if(MCSOLVERENGINE_WITH_OCCT AND OCC_LIBRARY_DIR AND NOT OCC_LIBRARIES)
-        if(WIN32)
-            file(GLOB _mcsolverengine_occ_libs "${OCC_LIBRARY_DIR}/*.lib")
-        else()
-            file(GLOB _mcsolverengine_occ_libs "${OCC_LIBRARY_DIR}/lib*.so" "${OCC_LIBRARY_DIR}/lib*.a")
-        endif()
-        list(SORT _mcsolverengine_occ_libs)
-        set(OCC_LIBRARIES ${_mcsolverengine_occ_libs})
+        find_package(OpenCASCADE CONFIG REQUIRED
+            PATHS "${OpenCASCADE_DIR}"
+            NO_DEFAULT_PATH
+            COMPONENTS FoundationClasses ModelingData ModelingAlgorithms
+        )
     endif()
 
 else()
@@ -220,18 +161,13 @@ else()
     endif()
 endif()
 
-if(MCSOLVERENGINE_WITH_OCCT AND (OpenCASCADE_FOUND OR TARGET TKBRep OR OCC_INCLUDE_DIR))
+if(MCSOLVERENGINE_WITH_OCCT AND (OpenCASCADE_FOUND OR TARGET TKBRep))
     set(MCSOLVERENGINE_HAS_OCCT ON)
 endif()
 
 set(MCSOLVERENGINE_RUNTIME_PATH "")
 if(MCSOLVERENGINE_HAS_OCCT AND OpenCASCADE_BINARY_DIR)
     set(MCSOLVERENGINE_RUNTIME_PATH "${OpenCASCADE_BINARY_DIR}")
-elseif(MCSOLVERENGINE_HAS_OCCT AND OCC_LIBRARY_DIR)
-    get_filename_component(_mcsolverengine_occ_root "${OCC_LIBRARY_DIR}" DIRECTORY)
-    if(EXISTS "${_mcsolverengine_occ_root}/bin")
-        set(MCSOLVERENGINE_RUNTIME_PATH "${_mcsolverengine_occ_root}/bin")
-    endif()
 endif()
 
 include(GNUInstallDirs)
@@ -350,14 +286,6 @@ endif()
 
 if(MCSOLVERENGINE_HAS_OCCT AND TARGET TKBRep)
     target_link_libraries(McSolverEngineCore PUBLIC TKBRep TKTopAlgo TKShHealing)
-elseif(MCSOLVERENGINE_HAS_OCCT AND OCC_INCLUDE_DIR)
-    target_include_directories(McSolverEngineCore SYSTEM PUBLIC ${OCC_INCLUDE_DIR})
-    if(OCC_LIBRARY_DIR)
-        target_link_directories(McSolverEngineCore PUBLIC ${OCC_LIBRARY_DIR})
-    endif()
-    if(OCC_LIBRARIES)
-        target_link_libraries(McSolverEngineCore PUBLIC ${OCC_LIBRARIES})
-    endif()
 endif()
 
 add_library(McSolverEngineNative SHARED
@@ -463,14 +391,6 @@ if(MCSOLVERENGINE_BUILD_TESTS)
 
     if(MCSOLVERENGINE_HAS_OCCT AND TARGET TKBRep)
         target_link_libraries(McSolverEngineSmokeTest PRIVATE TKBRep TKTopAlgo TKShHealing)
-    elseif(MCSOLVERENGINE_HAS_OCCT AND OCC_INCLUDE_DIR)
-        target_include_directories(McSolverEngineSmokeTest SYSTEM PRIVATE ${OCC_INCLUDE_DIR})
-        if(OCC_LIBRARY_DIR)
-            target_link_directories(McSolverEngineSmokeTest PRIVATE ${OCC_LIBRARY_DIR})
-        endif()
-        if(OCC_LIBRARIES)
-            target_link_libraries(McSolverEngineSmokeTest PRIVATE ${OCC_LIBRARIES})
-        endif()
     endif()
 
     target_link_libraries(McSolverEngineSmokeTest
@@ -536,30 +456,40 @@ if(MCSOLVERENGINE_BUILD_TESTS)
         endif()
 
         # ── C# wrapper integration ───────────────────────────────────
-        if(WIN32)
-            find_program(DOTNET_EXECUTABLE dotnet)
-            if(DOTNET_EXECUTABLE)
-                set(_csharp_wrapper_proj "${CMAKE_CURRENT_SOURCE_DIR}/wrapper/csharp/McSolverEngine.Wrapper.csproj")
-                set(_csharp_tests_proj "${CMAKE_CURRENT_SOURCE_DIR}/wrapper/csharp/tests/McSolverEngine.Wrapper.Tests.csproj")
+        find_program(DOTNET_EXECUTABLE dotnet)
+        if(DOTNET_EXECUTABLE)
+            set(_csharp_wrapper_proj "${CMAKE_CURRENT_SOURCE_DIR}/wrapper/csharp/McSolverEngine.Wrapper.csproj")
+            set(_csharp_tests_proj "${CMAKE_CURRENT_SOURCE_DIR}/wrapper/csharp/tests/McSolverEngine.Wrapper.Tests.csproj")
 
-                add_custom_target(McSolverEngineCSharpWrapper ALL
-                    COMMAND ${CMAKE_COMMAND} -E env DOTNET_CLI_UI_LANGUAGE=en
-                        ${DOTNET_EXECUTABLE} build "${_csharp_wrapper_proj}"
-                        --configuration $<CONFIG>
-                    DEPENDS McSolverEngineNative
-                    WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
-                    COMMENT "Building C# wrapper ($<CONFIG>)"
-                )
+            if(WIN32)
+                set(_csharp_build_args_wrapper "")
+                set(_csharp_build_args_tests "")
+            else()
+                set(_csharp_build_args_wrapper "--framework" "net8.0")
+                set(_csharp_build_args_tests "--framework" "net8.0")
+            endif()
 
-                add_custom_target(McSolverEngineCSharpTests ALL
-                    COMMAND ${CMAKE_COMMAND} -E env DOTNET_CLI_UI_LANGUAGE=en
-                        ${DOTNET_EXECUTABLE} build "${_csharp_tests_proj}"
-                        --configuration $<CONFIG>
-                    DEPENDS McSolverEngineCSharpWrapper
-                    WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
-                    COMMENT "Building C# tests ($<CONFIG>)"
-                )
+            add_custom_target(McSolverEngineCSharpWrapper ALL
+                COMMAND ${CMAKE_COMMAND} -E env DOTNET_CLI_UI_LANGUAGE=en
+                    ${DOTNET_EXECUTABLE} build "${_csharp_wrapper_proj}"
+                    --configuration $<CONFIG>
+                    ${_csharp_build_args_wrapper}
+                DEPENDS McSolverEngineNative
+                WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+                COMMENT "Building C# wrapper ($<CONFIG>)"
+            )
 
+            add_custom_target(McSolverEngineCSharpTests ALL
+                COMMAND ${CMAKE_COMMAND} -E env DOTNET_CLI_UI_LANGUAGE=en
+                    ${DOTNET_EXECUTABLE} build "${_csharp_tests_proj}"
+                    --configuration $<CONFIG>
+                    ${_csharp_build_args_tests}
+                DEPENDS McSolverEngineCSharpWrapper
+                WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+                COMMENT "Building C# tests ($<CONFIG>)"
+            )
+
+            if(WIN32)
                 add_test(
                     NAME McSolverEngineCSharpWrapperTests_net48
                     COMMAND
@@ -570,22 +500,22 @@ if(MCSOLVERENGINE_BUILD_TESTS)
                 set_tests_properties(McSolverEngineCSharpWrapperTests_net48 PROPERTIES
                     LABELS "csharp"
                 )
-
-                add_test(
-                    NAME McSolverEngineCSharpWrapperTests_net80
-                    COMMAND
-                        ${CMAKE_COMMAND} -E env
-                        DOTNET_CLI_UI_LANGUAGE=en
-                        "${MCSOLVERENGINE_LIB_PATH_VAR}=$<TARGET_FILE_DIR:McSolverEngineNative>${MCSOLVERENGINE_PATH_SEP}${MCSOLVERENGINE_RUNTIME_PATH}${MCSOLVERENGINE_PATH_SEP}$ENV{${MCSOLVERENGINE_LIB_PATH_VAR}}"
-                        ${DOTNET_EXECUTABLE} test "${_csharp_tests_proj}"
-                        --configuration $<CONFIG>
-                        --framework net8.0
-                        --no-build
-                )
-                set_tests_properties(McSolverEngineCSharpWrapperTests_net80 PROPERTIES
-                    LABELS "csharp"
-                )
             endif()
+
+            add_test(
+                NAME McSolverEngineCSharpWrapperTests_net80
+                COMMAND
+                    ${CMAKE_COMMAND} -E env
+                    DOTNET_CLI_UI_LANGUAGE=en
+                    "${MCSOLVERENGINE_LIB_PATH_VAR}=$<TARGET_FILE_DIR:McSolverEngineNative>${MCSOLVERENGINE_PATH_SEP}${MCSOLVERENGINE_RUNTIME_PATH}${MCSOLVERENGINE_PATH_SEP}$ENV{${MCSOLVERENGINE_LIB_PATH_VAR}}"
+                    ${DOTNET_EXECUTABLE} test "${_csharp_tests_proj}"
+                    --configuration $<CONFIG>
+                    --framework net8.0
+                    --no-build
+            )
+            set_tests_properties(McSolverEngineCSharpWrapperTests_net80 PROPERTIES
+                LABELS "csharp"
+            )
         endif()
     endif()
 endif()
