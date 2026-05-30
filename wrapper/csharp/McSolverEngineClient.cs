@@ -520,7 +520,11 @@ public static class McSolverEngineClient
 
     private static string GetPlatformLibraryFileName()
     {
+#if NET6_0_OR_GREATER
+        return NativeLibraryFileName;
+#else
         return $"{NativeLibraryName}.dll";
+#endif
     }
 
     private static bool IsExistingFile(string? candidate)

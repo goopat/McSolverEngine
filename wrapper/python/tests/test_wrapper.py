@@ -56,6 +56,12 @@ def _find_build_dll():
 # Resolve the native library before any tests touch the Engine.
 set_native_lib_path(_find_build_dll())
 
+# Verify the native library can actually be loaded.
+try:
+    _ = Engine.version()
+except OSError as e:
+    raise RuntimeError(f"Failed to load native library: {e}") from e
+
 SAMPLE_XML = os.path.join(REPO_ROOT, "fcstdDoc", "1.xml")
 
 EVALUATED_VARSET_PROPERTIES_XML = """<?xml version="1.0" encoding="UTF-8"?>

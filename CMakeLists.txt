@@ -508,7 +508,7 @@ if(MCSOLVERENGINE_BUILD_TESTS)
                     ${CMAKE_COMMAND} -E env
                     DOTNET_CLI_UI_LANGUAGE=en
                     "${MCSOLVERENGINE_LIB_PATH_VAR}=$<TARGET_FILE_DIR:McSolverEngineNative>${MCSOLVERENGINE_PATH_SEP}${MCSOLVERENGINE_RUNTIME_PATH}${MCSOLVERENGINE_PATH_SEP}$ENV{${MCSOLVERENGINE_LIB_PATH_VAR}}"
-                    ${DOTNET_EXECUTABLE} test "${_csharp_tests_proj}"
+                    ${DOTNET_EXECUTABLE} run --project "${_csharp_tests_proj}"
                     --configuration $<CONFIG>
                     --framework net8.0
                     --no-build

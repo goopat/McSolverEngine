@@ -425,8 +425,8 @@ public class WrapperRegressionTests
         var occtRuntimeDirectory = FindOcctRuntimeDirectory();
 
         Assert.IsTrue(
-            File.Exists(Path.Combine(nativeDirectory, "mcsolverengine_native.dll")),
-            $"Failed to locate mcsolverengine_native.dll in '{nativeDirectory}'."
+            File.Exists(Path.Combine(nativeDirectory, NativeLibraryFileName)),
+            $"Failed to locate {NativeLibraryFileName} in '{nativeDirectory}'."
         );
         Assert.IsTrue(File.Exists(_sampleXmlPath));
         Assert.IsTrue(File.Exists(_expectedBrepPath));
@@ -456,6 +456,12 @@ public class WrapperRegressionTests
         );
 
         McSolverEngineClient.ConfigureNativeLibraryDirectory(nativeDirectory);
+
+        try {
+            McSolverEngineClient.GetVersion();
+        } catch (DllNotFoundException ex) {
+            Assert.Fail($"Failed to load native library from '{nativeDirectory}': {ex.Message}");
+        }
     }
 
     [TestMethod]
@@ -1512,21 +1518,22 @@ public class WrapperRegressionTests
             return configuredDirectory!;
         }
 
+        var buildCandidates = new List<string> { AppContext.BaseDirectory };
+        buildCandidates.Add(Path.Combine(_projectRoot, "build"));
         foreach (var configuration in GetPreferredBuildConfigurations()) {
-            foreach (var candidate in new[] {
-                         AppContext.BaseDirectory,
-                         Path.Combine(_projectRoot, "build", configuration),
-                         Path.Combine(_projectRoot, "build", configuration, configuration),
-                         Path.Combine(_workspaceRoot, "build", "mcsolverengine", configuration),
-                         Path.Combine(_workspaceRoot, "build", "mcsolverengine", configuration, configuration),
-                     }) {
-                if (HasNativeLibrary(candidate)) {
-                    return candidate;
-                }
+            buildCandidates.Add(Path.Combine(_projectRoot, "build", configuration));
+            buildCandidates.Add(Path.Combine(_projectRoot, "build", configuration, configuration));
+            buildCandidates.Add(Path.Combine(_workspaceRoot, "build", "mcsolverengine", configuration));
+            buildCandidates.Add(Path.Combine(_workspaceRoot, "build", "mcsolverengine", configuration, configuration));
+        }
+
+        foreach (var candidate in buildCandidates) {
+            if (HasNativeLibrary(candidate)) {
+                return candidate;
             }
         }
 
-        throw new DirectoryNotFoundException("Failed to locate a build output directory containing mcsolverengine_native.dll.");
+        throw new DirectoryNotFoundException($"Failed to locate a build output directory containing {NativeLibraryFileName}.");
     }
 
     private static string? FindOcctRuntimeDirectory()
@@ -1547,8 +1554,8 @@ public class WrapperRegressionTests
         foreach (var candidate in new[] {
                      Path.Combine(_projectRoot, ".pixi", "envs", "default", "Library", "bin"),
                      Path.Combine(_workspaceRoot, ".pixi", "envs", "default", "Library", "bin"),
-                     @"D:\work\bim2025-client\packages\opencascade.7.9-native.1.0.0\lib\build\bin",
-                     @"D:\work\bim2025-client\packages\opencascade.7.9-native.1.0.0\lib\build\bind",
+                     Path.Combine(_projectRoot, ".pixi", "envs", "default", "lib"),
+                     Path.Combine(_workspaceRoot, ".pixi", "envs", "default", "lib"),
                  }) {
             var runtimeDirectory = ResolveOcctRuntimeDirectory(candidate);
             if (!string.IsNullOrWhiteSpace(runtimeDirectory)) {
