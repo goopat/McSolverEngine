@@ -219,7 +219,7 @@ FreeCAD 中真正把“草图数据”翻译成 GCS 参数和约束的是：
 
 - 当前实际的**非 C++ 标准库依赖**有四类：`Eigen3`、`libboost-headers`、`OCCT`、`zlib`
 - 其中 `Eigen3` 与 `libboost-headers` 是当前求解核心的必需依赖；若只保留”`Document.xml` 导入 + 基础 2D 约束求解 + 精确几何导出”，最小非标准库依赖集就是这两项
-- `libboost-headers` 当前主要通过 `planegcs` 使用 `Boost.Graph`、`Boost.Regex` 与 `Boost.Math constants`
+- `libboost-headers` 当前主要通过 `planegcs` 使用 `Boost.Graph` 与 `Boost.Math constants`
 - 当前链接方式并非”全部动态链接”：
   - `Eigen3` 在本项目中按 header-only 依赖使用
   - `libboost-headers` 当前也按头文件依赖使用，构建脚本未显式链接 Boost 二进制库
@@ -567,21 +567,23 @@ FreeCAD 中真正把“草图数据”翻译成 GCS 参数和约束的是：
 12. `fcstdDoc\V102.6.xml` -> `V102.6.brp`
 13. `fcstdDoc\V102.6.xml` + `VarSet.L1=400` -> `V102.6_400.brp`
 14. `fcstdDoc\V102.7.FCStd` 提取 + 参数化 BREP -> `V102.7.50.brp`
-15. `fcstdDoc\V111.9.xml` / `V111.9.500.xml` BREP 几何等价回归（允许对象顺序漂移）
-16. `McSolverEngineCApiSmokeTest`：
+15. `fcstdDoc\V102.8.xml` -> `V102.8.brp`
+16. `fcstdDoc\V111.9.xml` / `V111.9.500.xml` BREP 几何等价回归（允许对象顺序漂移）
+17. `McSolverEngineCApiSmokeTest`：
    - 结构化 Geometry C ABI（完整过程状态）
    - 结构化 BRep C ABI（完整过程状态 + BREP 文本）
    - OCCT / no-OCCT 两种构建路径下的导出状态
    - `V102.5.xml` / `V102.6.xml` 表达式驱动约束引用导出，包括约束 `kind`、`expression` 与 `originalIndex`
-17. 固定（external）弧线不产生冗余 ArcRules
-18. OCC BSpline 权重归一化 hack 回归
-19. BSpline PolesCount / KnotsCount 不匹配拒绝导入
-20. 空元素约束自动 GeoUndef 补齐导入
-21. ArcOfParabola BREP 导出回归
+18. `McSolverEngineUnitTest`：ParameterValueUtils、CompatModel API、Diameter/Equal/Parallel 约束、冲突/冗余检测、ZIP/GeometryExport/XML 边界
+19. 固定（external）弧线不产生冗余 ArcRules
+20. OCC BSpline 权重归一化 hack 回归
+21. BSpline PolesCount / KnotsCount 不匹配拒绝导入
+22. 空元素约束自动 GeoUndef 补齐导入
+23. ArcOfParabola BREP 导出回归
 
 当前托管包装层回归已覆盖：
 
-1. `wrapper\csharp\tests` 下的 net48 + net6.0 MSTest 项目
+1. `wrapper\csharp\tests` 下的 net48 + net8.0 MSTest 项目
 2. `fcstdDoc\1.xml` 的 Geometry 包装接口回归
 3. `fcstdDoc\1.xml` 的 BREP 包装接口回归
 4. 参数化 Geometry 包装接口回归

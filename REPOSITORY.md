@@ -86,18 +86,24 @@ McSolverEngine/
 │
 ├── fcstdDoc/                      # FreeCAD 测试数据（回归语料库）
 │   ├── 1.FCStd / 1.xml / 1.brp / 1.solver.brp
-│   ├── 2.FCStd / 2.xml（含 3 张不同平面草图）
+│   ├── 2.FCStd / 2.xml / 2.Sketch.Shape.brp / 2.Sketch.solver.brp
+│   ├── 2.Sketch001.Shape.brp / 2.Sketch001.solver.brp / 2.Sketch002.Shape.brp / 2.Sketch002.solver.brp（多平面草图）
 │   ├── 3.FCStd / 3.xml / 3.Sketch.Shape.brp / 3.Sketch.solver.brp
+│   ├── 3.xml.isVersionOf.FreeCAD1.1.1.txt
 │   ├── V102.1.FCStd / V102.1.xml / V102.1.brp / V102.1.solver.brp
-│   ├── V102.2.FCStd / V102.2.xml（含 3 张多平面草图）
+│   ├── V102.2.FCStd / V102.2.xml / V102.2.Sketch.Shape.brp / V102.2.Sketch.solver.brp
+│   ├── V102.2.Sketch001.Shape.brp / V102.2.Sketch001.solver.brp / V102.2.Sketch002.Shape.brp / V102.2.Sketch002.solver.brp（多平面草图）
 │   ├── V102.4.FCStd / V102.4.xml / V102.4.brp / V102.4.solver.brp
-│   ├── V102.4.plus1.FCStd / V102.4.plus1.xml / V102.4.plus1.brp（参数 +1 覆盖）
+│   ├── V102.4.plus1.FCStd / V102.4.plus1.xml / V102.4.plus1.brp / V102.4.plus1.solver.brp（参数 +1 覆盖）
 │   ├── V102.5.FCStd / V102.5.xml / V102.5.brp / V102.5.solver.brp（表达式驱动）
-│   ├── V102.6.FCStd / V102.6.xml / V102.6.brp（VarSet + 参数化, V102.6_400.brp 覆盖）
+│   ├── V102.6.FCStd / V102.6.xml / V102.6.brp / V102.6.solver.brp
+│   ├── V102.6_400.brp / V102.6_400.solver.brp（VarSet L1=400 参数覆盖）
 │   ├── V102.7.FCStd / V102.7.xml / V102.7.brp（FCStd 提取 + 参数化 BREP）
-│   ├── V102.7.50.FCStd / V102.7.50.xml / V102.7.50.brp（V102.7 + 参数集1.L1=50 覆盖）
+│   ├── V102.7.50.FCStd / V102.7.50.xml / V102.7.50.brp / V102.7.50.solver.brp（V102.7 + 参数集1.L1=50 覆盖）
 │   ├── V102.8.FCStd / V102.8.xml / V102.8.brp
-│   └── *.svg                      #   Python wrapper 输出的 SVG 可视化
+│   ├── V111.9.FCStd / V111.9.xml / V111.9.brp
+│   ├── V111.9.500.FCStd / V111.9.500.xml / V111.9.500.brp / V111.9.500.solver.brp（参数化 BREP 非确定性顺序漂移校验）
+│   └── *.svg / *.py.svg              # C#/Python wrapper 输出的 SVG 可视化
 │
 ├── scripts/                       # 构建与打包脚本
 │   ├── package_nuget.ps1          #   NuGet 打包核心脚本

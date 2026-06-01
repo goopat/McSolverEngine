@@ -555,7 +555,7 @@ McSolverEngine supports two build configurations controlled by the CMake option 
 
 | Build | CMake | OCCT dependency | BREP export |
 |-------|-------|-----------------|-------------|
-| **With OCCT** | `-DMCSOLVERENGINE_WITH_OCCT=ON` | Links `TKernel`, `TKMath`, `TKBRep` `.lib` files | Available |
+| **With OCCT** | `-DMCSOLVERENGINE_WITH_OCCT=ON` | Links `TKBRep`, `TKTopAlgo`, `TKShHealing` `.lib` files | Available |
 | **Without OCCT** | `-DMCSOLVERENGINE_WITH_OCCT=OFF` (default) | No OCCT linkage | Unavailable |
 
 In both configurations the DLL is named `mcsolverengine_native.dll`. Geometry export is **always available** regardless of the OCCT switch.

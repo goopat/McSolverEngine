@@ -5,9 +5,10 @@
 This repository is a CMake-based C++20 project. Standalone builds define these top-level targets:
 
 - `McSolverEngineCore` (static library)
+- `McSolverEngineZip` (static library, zlib inflate + ZIP extraction)
 - `McSolverEngineNative` (shared library exposing the C ABI)
 - `McSolverEngineCli` (CLI executable)
-- `McSolverEngineSmokeTest` and `McSolverEngineCApiSmokeTest` when `MCSOLVERENGINE_BUILD_TESTS=ON`
+- `McSolverEngineSmokeTest`, `McSolverEngineCApiSmokeTest`, and `McSolverEngineUnitTest` when `MCSOLVERENGINE_BUILD_TESTS=ON`
 
 Configure and build:
 
@@ -35,6 +36,13 @@ Useful configure switches:
 cmake -S . -B build -DMCSOLVERENGINE_BUILD_TESTS=ON -DMCSOLVERENGINE_WITH_OCCT=OFF
 ```
 
+Run .NET and Python wrapper tests:
+
+```sh
+dotnet test wrapper/csharp/tests/McSolverEngine.Wrapper.Tests.csproj -c Release -f net8.0
+python -m unittest wrapper/python/tests/test_wrapper.py -v
+```
+
 Dependency notes:
 
 - `Eigen3` is required and must come from `.pixi`.
@@ -43,7 +51,7 @@ Dependency notes:
 - `CMakeLists.txt` auto-probes `..\.pixi\envs\default\Library\...` for Eigen, Boost, and OCCT; these dependencies do not fall back outside `.pixi`.
 - Current linkage is mixed, not fully dynamic:
   - `Eigen3` is consumed as a header-only dependency in this project.
-  - `libboost-headers` is currently consumed via headers only (`Boost.Graph`, `Boost.Regex`, `Boost.Math constants`); the build does not explicitly link Boost binary libraries.
+  - `libboost-headers` is currently consumed via headers only (`Boost.Graph`, `Boost.Math constants`); the build does not explicitly link Boost binary libraries.
   - `OpenCASCADE` is a runtime dynamic dependency when enabled: the build links `.lib` import libraries and the resulting binaries require the matching OCCT `.dll` files on `PATH`.
   - On Windows, the generated projects use the dynamic MSVC runtime (`/MD` and `/MDd`), not static CRT linkage.
 
@@ -52,7 +60,7 @@ Dependency notes:
 `McSolverEngine` is a standalone extraction of the FreeCAD Sketcher solver stack. The important flow is:
 
 1. `src\DocumentXml.cpp` parses FreeCAD `Document.xml` sketch data into `Compat::SketchModel`.
-2. `src\CompatSolver.cpp` translates that compat model into `planegcs` primitives and solves with `GCS::DogLeg`.
+2. `src\CompatSolver.cpp` translates that compat model into `planegcs` primitives and solves with a four-level fallback chain: `GCS::DogLeg` → LevenbergMarquardt → BFGS → SQP augmented.
 3. Export happens through either:
    - `src\GeometryExport.cpp` for exact structured geometry plus `Placement`
    - `src\BRepExport.cpp` + `src\SketchShapeBuilder.cpp` for OCCT-backed BREP output
@@ -81,7 +89,7 @@ The library packaging split matters:
 - `ExternalGeo` and construction geometry are imported into the same `SketchModel`, but both `GeometryExport` and `SketchShapeBuilder` intentionally skip `geometry.construction` and `geometry.external` when producing outputs.
 - Placement is preserved separately from exact geometry. `Geometry::exportSketchGeometry(...)` returns 2D geometry plus `placement`; OCCT export applies that placement when building the final shape.
 - The solver layer owns persistent `double` storage because `planegcs` works with raw parameter pointers. Follow the existing `SolveContext` pattern rather than introducing stack-backed parameter lifetimes.
-- The solver currently initializes and solves with `GCS::DogLeg`. If solver behavior changes, inspect both conflict/redundancy reporting and solved-geometry writeback in `src\CompatSolver.cpp`.
+- The solver uses a four-level fallback chain: `GCS::DogLeg` → LevenbergMarquardt → BFGS → SQP augmented. If solver behavior changes, inspect both conflict/redundancy reporting and solved-geometry writeback in `src\CompatSolver.cpp`.
 - Native regression tests are plain executables in `tests\`, not a unit-test framework. `tests\smoke.cpp` and `tests\capi_smoke.cpp` use direct assertions, sample `fcstdDoc\*.xml` inputs, and checked-in `.brp` baselines.
 - If you touch import/export behavior, check `fcstdDoc\` regression assets. The smoke test validates both exact geometry and, when OCCT is enabled, serialized BREP output against those checked-in samples.
 - The C API allocates structured geometry/BREP results on the native side. Callers must release them with `McSolverEngine_FreeGeometryResult(...)` and `McSolverEngine_FreeBRepResult(...)`.

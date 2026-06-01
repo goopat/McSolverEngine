@@ -561,7 +561,7 @@ McSolverEngine 支持两种构建配置，由 CMake 选项 `-DMCSOLVERENGINE_WIT
 
 | 构建 | CMake | OCCT 依赖 | BREP 导出 |
 |------|-------|-----------|-----------|
-| **含 OCCT** | `-DMCSOLVERENGINE_WITH_OCCT=ON` | 链接 `TKernel`、`TKMath`、`TKBRep` `.lib` | 可用 |
+| **含 OCCT** | `-DMCSOLVERENGINE_WITH_OCCT=ON` | 链接 `TKBRep`、`TKTopAlgo`、`TKShHealing` `.lib` | 可用 |
 | **不含 OCCT** | `-DMCSOLVERENGINE_WITH_OCCT=OFF`（默认） | 无 OCCT 链接 | 不可用 |
 
 两种配置下 DLL 名称均为 `mcsolverengine_native.dll`。Geometry 导出**始终可用**，不受 OCCT 开关影响。
