@@ -472,6 +472,143 @@ public static class McSolverEngineClient
         return values;
     }
 
+    private static List<InspectConstraintDto> ReadInspectConstraints(IntPtr pointer, int count)
+    {
+        var constraints = new List<InspectConstraintDto>();
+        if (pointer == IntPtr.Zero || count <= 0) {
+            return constraints;
+        }
+
+        var stride = Marshal.SizeOf(typeof(NativeInspectConstraint));
+        for (var i = 0; i < count; ++i) {
+            var current = IntPtr.Add(pointer, i * stride);
+            var native = (NativeInspectConstraint)Marshal.PtrToStructure(current, typeof(NativeInspectConstraint))!;
+            constraints.Add(new InspectConstraintDto {
+                OriginalIndex = native.OriginalIndex,
+                Type = native.Type,
+                Kind = ReadNativeUtf8String(native.KindUtf8),
+                Driving = native.Driving != 0,
+                Value = native.Value,
+                ReferencedGeoIds = ReadIntArray(native.ReferencedGeoIds, native.ReferencedGeoIdCount)
+            });
+        }
+
+        return constraints;
+    }
+
+    private static List<InspectGeometryElementDto> ReadInspectGeometryElements(IntPtr pointer, int count)
+    {
+        var elements = new List<InspectGeometryElementDto>();
+        if (pointer == IntPtr.Zero || count <= 0) {
+            return elements;
+        }
+
+        var stride = Marshal.SizeOf(typeof(NativeInspectGeometryElement));
+        for (var i = 0; i < count; ++i) {
+            var current = IntPtr.Add(pointer, i * stride);
+            var native = (NativeInspectGeometryElement)Marshal.PtrToStructure(current, typeof(NativeInspectGeometryElement))!;
+            elements.Add(new InspectGeometryElementDto {
+                Index = native.Index,
+                OriginalId = native.OriginalId,
+                Type = ReadNativeUtf8String(native.TypeUtf8),
+                Construction = native.Construction != 0,
+                External = native.External != 0,
+                ConstraintIndices = ReadIntArray(native.ConstraintIndices, native.ConstraintCount)
+            });
+        }
+
+        return elements;
+    }
+
+    private static List<ScalarPropertyInfoDto> ReadScalarPropertyInfos(IntPtr pointer, int count)
+    {
+        var properties = new List<ScalarPropertyInfoDto>();
+        if (pointer == IntPtr.Zero || count <= 0) {
+            return properties;
+        }
+
+        var stride = Marshal.SizeOf(typeof(NativeScalarPropertyInfo));
+        for (var i = 0; i < count; ++i) {
+            var current = IntPtr.Add(pointer, i * stride);
+            var native = (NativeScalarPropertyInfo)Marshal.PtrToStructure(current, typeof(NativeScalarPropertyInfo))!;
+            properties.Add(new ScalarPropertyInfoDto {
+                Name = ReadNativeUtf8String(native.NameUtf8),
+                Type = ReadNativeUtf8String(native.TypeUtf8),
+                ScalarValue = ReadNativeUtf8String(native.ScalarValueUtf8),
+                PropertyXml = ReadNativeUtf8String(native.PropertyXmlUtf8)
+            });
+        }
+
+        return properties;
+    }
+
+    private static List<VarSetParameterInfoDto> ReadVarSetParameterInfos(IntPtr pointer, int count)
+    {
+        var parameters = new List<VarSetParameterInfoDto>();
+        if (pointer == IntPtr.Zero || count <= 0) {
+            return parameters;
+        }
+
+        var stride = Marshal.SizeOf(typeof(NativeVarSetParameterInfo));
+        for (var i = 0; i < count; ++i) {
+            var current = IntPtr.Add(pointer, i * stride);
+            var native = (NativeVarSetParameterInfo)Marshal.PtrToStructure(current, typeof(NativeVarSetParameterInfo))!;
+            parameters.Add(new VarSetParameterInfoDto {
+                Name = ReadNativeUtf8String(native.NameUtf8),
+                Type = ReadNativeUtf8String(native.TypeUtf8),
+                RawValue = ReadNativeUtf8String(native.RawValueUtf8),
+                Expression = ReadNativeUtf8String(native.ExpressionUtf8),
+                PropertyXml = ReadNativeUtf8String(native.PropertyXmlUtf8)
+            });
+        }
+
+        return parameters;
+    }
+
+    private static List<SketchInfoDto> ReadSketchInfos(IntPtr pointer, int count)
+    {
+        var sketches = new List<SketchInfoDto>();
+        if (pointer == IntPtr.Zero || count <= 0) {
+            return sketches;
+        }
+
+        var stride = Marshal.SizeOf(typeof(NativeSketchInfo));
+        for (var i = 0; i < count; ++i) {
+            var current = IntPtr.Add(pointer, i * stride);
+            var native = (NativeSketchInfo)Marshal.PtrToStructure(current, typeof(NativeSketchInfo))!;
+            sketches.Add(new SketchInfoDto {
+                Label = ReadNativeUtf8String(native.LabelUtf8),
+                ObjectName = ReadNativeUtf8String(native.ObjectNameUtf8),
+                Properties = ReadScalarPropertyInfos(native.Properties, native.PropertyCount),
+                Geometries = ReadInspectGeometryElements(native.Geometries, native.GeometryCount),
+                Constraints = ReadInspectConstraints(native.Constraints, native.ConstraintCount)
+            });
+        }
+
+        return sketches;
+    }
+
+    private static List<VarSetInfoDto> ReadVarSetInfos(IntPtr pointer, int count)
+    {
+        var varSets = new List<VarSetInfoDto>();
+        if (pointer == IntPtr.Zero || count <= 0) {
+            return varSets;
+        }
+
+        var stride = Marshal.SizeOf(typeof(NativeVarSetInfo));
+        for (var i = 0; i < count; ++i) {
+            var current = IntPtr.Add(pointer, i * stride);
+            var native = (NativeVarSetInfo)Marshal.PtrToStructure(current, typeof(NativeVarSetInfo))!;
+            varSets.Add(new VarSetInfoDto {
+                Label = ReadNativeUtf8String(native.LabelUtf8),
+                ObjectName = ReadNativeUtf8String(native.ObjectNameUtf8),
+                Parameters = ReadVarSetParameterInfos(native.Parameters, native.ParameterCount)
+            });
+        }
+
+        return varSets;
+    }
+
     private static string? GetConfiguredLibraryCandidate()
     {
         string? configuredPath;
@@ -731,6 +868,82 @@ public static class McSolverEngineClient
     }
 
     [StructLayout(LayoutKind.Sequential)]
+    private struct NativeInspectConstraint
+    {
+        public int OriginalIndex;
+        public int Type;
+        public IntPtr KindUtf8;
+        public int Driving;
+        public double Value;
+        public int ReferencedGeoIdCount;
+        public IntPtr ReferencedGeoIds;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct NativeInspectGeometryElement
+    {
+        public int Index;
+        public int OriginalId;
+        public IntPtr TypeUtf8;
+        public int Construction;
+        public int External;
+        public int ConstraintCount;
+        public IntPtr ConstraintIndices;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct NativeScalarPropertyInfo
+    {
+        public IntPtr NameUtf8;
+        public IntPtr TypeUtf8;
+        public IntPtr ScalarValueUtf8;
+        public IntPtr PropertyXmlUtf8;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct NativeVarSetParameterInfo
+    {
+        public IntPtr NameUtf8;
+        public IntPtr TypeUtf8;
+        public IntPtr RawValueUtf8;
+        public IntPtr ExpressionUtf8;
+        public IntPtr PropertyXmlUtf8;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct NativeSketchInfo
+    {
+        public IntPtr LabelUtf8;
+        public IntPtr ObjectNameUtf8;
+        public int PropertyCount;
+        public IntPtr Properties;
+        public int GeometryCount;
+        public IntPtr Geometries;
+        public int ConstraintCount;
+        public IntPtr Constraints;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct NativeVarSetInfo
+    {
+        public IntPtr LabelUtf8;
+        public IntPtr ObjectNameUtf8;
+        public int ParameterCount;
+        public IntPtr Parameters;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct NativeDocumentInfo
+    {
+        public int SketchCount;
+        public IntPtr Sketches;
+        public int VarSetCount;
+        public IntPtr VarSets;
+        public int MessageCount;
+        public IntPtr Messages;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
     private struct NativeGeometryRecord
     {
         public int GeometryIndex;
@@ -858,6 +1071,46 @@ public static class McSolverEngineClient
 
     [DllImport(NativeLibraryName, CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
     private static extern void McSolverEngine_FreeBRepResult(IntPtr value);
+
+    [DllImport(NativeLibraryName, CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    private static extern McSolverEngineNativeStatus McSolverEngine_InspectDocumentXml(
+        IntPtr documentXmlUtf8,
+        out IntPtr result
+    );
+
+    [DllImport(NativeLibraryName, CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    private static extern void McSolverEngine_FreeDocumentInfo(IntPtr value);
+
+    /// <summary>
+    /// Inspect Document.xml content and return sketch/varSet metadata including
+    /// geometry elements and constraints for each sketch.
+    /// </summary>
+    public static DocumentInfoDto InspectDocumentXml(string documentXml)
+    {
+        ValidateRequiredString(documentXml, nameof(documentXml));
+        EnsureNativeLibraryLoaded();
+
+        using var documentXmlHandle = new NativeUtf8String(documentXml);
+        var nativeStatus = McSolverEngine_InspectDocumentXml(documentXmlHandle.Pointer, out var resultPointer);
+
+        var result = new DocumentInfoDto();
+        if (resultPointer == IntPtr.Zero) {
+            result.Messages.Add($"InspectDocumentXml failed with status {(int)nativeStatus}");
+            return result;
+        }
+
+        try {
+            var nativeResult = (NativeDocumentInfo)Marshal.PtrToStructure(
+                resultPointer, typeof(NativeDocumentInfo))!;
+            result.Sketches = ReadSketchInfos(nativeResult.Sketches, nativeResult.SketchCount);
+            result.VarSets = ReadVarSetInfos(nativeResult.VarSets, nativeResult.VarSetCount);
+            result.Messages = ReadStringArray(nativeResult.Messages, nativeResult.MessageCount);
+            return result;
+        }
+        finally {
+            McSolverEngine_FreeDocumentInfo(resultPointer);
+        }
+    }
 
     [DllImport(NativeLibraryName, CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
     private static extern McSolverEngineFCStdStatus McSolverEngine_ExtractFCStdDoc(

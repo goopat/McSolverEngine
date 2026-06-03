@@ -17,6 +17,66 @@ public sealed class VarSetPropertyValueDto
     public string Unit { get; set; } = string.Empty;
 }
 
+public sealed class InspectConstraintDto
+{
+    public int OriginalIndex { get; set; }
+    public int Type { get; set; }
+    public string Kind { get; set; } = string.Empty;
+    public bool Driving { get; set; } = true;
+    public double Value { get; set; }
+    public List<int> ReferencedGeoIds { get; set; } = [];
+}
+
+public sealed class InspectGeometryElementDto
+{
+    public int Index { get; set; }
+    public int OriginalId { get; set; }
+    public string Type { get; set; } = string.Empty;
+    public bool Construction { get; set; }
+    public bool External { get; set; }
+    public List<int> ConstraintIndices { get; set; } = [];
+}
+
+public sealed class SketchInfoDto
+{
+    public string Label { get; set; } = string.Empty;
+    public string ObjectName { get; set; } = string.Empty;
+    public List<ScalarPropertyInfoDto> Properties { get; set; } = [];
+    public List<InspectGeometryElementDto> Geometries { get; set; } = [];
+    public List<InspectConstraintDto> Constraints { get; set; } = [];
+}
+
+public sealed class ScalarPropertyInfoDto
+{
+    public string Name { get; set; } = string.Empty;
+    public string Type { get; set; } = string.Empty;
+    public string ScalarValue { get; set; } = string.Empty;
+    public string PropertyXml { get; set; } = string.Empty;
+}
+
+public sealed class VarSetParameterInfoDto
+{
+    public string Name { get; set; } = string.Empty;
+    public string Type { get; set; } = string.Empty;
+    public string RawValue { get; set; } = string.Empty;
+    public string Expression { get; set; } = string.Empty;
+    public string PropertyXml { get; set; } = string.Empty;
+}
+
+public sealed class VarSetInfoDto
+{
+    public string Label { get; set; } = string.Empty;
+    public string ObjectName { get; set; } = string.Empty;
+    public List<VarSetParameterInfoDto> Parameters { get; set; } = [];
+}
+
+public sealed class DocumentInfoDto
+{
+    public List<SketchInfoDto> Sketches { get; set; } = [];
+    public List<VarSetInfoDto> VarSets { get; set; } = [];
+    public List<string> Messages { get; set; } = [];
+}
+
 public sealed class BRepSolveResponse
 {
     public McSolverEngineNativeStatus NativeStatus { get; set; }

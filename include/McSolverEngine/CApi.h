@@ -124,12 +124,38 @@ typedef struct McSolverEngineScalarPropertyInfo
     const char* propertyXmlUtf8;  // UTF-8 original <Property>...</Property> snippet
 } McSolverEngineScalarPropertyInfo;
 
+typedef struct McSolverEngineInspectConstraint
+{
+    int originalIndex;
+    int type;
+    const char* kindUtf8;         // UTF-8 human-readable kind name
+    int driving;
+    double value;
+    int referencedGeoIdCount;
+    const int* referencedGeoIds;
+} McSolverEngineInspectConstraint;
+
+typedef struct McSolverEngineInspectGeometryElement
+{
+    int index;
+    int originalId;
+    const char* typeUtf8;         // UTF-8 geometry type string
+    int construction;
+    int external;
+    int constraintCount;
+    const int* constraintIndices;
+} McSolverEngineInspectGeometryElement;
+
 typedef struct McSolverEngineSketchInfo
 {
     const char* labelUtf8;        // UTF-8 Label value, or ""
     const char* objectNameUtf8;   // UTF-8 real object name
     int propertyCount;
     const McSolverEngineScalarPropertyInfo* properties;
+    int geometryCount;
+    const McSolverEngineInspectGeometryElement* geometries;
+    int constraintCount;
+    const McSolverEngineInspectConstraint* constraints;
 } McSolverEngineSketchInfo;
 
 typedef struct McSolverEngineVarSetParameterInfo

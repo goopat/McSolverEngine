@@ -38,11 +38,33 @@ struct ScalarPropertyInfo
     std::string propertyXml;
 };
 
+struct InspectGeometryElement
+{
+    int index {-1};
+    int originalId {-1};
+    std::string type;
+    bool construction {false};
+    bool external {false};
+    std::vector<int> constraintIndices;
+};
+
+struct InspectConstraintInfo
+{
+    int originalIndex {-1};
+    int type {0};
+    std::string kind;
+    bool driving {true};
+    double value {0.0};
+    std::vector<int> referencedGeoIds;
+};
+
 struct SketchInfo
 {
     std::string label;
     std::string objectName;
     std::vector<ScalarPropertyInfo> properties;
+    std::vector<InspectGeometryElement> geometries;
+    std::vector<InspectConstraintInfo> constraints;
 };
 
 struct VarSetParameterInfo

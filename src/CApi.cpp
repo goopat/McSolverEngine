@@ -312,6 +312,34 @@ void freeVarSetParameterInfos(int count, const McSolverEngineVarSetParameterInfo
     delete[] parameters;
 }
 
+void freeInspectConstraints(int count, const McSolverEngineInspectConstraint* values) noexcept
+{
+    auto* constraints = const_cast<McSolverEngineInspectConstraint*>(values);
+    if (!constraints) {
+        return;
+    }
+
+    for (int i = 0; i < count; ++i) {
+        delete[] constraints[i].kindUtf8;
+        delete[] constraints[i].referencedGeoIds;
+    }
+    delete[] constraints;
+}
+
+void freeInspectGeometryElements(int count, const McSolverEngineInspectGeometryElement* values) noexcept
+{
+    auto* elements = const_cast<McSolverEngineInspectGeometryElement*>(values);
+    if (!elements) {
+        return;
+    }
+
+    for (int i = 0; i < count; ++i) {
+        delete[] elements[i].typeUtf8;
+        delete[] elements[i].constraintIndices;
+    }
+    delete[] elements;
+}
+
 void freeSketchInfos(int count, const McSolverEngineSketchInfo* values) noexcept
 {
     auto* sketches = const_cast<McSolverEngineSketchInfo*>(values);
@@ -323,6 +351,8 @@ void freeSketchInfos(int count, const McSolverEngineSketchInfo* values) noexcept
         delete[] sketches[i].labelUtf8;
         delete[] sketches[i].objectNameUtf8;
         freeScalarPropertyInfos(sketches[i].propertyCount, sketches[i].properties);
+        freeInspectGeometryElements(sketches[i].geometryCount, sketches[i].geometries);
+        freeInspectConstraints(sketches[i].constraintCount, sketches[i].constraints);
     }
     delete[] sketches;
 }
@@ -607,6 +637,88 @@ void freeBRepResult(McSolverEngineBRepResult* value) noexcept
     return true;
 }
 
+[[nodiscard]] bool assignInspectConstraints(
+    const std::vector<McSolverEngine::DocumentXml::InspectConstraintInfo>& values,
+    int* count,
+    const McSolverEngineInspectConstraint** out
+)
+{
+    if (!count || !out) {
+        return false;
+    }
+
+    *count = 0;
+    *out = nullptr;
+    if (values.size() > static_cast<std::size_t>(std::numeric_limits<int>::max())) {
+        return false;
+    }
+    if (values.empty()) {
+        return true;
+    }
+
+    auto* array = new (std::nothrow) McSolverEngineInspectConstraint[values.size()] {};
+    if (!array) {
+        return false;
+    }
+
+    for (std::size_t i = 0; i < values.size(); ++i) {
+        array[i].originalIndex = values[i].originalIndex;
+        array[i].type = values[i].type;
+        array[i].driving = values[i].driving ? 1 : 0;
+        array[i].value = values[i].value;
+        if (!assignOwnedString(values[i].kind, &array[i].kindUtf8)
+            || !assignIntArray(values[i].referencedGeoIds, &array[i].referencedGeoIdCount, &array[i].referencedGeoIds)) {
+            freeInspectConstraints(static_cast<int>(values.size()), array);
+            return false;
+        }
+    }
+
+    *count = static_cast<int>(values.size());
+    *out = array;
+    return true;
+}
+
+[[nodiscard]] bool assignInspectGeometryElements(
+    const std::vector<McSolverEngine::DocumentXml::InspectGeometryElement>& values,
+    int* count,
+    const McSolverEngineInspectGeometryElement** out
+)
+{
+    if (!count || !out) {
+        return false;
+    }
+
+    *count = 0;
+    *out = nullptr;
+    if (values.size() > static_cast<std::size_t>(std::numeric_limits<int>::max())) {
+        return false;
+    }
+    if (values.empty()) {
+        return true;
+    }
+
+    auto* array = new (std::nothrow) McSolverEngineInspectGeometryElement[values.size()] {};
+    if (!array) {
+        return false;
+    }
+
+    for (std::size_t i = 0; i < values.size(); ++i) {
+        array[i].index = values[i].index;
+        array[i].originalId = values[i].originalId;
+        array[i].construction = values[i].construction ? 1 : 0;
+        array[i].external = values[i].external ? 1 : 0;
+        if (!assignOwnedString(values[i].type, &array[i].typeUtf8)
+            || !assignIntArray(values[i].constraintIndices, &array[i].constraintCount, &array[i].constraintIndices)) {
+            freeInspectGeometryElements(static_cast<int>(values.size()), array);
+            return false;
+        }
+    }
+
+    *count = static_cast<int>(values.size());
+    *out = array;
+    return true;
+}
+
 [[nodiscard]] bool assignSketchInfos(
     const std::vector<McSolverEngine::DocumentXml::SketchInfo>& values,
     int* count,
@@ -634,7 +746,9 @@ void freeBRepResult(McSolverEngineBRepResult* value) noexcept
     for (std::size_t i = 0; i < values.size(); ++i) {
         if (!assignOwnedString(values[i].label, &array[i].labelUtf8)
             || !assignOwnedString(values[i].objectName, &array[i].objectNameUtf8)
-            || !assignScalarPropertyInfos(values[i].properties, &array[i].propertyCount, &array[i].properties)) {
+            || !assignScalarPropertyInfos(values[i].properties, &array[i].propertyCount, &array[i].properties)
+            || !assignInspectGeometryElements(values[i].geometries, &array[i].geometryCount, &array[i].geometries)
+            || !assignInspectConstraints(values[i].constraints, &array[i].constraintCount, &array[i].constraints)) {
             freeSketchInfos(static_cast<int>(values.size()), array);
             return false;
         }

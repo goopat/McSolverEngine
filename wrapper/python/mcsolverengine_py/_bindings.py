@@ -298,6 +298,75 @@ class BRepResult(ctypes.Structure):
         ("brepUtf8", ctypes.c_char_p),
     ]
 
+class InspectConstraint(ctypes.Structure):
+    _fields_ = [
+        ("originalIndex", ctypes.c_int),
+        ("type", ctypes.c_int),
+        ("kindUtf8", ctypes.c_char_p),
+        ("driving", ctypes.c_int),
+        ("value", ctypes.c_double),
+        ("referencedGeoIdCount", ctypes.c_int),
+        ("referencedGeoIds", ctypes.POINTER(ctypes.c_int)),
+    ]
+
+class InspectGeometryElement(ctypes.Structure):
+    _fields_ = [
+        ("index", ctypes.c_int),
+        ("originalId", ctypes.c_int),
+        ("typeUtf8", ctypes.c_char_p),
+        ("construction", ctypes.c_int),
+        ("external", ctypes.c_int),
+        ("constraintCount", ctypes.c_int),
+        ("constraintIndices", ctypes.POINTER(ctypes.c_int)),
+    ]
+
+class ScalarPropertyInfo(ctypes.Structure):
+    _fields_ = [
+        ("nameUtf8", ctypes.c_char_p),
+        ("typeUtf8", ctypes.c_char_p),
+        ("scalarValueUtf8", ctypes.c_char_p),
+        ("propertyXmlUtf8", ctypes.c_char_p),
+    ]
+
+class VarSetParameterInfo(ctypes.Structure):
+    _fields_ = [
+        ("nameUtf8", ctypes.c_char_p),
+        ("typeUtf8", ctypes.c_char_p),
+        ("rawValueUtf8", ctypes.c_char_p),
+        ("expressionUtf8", ctypes.c_char_p),
+        ("propertyXmlUtf8", ctypes.c_char_p),
+    ]
+
+class SketchInfo(ctypes.Structure):
+    _fields_ = [
+        ("labelUtf8", ctypes.c_char_p),
+        ("objectNameUtf8", ctypes.c_char_p),
+        ("propertyCount", ctypes.c_int),
+        ("properties", ctypes.POINTER(ScalarPropertyInfo)),
+        ("geometryCount", ctypes.c_int),
+        ("geometries", ctypes.POINTER(InspectGeometryElement)),
+        ("constraintCount", ctypes.c_int),
+        ("constraints", ctypes.POINTER(InspectConstraint)),
+    ]
+
+class VarSetInfo(ctypes.Structure):
+    _fields_ = [
+        ("labelUtf8", ctypes.c_char_p),
+        ("objectNameUtf8", ctypes.c_char_p),
+        ("parameterCount", ctypes.c_int),
+        ("parameters", ctypes.POINTER(VarSetParameterInfo)),
+    ]
+
+class DocumentInfo(ctypes.Structure):
+    _fields_ = [
+        ("sketchCount", ctypes.c_int),
+        ("sketches", ctypes.POINTER(SketchInfo)),
+        ("varSetCount", ctypes.c_int),
+        ("varSets", ctypes.POINTER(VarSetInfo)),
+        ("messageCount", ctypes.c_int),
+        ("messages", ctypes.POINTER(ctypes.c_char_p)),
+    ]
+
 # ── Function signatures ──────────────────────────────────────
 
 def _setup_signatures(lib):
@@ -352,6 +421,15 @@ def _setup_signatures(lib):
 
     lib.McSolverEngine_FreeFCStdDoc.restype = None
     lib.McSolverEngine_FreeFCStdDoc.argtypes = [ctypes.c_char_p]
+
+    lib.McSolverEngine_InspectDocumentXml.restype = ctypes.c_int
+    lib.McSolverEngine_InspectDocumentXml.argtypes = [
+        ctypes.c_char_p,
+        ctypes.POINTER(ctypes.POINTER(DocumentInfo)),
+    ]
+
+    lib.McSolverEngine_FreeDocumentInfo.restype = None
+    lib.McSolverEngine_FreeDocumentInfo.argtypes = [ctypes.POINTER(DocumentInfo)]
 
     lib.McSolverEngine_GetLastError.restype = ctypes.c_char_p
     lib.McSolverEngine_GetLastError.argtypes = []

@@ -256,14 +256,21 @@ int main()
                     <Float value="12.5"/>
                 </Property>
                 <Property name="Constraints" type="Sketcher::PropertyConstraintList">
-                    <ConstraintList count="0">
+                    <ConstraintList count="3">
+                        <Constrain Name="" Type="1" Value="1.0" First="0" FirstPos="0" Second="0" SecondPos="0" Third="-2000" ThirdPos="0" IsDriving="0" IsInVirtualSpace="0" IsActive="1"/>
+                        <Constrain Name="" Type="6" Value="100.0" First="0" FirstPos="0" Second="-2000" SecondPos="0" Third="-2000" ThirdPos="0" IsDriving="1" IsInVirtualSpace="0" IsActive="1"/>
+                        <Constrain Name="" Type="11" Value="25.0" First="1" FirstPos="0" Second="-2000" SecondPos="0" Third="-2000" ThirdPos="0" IsDriving="1" IsInVirtualSpace="0" IsActive="1"/>
                     </ConstraintList>
                 </Property>
                 <Property name="Geometry" type="Part::PropertyGeometryList">
-                    <GeometryList count="1">
+                    <GeometryList count="2">
                         <Geometry type="Part::GeomLineSegment" id="1" migrated="1">
                             <LineSegment StartX="0.0" StartY="0.0" StartZ="0.0" EndX="1.0" EndY="0.0" EndZ="0.0"/>
                             <Construction value="0"/>
+                        </Geometry>
+                        <Geometry type="Part::GeomCircle" id="2" migrated="1">
+                            <Circle CenterX="0.0" CenterY="0.0" CenterZ="0.0" Radius="10.0"/>
+                            <Construction value="1"/>
                         </Geometry>
                     </GeometryList>
                 </Property>
@@ -353,6 +360,89 @@ int main()
             )) {
             McSolverEngine_FreeDocumentInfo(inspected);
             return EXIT_FAILURE;
+        }
+
+        // ── New: geometry elements ──
+        if (!expect(sketch->geometryCount == 2, "Expected sketch to expose 2 geometry elements.")
+            || !expect(sketch->geometries != nullptr, "Expected geometries pointer.")) {
+            McSolverEngine_FreeDocumentInfo(inspected);
+            return EXIT_FAILURE;
+        }
+        {
+            const auto& g0 = sketch->geometries[0];
+            if (!expect(g0.index == 0 && g0.originalId == 1, "Expected first geometry index=0, id=1.")
+                || !expect(
+                    g0.typeUtf8 != nullptr && std::string(g0.typeUtf8) == "Part::GeomLineSegment",
+                    "Expected first geometry type: Part::GeomLineSegment."
+                )
+                || !expect(g0.construction == 0 && g0.external == 0, "Expected first geometry non-construction, non-external.")
+                || !expect(g0.constraintCount == 3, "Expected first geometry to have 3 constraint references [0,0,1].")
+                || !expect(g0.constraintIndices != nullptr, "Expected first geometry constraintIndices pointer.")
+                || !expect(g0.constraintIndices[0] == 0, "Expected first geometry constraintIndices[0] == 0.")
+                || !expect(g0.constraintIndices[1] == 0, "Expected first geometry constraintIndices[1] == 0.")
+                || !expect(g0.constraintIndices[2] == 1, "Expected first geometry constraintIndices[2] == 1.")) {
+                McSolverEngine_FreeDocumentInfo(inspected);
+                return EXIT_FAILURE;
+            }
+        }
+        {
+            const auto& g1 = sketch->geometries[1];
+            if (!expect(g1.index == 1 && g1.originalId == 2, "Expected second geometry index=1, id=2.")
+                || !expect(
+                    g1.typeUtf8 != nullptr && std::string(g1.typeUtf8) == "Part::GeomCircle",
+                    "Expected second geometry type: Part::GeomCircle."
+                )
+                || !expect(g1.construction == 1 && g1.external == 0, "Expected second geometry construction, non-external.")
+                || !expect(g1.constraintCount == 1, "Expected second geometry to have 1 constraint reference.")
+                || !expect(g1.constraintIndices != nullptr, "Expected second geometry constraintIndices pointer.")
+                || !expect(g1.constraintIndices[0] == 2, "Expected second geometry constraintIndices[0] == 2.")) {
+                McSolverEngine_FreeDocumentInfo(inspected);
+                return EXIT_FAILURE;
+            }
+        }
+
+        // ── New: constraints ──
+        if (!expect(sketch->constraintCount == 3, "Expected sketch to expose 3 constraints.")
+            || !expect(sketch->constraints != nullptr, "Expected constraints pointer.")) {
+            McSolverEngine_FreeDocumentInfo(inspected);
+            return EXIT_FAILURE;
+        }
+        {
+            const auto& c0 = sketch->constraints[0];
+            if (!expect(c0.originalIndex == 0 && c0.type == 1, "Expected first constraint originalIndex=0, type=1.")
+                || !expect(c0.kindUtf8 != nullptr && std::string(c0.kindUtf8) == "Coincident", "Expected Coincident.")
+                || !expect(c0.driving == 0, "Expected first constraint non-driving.")
+                || !expect(c0.referencedGeoIdCount == 2, "Expected first constraint to reference 2 geoIds.")
+                || !expect(c0.referencedGeoIds != nullptr, "Expected first constraint referencedGeoIds pointer.")
+                || !expect(c0.referencedGeoIds[0] == 0, "Expected first constraint references geo [0].")
+                || !expect(c0.referencedGeoIds[1] == 0, "Expected first constraint references geo [0] again.")) {
+                McSolverEngine_FreeDocumentInfo(inspected);
+                return EXIT_FAILURE;
+            }
+        }
+        {
+            const auto& c1 = sketch->constraints[1];
+            if (!expect(c1.originalIndex == 1 && c1.type == 6, "Expected second constraint originalIndex=1, type=6.")
+                || !expect(c1.kindUtf8 != nullptr && std::string(c1.kindUtf8) == "Distance", "Expected Distance.")
+                || !expect(c1.driving == 1, "Expected second constraint driving.")
+                || !expect(c1.value == 100.0, "Expected second constraint value=100.")
+                || !expect(c1.referencedGeoIdCount == 1, "Expected second constraint to reference 1 geoId.")
+                || !expect(c1.referencedGeoIds != nullptr && c1.referencedGeoIds[0] == 0, "Expected second constraint references geo [0].")) {
+                McSolverEngine_FreeDocumentInfo(inspected);
+                return EXIT_FAILURE;
+            }
+        }
+        {
+            const auto& c2 = sketch->constraints[2];
+            if (!expect(c2.originalIndex == 2 && c2.type == 11, "Expected third constraint originalIndex=2, type=11.")
+                || !expect(c2.kindUtf8 != nullptr && std::string(c2.kindUtf8) == "Radius", "Expected Radius.")
+                || !expect(c2.driving == 1, "Expected third constraint driving.")
+                || !expect(c2.value == 25.0, "Expected third constraint value=25.")
+                || !expect(c2.referencedGeoIdCount == 1, "Expected third constraint to reference 1 geoId.")
+                || !expect(c2.referencedGeoIds != nullptr && c2.referencedGeoIds[0] == 1, "Expected third constraint references geo [1].")) {
+                McSolverEngine_FreeDocumentInfo(inspected);
+                return EXIT_FAILURE;
+            }
         }
 
         McSolverEngine_FreeDocumentInfo(inspected);

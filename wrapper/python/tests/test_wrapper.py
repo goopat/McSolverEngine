@@ -459,6 +459,128 @@ def _assert_brep_geometry_equivalent_unordered(test: unittest.TestCase, expected
             test.fail(f"Missing matching BREP curve record for: {expected_line}")
 
 
+class TestInspectDocumentXml(unittest.TestCase):
+    """Regression tests for Engine.inspect_document."""
+
+    INSPECT_XML_WITH_GEOMETRY = """<?xml version="1.0" encoding="UTF-8"?>
+<Document>
+    <Objects Count="2">
+        <Object type="App::VarSet" name="VarSet001" id="1"/>
+        <Object type="Sketcher::SketchObject" name="SketchA" id="2"/>
+    </Objects>
+    <ObjectData Count="2">
+        <Object name="VarSet001">
+            <Properties Count="2" TransientCount="0">
+                <Property name="Label" type="App::PropertyString">
+                    <String value="Parameters"/>
+                </Property>
+                <Property name="Width" type="App::PropertyFloat">
+                    <Float value="6.0"/>
+                </Property>
+            </Properties>
+        </Object>
+        <Object name="SketchA">
+            <Properties Count="3" TransientCount="0">
+                <Property name="Label" type="App::PropertyString">
+                    <String value="Sketch Alpha"/>
+                </Property>
+                <Property name="Constraints" type="Sketcher::PropertyConstraintList">
+                    <ConstraintList count="4">
+                        <Constrain Name="" Type="1" Value="1.0" First="0" FirstPos="0" Second="0" SecondPos="0" Third="-2000" ThirdPos="0" IsDriving="0" IsInVirtualSpace="0" IsActive="1"/>
+                        <Constrain Name="" Type="2" Value="0.0" First="0" FirstPos="0" Second="-2000" SecondPos="0" Third="-2000" ThirdPos="0" IsDriving="1" IsInVirtualSpace="0" IsActive="1"/>
+                        <Constrain Name="" Type="6" Value="100.0" First="0" FirstPos="0" Second="-2000" SecondPos="0" Third="-2000" ThirdPos="0" IsDriving="1" IsInVirtualSpace="0" IsActive="1"/>
+                        <Constrain Name="" Type="11" Value="25.0" First="1" FirstPos="0" Second="-2000" SecondPos="0" Third="-2000" ThirdPos="0" IsDriving="1" IsInVirtualSpace="0" IsActive="1"/>
+                    </ConstraintList>
+                </Property>
+                <Property name="Geometry" type="Part::PropertyGeometryList">
+                    <GeometryList count="2">
+                        <Geometry type="Part::GeomLineSegment" id="1" migrated="1">
+                            <LineSegment StartX="0.0" StartY="0.0" StartZ="0.0" EndX="1.0" EndY="0.0" EndZ="0.0"/>
+                            <Construction value="0"/>
+                        </Geometry>
+                        <Geometry type="Part::GeomCircle" id="2" migrated="1">
+                            <Circle CenterX="0.0" CenterY="0.0" CenterZ="0.0" Radius="10.0"/>
+                            <Construction value="1"/>
+                        </Geometry>
+                    </GeometryList>
+                </Property>
+            </Properties>
+        </Object>
+    </ObjectData>
+</Document>
+"""
+
+    def test_returns_geometry_and_constraints(self):
+        result = Engine.inspect_document(self.INSPECT_XML_WITH_GEOMETRY)
+        self.assertEqual(0, len(result.messages), f"Unexpected messages: {result.messages}")
+        self.assertEqual(1, len(result.sketches))
+        self.assertEqual(1, len(result.varSets))
+
+        sketch = result.sketches[0]
+        self.assertEqual("SketchA", sketch.objectName)
+        self.assertEqual("Sketch Alpha", sketch.label)
+        self.assertGreater(len(sketch.properties), 0)
+
+        # Geometries
+        self.assertEqual(2, len(sketch.geometries))
+        g0 = sketch.geometries[0]
+        self.assertEqual(0, g0.index)
+        self.assertEqual(1, g0.originalId)
+        self.assertEqual("Part::GeomLineSegment", g0.type)
+        self.assertFalse(g0.construction)
+        self.assertFalse(g0.external)
+        self.assertEqual(4, len(g0.constraintIndices))
+        self.assertEqual([0, 0, 1, 2], g0.constraintIndices)
+
+        g1 = sketch.geometries[1]
+        self.assertEqual(1, g1.index)
+        self.assertEqual(2, g1.originalId)
+        self.assertEqual("Part::GeomCircle", g1.type)
+        self.assertTrue(g1.construction)
+        self.assertFalse(g1.external)
+        self.assertEqual(1, len(g1.constraintIndices))
+        self.assertEqual([3], g1.constraintIndices)
+
+        # Constraints
+        self.assertEqual(4, len(sketch.constraints))
+        c0 = sketch.constraints[0]
+        self.assertEqual(0, c0.originalIndex)
+        self.assertEqual(1, c0.type)
+        self.assertEqual("Coincident", c0.kind)
+        self.assertFalse(c0.driving)
+        self.assertEqual(1.0, c0.value)
+        self.assertEqual([0, 0], c0.referencedGeoIds)
+
+        c1 = sketch.constraints[1]
+        self.assertEqual(1, c1.originalIndex)
+        self.assertEqual(2, c1.type)
+        self.assertEqual("Horizontal", c1.kind)
+        self.assertTrue(c1.driving)
+
+        c2 = sketch.constraints[2]
+        self.assertEqual(2, c2.originalIndex)
+        self.assertEqual(6, c2.type)
+        self.assertEqual("Distance", c2.kind)
+        self.assertTrue(c2.driving)
+        self.assertEqual(100.0, c2.value)
+        self.assertEqual([0], c2.referencedGeoIds)
+
+        c3 = sketch.constraints[3]
+        self.assertEqual(3, c3.originalIndex)
+        self.assertEqual(11, c3.type)
+        self.assertEqual("Radius", c3.kind)
+        self.assertTrue(c3.driving)
+        self.assertEqual(25.0, c3.value)
+        self.assertEqual([1], c3.referencedGeoIds)
+
+    def test_invalid_xml_has_messages(self):
+        result = Engine.inspect_document("not valid xml")
+        self.assertEqual(1, len(result.messages))
+        self.assertIn("ObjectData", result.messages[0])
+        self.assertEqual(0, len(result.sketches))
+        self.assertEqual(0, len(result.varSets))
+
+
 class TestV1027ExtractAndSolveWithParameters(unittest.TestCase):
     """Extract V102.7.FCStd, solve with 参数集1.L1=50, compare BREP."""
 

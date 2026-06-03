@@ -104,6 +104,67 @@ class BRepResult:
     placement: Placement = field(default_factory=Placement)
     brepUtf8: str = ""
 
+
+@dataclass
+class InspectConstraintDesc:
+    originalIndex: int
+    type: int
+    kind: str
+    driving: bool
+    value: float
+    referencedGeoIds: List[int] = field(default_factory=list)
+
+
+@dataclass
+class InspectGeometryElementDesc:
+    index: int
+    originalId: int
+    type: str
+    construction: bool
+    external: bool
+    constraintIndices: List[int] = field(default_factory=list)
+
+
+@dataclass
+class ScalarPropertyInfoDesc:
+    name: str
+    type: str
+    scalarValue: str
+    propertyXml: str
+
+
+@dataclass
+class VarSetParameterInfoDesc:
+    name: str
+    type: str
+    rawValue: str
+    expression: str
+    propertyXml: str
+
+
+@dataclass
+class SketchDesc:
+    label: str
+    objectName: str
+    properties: List[ScalarPropertyInfoDesc] = field(default_factory=list)
+    geometries: List[InspectGeometryElementDesc] = field(default_factory=list)
+    constraints: List[InspectConstraintDesc] = field(default_factory=list)
+
+
+@dataclass
+class VarSetDesc:
+    label: str
+    objectName: str
+    parameters: List[VarSetParameterInfoDesc] = field(default_factory=list)
+
+
+@dataclass
+class DocumentDesc:
+    sketches: List[SketchDesc] = field(default_factory=list)
+    varSets: List[VarSetDesc] = field(default_factory=list)
+    messages: List[str] = field(default_factory=list)
+
+
 # ── Helper ───────────────────────────────────────────────────
 
 def _decode(s: Optional[bytes]) -> str:
@@ -235,6 +296,84 @@ def _convert_brep_result(raw: _n.BRepResult) -> BRepResult:
         brepUtf8=_decode(raw.brepUtf8) if raw.brepUtf8 else "",
     )
 
+
+def _convert_inspect_constraint(raw: _n.InspectConstraint) -> InspectConstraintDesc:
+    return InspectConstraintDesc(
+        originalIndex=raw.originalIndex,
+        type=raw.type,
+        kind=_decode(raw.kindUtf8),
+        driving=bool(raw.driving),
+        value=raw.value,
+        referencedGeoIds=_int_array(raw.referencedGeoIds, raw.referencedGeoIdCount),
+    )
+
+
+def _convert_inspect_geometry(raw: _n.InspectGeometryElement) -> InspectGeometryElementDesc:
+    return InspectGeometryElementDesc(
+        index=raw.index,
+        originalId=raw.originalId,
+        type=_decode(raw.typeUtf8),
+        construction=bool(raw.construction),
+        external=bool(raw.external),
+        constraintIndices=_int_array(raw.constraintIndices, raw.constraintCount),
+    )
+
+
+def _convert_scalar_property(raw: _n.ScalarPropertyInfo) -> ScalarPropertyInfoDesc:
+    return ScalarPropertyInfoDesc(
+        name=_decode(raw.nameUtf8),
+        type=_decode(raw.typeUtf8),
+        scalarValue=_decode(raw.scalarValueUtf8),
+        propertyXml=_decode(raw.propertyXmlUtf8),
+    )
+
+
+def _convert_varset_parameter(raw: _n.VarSetParameterInfo) -> VarSetParameterInfoDesc:
+    return VarSetParameterInfoDesc(
+        name=_decode(raw.nameUtf8),
+        type=_decode(raw.typeUtf8),
+        rawValue=_decode(raw.rawValueUtf8),
+        expression=_decode(raw.expressionUtf8),
+        propertyXml=_decode(raw.propertyXmlUtf8),
+    )
+
+
+def _convert_document_info(raw: _n.DocumentInfo) -> DocumentDesc:
+    return DocumentDesc(
+        sketches=[
+            SketchDesc(
+                label=_decode(raw.sketches[i].labelUtf8),
+                objectName=_decode(raw.sketches[i].objectNameUtf8),
+                properties=[
+                    _convert_scalar_property(raw.sketches[i].properties[j])
+                    for j in range(raw.sketches[i].propertyCount)
+                ],
+                geometries=[
+                    _convert_inspect_geometry(raw.sketches[i].geometries[j])
+                    for j in range(raw.sketches[i].geometryCount)
+                ],
+                constraints=[
+                    _convert_inspect_constraint(raw.sketches[i].constraints[j])
+                    for j in range(raw.sketches[i].constraintCount)
+                ],
+            )
+            for i in range(raw.sketchCount)
+        ],
+        varSets=[
+            VarSetDesc(
+                label=_decode(raw.varSets[i].labelUtf8),
+                objectName=_decode(raw.varSets[i].objectNameUtf8),
+                parameters=[
+                    _convert_varset_parameter(raw.varSets[i].parameters[j])
+                    for j in range(raw.varSets[i].parameterCount)
+                ],
+            )
+            for i in range(raw.varSetCount)
+        ],
+        messages=_str_array(raw.messages, raw.messageCount),
+    )
+
+
 # ── Engine ───────────────────────────────────────────────────
 
 class Engine:
@@ -348,3 +487,21 @@ class Engine:
             return out_ptr.value.decode("utf-8")
         finally:
             _n._native.McSolverEngine_FreeFCStdDoc(out_ptr)
+
+    @staticmethod
+    def inspect_document(document_xml: str) -> DocumentDesc:
+        """Inspect Document.xml content and return sketch/varSet metadata,
+        including geometry elements and constraints for each sketch.
+
+        On parse failure the returned DocumentDesc will have an empty
+        sketches/varSets list and messages describing the problem.
+        """
+        result_ptr = ctypes.POINTER(_n.DocumentInfo)()
+        _n._native.McSolverEngine_InspectDocumentXml(
+            document_xml.encode("utf-8"),
+            ctypes.byref(result_ptr),
+        )
+        try:
+            return _convert_document_info(result_ptr.contents)
+        finally:
+            _n._native.McSolverEngine_FreeDocumentInfo(result_ptr)

@@ -30,7 +30,7 @@ dotnet test wrapper\csharp\tests\McSolverEngine.Wrapper.Tests.csproj -c Release 
 python -m unittest wrapper/python/tests/test_wrapper.py -v
 ```
 
-Regression data in `fcstdDoc/` (`.FCStd`, `.xml`, `.brp`, `.svg`). Covers samples 1–3, V102.1–V102.7 with parameterized, expression-driven, and multi-threaded scenarios.
+Regression data in `fcstdDoc/` (`.FCStd`, `.xml`, `.brp`, `.svg`). Covers samples 1–3, V102.1–V102.7 with parameterized, expression-driven, and multi-threaded scenarios. All three layers (C++ smoke, C API smoke, C# WrapperRegression, Python test_wrapper) also cover `InspectDocumentXml` with geometry/constraint/cross-reference assertions.
 
 ## Architecture
 
@@ -42,7 +42,7 @@ Standalone extraction of FreeCAD Sketcher's GCS constraint solver. 12 layers, to
 4. **Engine** — `Engine::version()` / `Engine::describe()`
 5. **Compat Model** — `CompatModel.h/cpp`. `SketchModel` is the central in-memory model. All geometry/constraint types are `std::variant` structs — no FreeCAD types
 6. **Compat Solver** — `CompatSolver.h/cpp`. Translates `SketchModel` → GCS parameters → solves → writes results back. Handles `ParameterMap` overrides
-7. **Document.xml Import** — `DocumentXml.h/cpp`. Custom XML parser (no external library). Extracts sketch objects, geometries, constraints, Placement, ExpressionEngine, VarSet
+7. **Document.xml Import + Inspect** — `DocumentXml.h/cpp`. Custom XML parser (no external library). `importSketchFromDocumentXml` extracts geometries, constraints, Placement, ExpressionEngine, VarSet for solving. `inspectDocumentXml` is a lightweight browse API that returns sketch/varSet metadata including geometry element types, construction flags, constraint kinds, and cross-references without running the solver
 8. **VarSet Expression Engine** — `VarSetExpressionEngine.cpp/h`. Lightweight FreeCAD expression subset: arithmetic, units, VarSet refs, math functions, pi/e, cycle detection
 9. **FCStd ZIP Extraction** — `ZipExtract.cpp` + `src/third_party/zlib/`. Custom ZIP parser + raw-DEFLATE via bundled zlib inflate
 10. **GCS Core** — `src/core/planegcs/`. DogLeg solver (`convergence=1e-10`, `maxIter=100`, `FullPivLU`). LGPL-2.1-or-later (derived from FreeCAD)
@@ -62,4 +62,6 @@ Standalone extraction of FreeCAD Sketcher's GCS constraint solver. 12 layers, to
 - **Import tolerance**: `DocumentXml` can return `ImportStatus::Partial` with `messages` + `skippedConstraints`; fatal VarSet issues use the dedicated unsupported-subset error path
 - **Flag preservation**: `originalId`, `construction`, `external`, `blocked` must survive round-trips through import → solve → export → C API
 - **Fixed geometry**: External and blocked geometry are solver-fixed references. Construction and external are excluded from BREP output
+- **Inspect ↔ Export alignment**: `InspectConstraintInfo::originalIndex` counts every `<Constrain/>` element in XML order (including inactive/virtual-space) and matches `ConstraintRef::originalIndex` from the solve→export path. Geometry elements from `inspectDocumentXml` and `exportSketchGeometry` share the same order and `originalId` — indices are 1:1
+- **Constraint cross-references**: `InspectGeometryElement::constraintIndices` lists all active non-virtual constraints that reference the geometry. `InspectConstraintInfo::referencedGeoIds` lists all geometry indices the constraint refers to (may contain duplicates for constraints like Coincident where first=second)
 - **Regression corpus**: `fcstdDoc/` is authoritative. Add new fixtures when fixing bugs or adding features

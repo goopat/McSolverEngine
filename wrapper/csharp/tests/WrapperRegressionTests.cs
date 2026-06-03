@@ -957,6 +957,68 @@ public class WrapperRegressionTests
     }
 
     [TestMethod]
+    public void InspectDocumentXml_ReturnsGeometryAndConstraints()
+    {
+        var result = McSolverEngineClient.InspectDocumentXml(PointwiseAngleDocumentXml);
+
+        Assert.AreEqual(0, result.Messages.Count, $"Expected no messages, got: {string.Join("; ", result.Messages)}");
+        Assert.AreEqual(1, result.Sketches.Count);
+        Assert.AreEqual(0, result.VarSets.Count);
+
+        var sketch = result.Sketches[0];
+        Assert.AreEqual("Sketch", sketch.ObjectName);
+        Assert.AreEqual(3, sketch.Geometries.Count);
+
+        var g0 = sketch.Geometries[0];
+        Assert.AreEqual(0, g0.Index);
+        Assert.AreEqual(1, g0.OriginalId);
+        Assert.AreEqual("Part::GeomLineSegment", g0.Type);
+        Assert.IsFalse(g0.Construction);
+        Assert.IsFalse(g0.External);
+        Assert.IsTrue(g0.ConstraintIndices.Count > 0, "Expected geometry[0] to have constraints.");
+
+        var g1 = sketch.Geometries[1];
+        Assert.AreEqual(1, g1.Index);
+        Assert.AreEqual(2, g1.OriginalId);
+        Assert.AreEqual("Part::GeomLineSegment", g1.Type);
+        Assert.IsFalse(g1.Construction);
+        Assert.IsFalse(g1.External);
+
+        var g2 = sketch.Geometries[2];
+        Assert.AreEqual(2, g2.Index);
+        Assert.AreEqual(3, g2.OriginalId);
+        Assert.AreEqual("Part::GeomPoint", g2.Type);
+        Assert.IsFalse(g2.Construction);
+        Assert.IsFalse(g2.External);
+        Assert.IsTrue(g2.ConstraintIndices.Count > 0, "Expected geometry[2] to have constraint references.");
+
+        Assert.AreEqual(8, sketch.Constraints.Count);
+        Assert.IsTrue(sketch.Constraints.Any(c => c.Kind == "Coincident"));
+        Assert.IsTrue(sketch.Constraints.Any(c => c.Kind == "Distance"));
+        Assert.IsTrue(sketch.Constraints.Any(c => c.Kind == "Angle"));
+        Assert.IsTrue(sketch.Constraints.Any(c => c.Kind == "Horizontal"));
+
+        var angleConstraint = sketch.Constraints.Single(c => c.Kind == "Angle");
+        Assert.IsTrue(angleConstraint.Driving);
+        Assert.AreEqual(0.7853981633974483, angleConstraint.Value, 1e-12);
+        Assert.AreEqual(3, angleConstraint.ReferencedGeoIds.Count);
+        Assert.AreEqual(0, angleConstraint.ReferencedGeoIds[0]);
+        Assert.AreEqual(1, angleConstraint.ReferencedGeoIds[1]);
+        Assert.AreEqual(2, angleConstraint.ReferencedGeoIds[2]);
+    }
+
+    [TestMethod]
+    public void InspectDocumentXml_InvalidXml_HasMessages()
+    {
+        var result = McSolverEngineClient.InspectDocumentXml("not valid xml");
+
+        Assert.AreEqual(1, result.Messages.Count);
+        StringAssert.Contains(result.Messages[0], "ObjectData");
+        Assert.AreEqual(0, result.Sketches.Count);
+        Assert.AreEqual(0, result.VarSets.Count);
+    }
+
+    [TestMethod]
     public void FCStdRegression_ForV1027_L1_50_SolveBRepMatchesReference()
     {
         Assert.IsTrue(File.Exists(_v1027FCStdPath), $"Missing {_v1027FCStdPath}");

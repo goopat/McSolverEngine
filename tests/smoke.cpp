@@ -1389,14 +1389,21 @@ int main()
                     <Float value="12.5"/>
                 </Property>
                 <Property name="Constraints" type="Sketcher::PropertyConstraintList">
-                    <ConstraintList count="0">
+                    <ConstraintList count="3">
+                        <Constrain Name="" Type="1" Value="1.0" First="0" FirstPos="0" Second="0" SecondPos="0" Third="-2000" ThirdPos="0" IsDriving="0" IsInVirtualSpace="0" IsActive="1"/>
+                        <Constrain Name="" Type="6" Value="100.0" First="0" FirstPos="0" Second="-2000" SecondPos="0" Third="-2000" ThirdPos="0" IsDriving="1" IsInVirtualSpace="0" IsActive="1"/>
+                        <Constrain Name="" Type="11" Value="25.0" First="1" FirstPos="0" Second="-2000" SecondPos="0" Third="-2000" ThirdPos="0" IsDriving="1" IsInVirtualSpace="0" IsActive="1"/>
                     </ConstraintList>
                 </Property>
                 <Property name="Geometry" type="Part::PropertyGeometryList">
-                    <GeometryList count="1">
+                    <GeometryList count="2">
                         <Geometry type="Part::GeomLineSegment" id="1" migrated="1">
                             <LineSegment StartX="0.0" StartY="0.0" StartZ="0.0" EndX="1.0" EndY="0.0" EndZ="0.0"/>
                             <Construction value="0"/>
+                        </Geometry>
+                        <Geometry type="Part::GeomCircle" id="2" migrated="1">
+                            <Circle CenterX="0.0" CenterY="0.0" CenterZ="0.0" Radius="10.0"/>
+                            <Construction value="1"/>
                         </Geometry>
                     </GeometryList>
                 </Property>
@@ -1456,6 +1463,72 @@ int main()
         || findScalarPropertyInfo(inspectedSketch.properties, "Constraints") != nullptr) {
         std::cerr << "Expected sketch inspection to ignore non-scalar properties.\n";
         return 1;
+    }
+
+    // ── New: geometry elements ──
+    if (inspectedSketch.geometries.size() != 2) {
+        std::cerr << "Expected sketch inspection to expose 2 geometry elements, got "
+                  << inspectedSketch.geometries.size() << ".\n";
+        return 1;
+    }
+    {
+        const auto& g0 = inspectedSketch.geometries[0];
+        if (g0.index != 0 || g0.originalId != 1 || g0.type != "Part::GeomLineSegment"
+            || g0.construction != false || g0.external != false) {
+            std::cerr << "Expected first geometry to be a non-construction LineSegment with id=1.\n";
+            return 1;
+        }
+        if (g0.constraintIndices.size() != 3 || g0.constraintIndices[0] != 0
+            || g0.constraintIndices[1] != 0 || g0.constraintIndices[2] != 1) {
+            std::cerr << "Expected first geometry to be referenced by constraints [0, 0, 1].\n";
+            return 1;
+        }
+    }
+    {
+        const auto& g1 = inspectedSketch.geometries[1];
+        if (g1.index != 1 || g1.originalId != 2 || g1.type != "Part::GeomCircle"
+            || g1.construction != true || g1.external != false) {
+            std::cerr << "Expected second geometry to be a construction Circle with id=2.\n";
+            return 1;
+        }
+        if (g1.constraintIndices.size() != 1 || g1.constraintIndices[0] != 2) {
+            std::cerr << "Expected second geometry to be referenced by constraint [2].\n";
+            return 1;
+        }
+    }
+
+    // ── New: constraints ──
+    if (inspectedSketch.constraints.size() != 3) {
+        std::cerr << "Expected sketch inspection to expose 3 constraints, got "
+                  << inspectedSketch.constraints.size() << ".\n";
+        return 1;
+    }
+    {
+        const auto& c0 = inspectedSketch.constraints[0];
+        if (c0.originalIndex != 0 || c0.type != 1 || c0.kind != "Coincident"
+            || c0.driving != false || c0.value != 1.0 || c0.referencedGeoIds.size() != 2
+            || c0.referencedGeoIds[0] != 0 || c0.referencedGeoIds[1] != 0) {
+            std::cerr << "Expected first constraint: Coincident (type=1), non-driving, references [0,0].\n";
+            return 1;
+        }
+    }
+    {
+        const auto& c1 = inspectedSketch.constraints[1];
+        if (c1.originalIndex != 1 || c1.type != 6 || c1.kind != "Distance"
+            || c1.driving != true || c1.value != 100.0 || c1.referencedGeoIds.size() != 1
+            || c1.referencedGeoIds[0] != 0) {
+            std::cerr << "Expected second constraint: Distance (type=6), driving, value=100, references [0].\n";
+            return 1;
+        }
+    }
+    {
+        const auto& c2 = inspectedSketch.constraints[2];
+        if (c2.originalIndex != 2 || c2.type != 11 || c2.kind != "Radius"
+            || c2.driving != true || c2.value != 25.0 || c2.referencedGeoIds.size() != 1
+            || c2.referencedGeoIds[0] != 1) {
+            std::cerr << "Expected third constraint: Radius (type=11), driving, value=25, references [1].\n";
+            return 1;
+        }
     }
 
     const auto& inspectedVarSet = inspectedDocument.varSets.front();

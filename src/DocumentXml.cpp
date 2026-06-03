@@ -1536,6 +1536,67 @@ void applyConstraintExpressionBindings(
     return true;
 }
 
+[[nodiscard]] Compat::ConstraintKind constraintKindFromRawType(int type)
+{
+    switch (type) {
+        case 1:  return Compat::ConstraintKind::Coincident;
+        case 2:  return Compat::ConstraintKind::Horizontal;
+        case 3:  return Compat::ConstraintKind::Vertical;
+        case 4:  return Compat::ConstraintKind::Parallel;
+        case 5:  return Compat::ConstraintKind::Tangent;
+        case 6:  return Compat::ConstraintKind::Distance;
+        case 7:  return Compat::ConstraintKind::DistanceX;
+        case 8:  return Compat::ConstraintKind::DistanceY;
+        case 9:  return Compat::ConstraintKind::Angle;
+        case 10: return Compat::ConstraintKind::Perpendicular;
+        case 11: return Compat::ConstraintKind::Radius;
+        case 12: return Compat::ConstraintKind::Equal;
+        case 13: return Compat::ConstraintKind::PointOnObject;
+        case 14: return Compat::ConstraintKind::Symmetric;
+        case 15: return Compat::ConstraintKind::InternalAlignment;
+        case 16: return Compat::ConstraintKind::SnellsLaw;
+        case 17: return Compat::ConstraintKind::Block;
+        case 18: return Compat::ConstraintKind::Diameter;
+        case 19: return Compat::ConstraintKind::Weight;
+        default: return Compat::ConstraintKind::Coincident;
+    }
+}
+
+[[nodiscard]] std::string constraintKindName(int type)
+{
+    return std::string(Compat::toString(constraintKindFromRawType(type)));
+}
+
+[[nodiscard]] std::optional<InspectGeometryElement> parseInspectGeometryElement(
+    std::string_view geometryBlock,
+    int index,
+    bool external
+)
+{
+    const auto geometryHeaderEnd = geometryBlock.find('>');
+    if (geometryHeaderEnd == std::string_view::npos) {
+        return std::nullopt;
+    }
+
+    const auto header = geometryBlock.substr(0, geometryHeaderEnd + 1);
+    const auto geometryType = extractAttribute(header, "type");
+    if (!geometryType) {
+        return std::nullopt;
+    }
+
+    InspectGeometryElement element;
+    element.index = index;
+    element.type = std::string(*geometryType);
+    element.construction = parseConstruction(geometryBlock);
+    element.external = external;
+
+    if (const auto rawId = extractIntAttribute(header, "id")) {
+        element.originalId = *rawId;
+    }
+
+    return element;
+}
+
 }  // namespace
 
 ImportResult importSketchFromDocumentXml(std::string_view xml, std::string_view sketchName)
@@ -1750,11 +1811,135 @@ InspectResult inspectDocumentXml(std::string_view xml)
 
     for (const auto& object : objectBlocks) {
         if (isSketchLikeObject(object)) {
-            result.sketches.push_back(SketchInfo {
+            SketchInfo sketchInfo {
                 .label = extractObjectLabel(object),
                 .objectName = object.name,
                 .properties = collectScalarPropertyInfos(object.content),
-            });
+            };
+
+            // ── Parse internal geometry ──
+            int geometryIndex = 0;
+            if (const auto geometryProperty = findPropertyBlock(object.content, "Geometry")) {
+                auto cursor = std::size_t {0};
+                while (true) {
+                    const auto geometryStart = geometryProperty->find("<Geometry ", cursor);
+                    if (geometryStart == std::string_view::npos) {
+                        break;
+                    }
+                    const auto geometryHeaderEnd = geometryProperty->find('>', geometryStart);
+                    const auto geometryEnd = geometryProperty->find("</Geometry>", geometryHeaderEnd);
+                    if (geometryHeaderEnd == std::string_view::npos || geometryEnd == std::string_view::npos) {
+                        break;
+                    }
+                    const auto geometryBlock = geometryProperty->substr(
+                        geometryStart,
+                        geometryEnd + std::string_view("</Geometry>").size() - geometryStart
+                    );
+
+                    if (auto element = parseInspectGeometryElement(geometryBlock, geometryIndex, false)) {
+                        sketchInfo.geometries.push_back(std::move(*element));
+                        ++geometryIndex;
+                    }
+
+                    cursor = geometryEnd + std::string_view("</Geometry>").size();
+                }
+            }
+
+            const int internalCount = geometryIndex;
+
+            // ── Parse external geometry ──
+            if (const auto externalProperty = findPropertyBlock(object.content, "ExternalGeo")) {
+                auto cursor = std::size_t {0};
+                while (true) {
+                    const auto geometryStart = externalProperty->find("<Geometry ", cursor);
+                    if (geometryStart == std::string_view::npos) {
+                        break;
+                    }
+                    const auto geometryHeaderEnd = externalProperty->find('>', geometryStart);
+                    const auto geometryEnd = externalProperty->find("</Geometry>", geometryHeaderEnd);
+                    if (geometryHeaderEnd == std::string_view::npos || geometryEnd == std::string_view::npos) {
+                        break;
+                    }
+                    const auto geometryBlock = externalProperty->substr(
+                        geometryStart,
+                        geometryEnd + std::string_view("</Geometry>").size() - geometryStart
+                    );
+
+                    if (auto element = parseInspectGeometryElement(geometryBlock, geometryIndex, true)) {
+                        sketchInfo.geometries.push_back(std::move(*element));
+                        ++geometryIndex;
+                    }
+
+                    cursor = geometryEnd + std::string_view("</Geometry>").size();
+                }
+            }
+
+            // ── Map raw constraint geo id to unified index ──
+            auto mapGeoId = [internalCount](int rawGeoId) -> int {
+                if (rawGeoId == GeoUndef) {
+                    return -1;
+                }
+                if (rawGeoId < 0) {
+                    return internalCount + (-rawGeoId) - 1;
+                }
+                return rawGeoId;
+            };
+
+            // ── Parse constraints ──
+            int constraintIndex = 0;
+            std::unordered_map<int, std::vector<int>> geoConstraints;
+            if (const auto constraintsProperty = findPropertyBlock(object.content, "Constraints")) {
+                auto cursor = std::size_t {0};
+                while (true) {
+                    const auto constraintStart = constraintsProperty->find("<Constrain ", cursor);
+                    if (constraintStart == std::string_view::npos) {
+                        break;
+                    }
+                    const auto constraintEnd = constraintsProperty->find("/>", constraintStart);
+                    if (constraintEnd == std::string_view::npos) {
+                        break;
+                    }
+
+                    const auto constraintElement =
+                        constraintsProperty->substr(constraintStart, constraintEnd + 2 - constraintStart);
+                    const auto rawConstraint = parseRawConstraint(constraintElement);
+                    if (!rawConstraint) {
+                        break;
+                    }
+
+                    if (rawConstraint->isActive && !rawConstraint->isVirtualSpace) {
+                        InspectConstraintInfo info;
+                        info.originalIndex = constraintIndex;
+                        info.type = rawConstraint->type;
+                        info.kind = constraintKindName(rawConstraint->type);
+                        info.driving = rawConstraint->isDriving;
+                        info.value = rawConstraint->value;
+
+                        for (int geoId : {rawConstraint->first, rawConstraint->second, rawConstraint->third}) {
+                            const int mapped = mapGeoId(geoId);
+                            if (mapped >= 0) {
+                                info.referencedGeoIds.push_back(mapped);
+                                geoConstraints[mapped].push_back(constraintIndex);
+                            }
+                        }
+
+                        sketchInfo.constraints.push_back(std::move(info));
+                    }
+
+                    ++constraintIndex;
+                    cursor = constraintEnd + 2;
+                }
+            }
+
+            // ── Build cross-references ──
+            for (auto& geo : sketchInfo.geometries) {
+                auto it = geoConstraints.find(geo.index);
+                if (it != geoConstraints.end()) {
+                    geo.constraintIndices = std::move(it->second);
+                }
+            }
+
+            result.sketches.push_back(std::move(sketchInfo));
             continue;
         }
 
