@@ -141,11 +141,35 @@ typedef struct McSolverEngineScalarPropertyInfo {
     const char* propertyXmlUtf8;
 } McSolverEngineScalarPropertyInfo;
 
+typedef struct McSolverEngineInspectConstraint {
+    int originalIndex;               // XML 位置（计入每个 <Constrain/> 元素，含 inactive/virtual-space）
+    int type;                        // 原始约束类型号（1=Coincident, 2=Horizontal, …）
+    const char* kindUtf8;            // 可读名称（"Coincident", "Distance", …）
+    int driving;                     // 1=驱动, 0=非驱动（参考）
+    double value;                    // 约束值
+    int referencedGeoIdCount;
+    const int* referencedGeoIds;     // 此约束引用的图元索引
+} McSolverEngineInspectConstraint;
+
+typedef struct McSolverEngineInspectGeometryElement {
+    int index;                       // 草图中图元位置（internal 在前，external 在后）
+    int originalId;                  // XML geometry id 属性
+    const char* typeUtf8;            // 图元类型字符串（"Part::GeomLineSegment", …）
+    int construction;                // 1=辅助线
+    int external;                    // 1=外部引用几何
+    int constraintCount;
+    const int* constraintIndices;    // 引用此图元的约束 originalIndex 列表
+} McSolverEngineInspectGeometryElement;
+
 typedef struct McSolverEngineSketchInfo {
     const char* labelUtf8;
     const char* objectNameUtf8;
     int propertyCount;
     const McSolverEngineScalarPropertyInfo* properties;
+    int geometryCount;
+    const McSolverEngineInspectGeometryElement* geometries;
+    int constraintCount;
+    const McSolverEngineInspectConstraint* constraints;
 } McSolverEngineSketchInfo;
 
 typedef struct McSolverEngineVarSetParameterInfo {
@@ -177,7 +201,10 @@ typedef struct McSolverEngineDocumentInfo {
 
 - `InspectDocumentXml` 只解析 `documentXmlUtf8`，**不做参数覆盖、不做表达式求值、不做约束求解**
 - `SketchInfo.properties` 仅返回简单标量 Property：`Float / Integer / Quantity / String / Bool`
-- `Geometry` / `Constraints` / `ExpressionEngine` / `Placement` / `Shape` 等非标量 Property 会被忽略
+- `Geometry` / `Constraints` / `ExpressionEngine` / `Placement` / `Shape` 等非标量 Property 不会出现在 `properties` 中——几何元素和约束改为通过 `geometries` 和 `constraints` 导出
+- `geometries` 按 XML 顺序列出每个 `<Geometry>` 元素：先内部几何（`Geometry` 属性），后外部几何（`ExternalGeo` 属性）。元素顺序和 `originalId` 与 solve→export 的 `GeometryRecord` 列表一一对应
+- `constraints` 列出所有 active 且非虚拟空间的 `<Constrain/>` 元素；`originalIndex` 计入 XML 中每个 `<Constrain/>` 元素（含 inactive/virtual-space），与 solve→export 路径的 `ConstraintRef::originalIndex` 一致
+- `constraintIndices` / `referencedGeoIds` 提供图元与约束之间的双向交叉引用
 - `VarSetInfo.parameters` 返回所有标量参数，包含 `Label` / `Label2` / `Visibility`
 - `expressionUtf8` 为 VarSet `ExpressionEngine` 中同名路径的原始表达式；没有表达式时返回空串
 - `propertyXmlUtf8` 保留原始 `<Property>...</Property>` 片段，便于后续扩展
@@ -408,12 +435,15 @@ McSolverEngineResultCode McSolverEngine_InspectDocumentXml(
 );
 ```
 
-只解析 `Document.xml` 对象元数据，返回全部 Sketch 信息与全部 VarSet 信息。
+解析 `Document.xml`，返回全部 Sketch/VarSet 元数据，包括图元类型、construction 标志、约束类型以及双向交叉引用——无需运行求解器。
 
 - 输入仅支持 `documentXmlUtf8`
 - 不做参数覆盖
 - 不做 Sketch / VarSet 表达式求值
 - 不做约束求解
+- 每个 Sketch 返回：标量属性、图元列表（type, originalId, construction/external 标志, 约束交叉引用）、约束列表（originalIndex, 原始类型号, kind 名称, driving 标志, value, 引用图元索引）
+- 图元顺序与 solve→export 的 `GeometryRecord` 列表一一对应
+- `InspectConstraint::originalIndex` 与 solve→export 的 `ConstraintRef::originalIndex` 一致（计入 XML 中每个 `<Constrain/>`）
 - 成功时返回 `MCSOLVERENGINE_RESULT_SUCCESS`
 - 解析失败时返回 `MCSOLVERENGINE_RESULT_IMPORT_FAILED`，并尽量在 `result->messages` 中给出诊断信息
 - 内存分配失败时返回 `MCSOLVERENGINE_RESULT_OUT_OF_MEMORY`

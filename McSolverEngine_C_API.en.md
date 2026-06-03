@@ -135,11 +135,35 @@ typedef struct McSolverEngineScalarPropertyInfo {
     const char* propertyXmlUtf8;
 } McSolverEngineScalarPropertyInfo;
 
+typedef struct McSolverEngineInspectConstraint {
+    int originalIndex;               // XML position counting every <Constrain/> element
+    int type;                        // raw constraint type number (1=Coincident, 2=Horizontal, …)
+    const char* kindUtf8;            // human-readable kind name ("Coincident", "Distance", …)
+    int driving;                     // 1 if driving, 0 if non-driving (reference)
+    double value;                    // constraint value
+    int referencedGeoIdCount;
+    const int* referencedGeoIds;     // geometry indices this constraint references
+} McSolverEngineInspectConstraint;
+
+typedef struct McSolverEngineInspectGeometryElement {
+    int index;                       // position in sketch geometry list (internal first, then external)
+    int originalId;                  // XML geometry id attribute
+    const char* typeUtf8;            // geometry type string ("Part::GeomLineSegment", …)
+    int construction;                // 1 if construction geometry
+    int external;                    // 1 if external reference geometry
+    int constraintCount;
+    const int* constraintIndices;    // indices (originalIndex) of constraints referencing this geometry
+} McSolverEngineInspectGeometryElement;
+
 typedef struct McSolverEngineSketchInfo {
     const char* labelUtf8;
     const char* objectNameUtf8;
     int propertyCount;
     const McSolverEngineScalarPropertyInfo* properties;
+    int geometryCount;
+    const McSolverEngineInspectGeometryElement* geometries;
+    int constraintCount;
+    const McSolverEngineInspectConstraint* constraints;
 } McSolverEngineSketchInfo;
 
 typedef struct McSolverEngineVarSetParameterInfo {
@@ -171,7 +195,10 @@ Rules:
 
 - `InspectDocumentXml` only parses `documentXmlUtf8`; it does **not** apply parameter overrides, evaluate expressions, or solve constraints
 - `SketchInfo.properties` only includes scalar properties: `Float / Integer / Quantity / String / Bool`
-- Non-scalar properties such as `Geometry`, `Constraints`, `ExpressionEngine`, `Placement`, and `Shape` are ignored
+- Non-scalar properties such as `Geometry`, `Constraints`, `ExpressionEngine`, `Placement`, and `Shape` are **not** listed in `properties` — geometry elements and constraints are instead exposed via `geometries` and `constraints`
+- `geometries` lists every `<Geometry>` element in XML order: internal geometry first (from `Geometry` property), then external geometry (from `ExternalGeo` property). Element order and `originalId` match the solve→export `GeometryRecord` list 1:1
+- `constraints` lists every active, non-virtual-space `<Constrain/>` element; `originalIndex` counts all `<Constrain/>` elements in XML order (including inactive/virtual-space) and matches `ConstraintRef::originalIndex` from the solve→export path
+- `constraintIndices` / `referencedGeoIds` provide bidirectional cross-references between geometries and constraints
 - `VarSetInfo.parameters` includes all scalar parameters, including `Label`, `Label2`, and `Visibility`
 - `expressionUtf8` carries the raw VarSet `ExpressionEngine` expression for the same path; it is an empty string when absent
 - `propertyXmlUtf8` preserves the original `<Property>...</Property>` snippet for forward compatibility
@@ -402,14 +429,17 @@ McSolverEngineResultCode McSolverEngine_InspectDocumentXml(
 );
 ```
 
-Parses `Document.xml` object metadata only and returns all Sketch summaries plus all VarSet summaries.
+Parses `Document.xml` and returns all Sketch/VarSet metadata including geometry element types, construction flags, constraint kinds, and bidirectional cross-references — without running the solver.
 
 - Input is `documentXmlUtf8` only
 - No parameter overrides
 - No Sketch / VarSet expression evaluation
 - No constraint solving
+- Each sketch exposes: scalar properties, geometry elements (type, originalId, construction/external flags, constraint cross-references), and constraints (originalIndex, raw type, kind name, driving flag, value, referenced geometry indices)
+- Geometry element order matches the solve→export `GeometryRecord` list 1:1
+- `InspectConstraint::originalIndex` matches `ConstraintRef::originalIndex` from solve→export (counts every `<Constrain/>` in XML order)
 - Returns `MCSOLVERENGINE_RESULT_SUCCESS` on success
-- Returns `MCSOLVERENGINE_RESULT_IMPORT_FAILED` on parse failure and, when possible, populates `result->messages` with diagnostics
+- On parse failure returns `MCSOLVERENGINE_RESULT_IMPORT_FAILED`; `result` may still carry partial metadata with `messages` populated
 - Returns `MCSOLVERENGINE_RESULT_OUT_OF_MEMORY` on allocation failure
 
 ---
