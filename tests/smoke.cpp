@@ -3076,6 +3076,21 @@ int main()
         return 1;
     }
 
+    const std::string sampleV1028XmlPath = fcstdDocDir + "V102.8.xml";
+    const std::string sampleV1028ExpectedPath = fcstdDocDir + "V102.8.brp";
+    const std::string sampleV1028ActualPath = fcstdDocDir + "V102.8.solver.brp";
+    if (!verifySampleRegression(
+            sampleV1028XmlPath,
+            "Sketch",
+            sampleV1028ExpectedPath,
+            sampleV1028ActualPath,
+            "fcstdDoc/V102.8.xml / Sketch",
+            true,
+            false,
+            noParameters)) {
+        return 1;
+    }
+
     const std::string sampleV1119XmlPath = fcstdDocDir + "V111.9.xml";
     const std::string sampleV1119_500ExpectedPath = fcstdDocDir + "V111.9.500.brp";
     const std::string sampleV1119_500ActualPath = fcstdDocDir + "V111.9.500.solver.brp";

@@ -1400,7 +1400,7 @@ int main()
         const std::string docDir = std::string(MCSOLVERENGINE_SOURCE_DIR) + "/fcstdDoc";
         const char* names[] = {
             "1", "2", "3",
-            "V102.1", "V102.2", "V102.4", "V102.4.plus1", "V102.5", "V102.6"
+            "V102.1", "V102.2", "V102.4", "V102.4.plus1", "V102.5", "V102.6", "V102.8"
         };
         constexpr int count = sizeof(names) / sizeof(names[0]);
 

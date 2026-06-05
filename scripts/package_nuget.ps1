@@ -4,7 +4,8 @@ param(
     [string]$Variant,
 
     [string]$Version = "0.1.0",
-    [string]$Configuration = "Release"
+    [string]$Configuration = "Release",
+    [switch]$IncludeDotNet
 )
 
 $ErrorActionPreference = "Stop"
@@ -21,10 +22,11 @@ if (-not $nugetExe) {
 }
 if (-not $nugetExe) { throw "nuget.exe not found on PATH or in tools\." }
 
-$packageId         = "McSolverEngine_$Variant"
+$packageId         = if ($IncludeDotNet) { "McSolverEngine_${Variant}_Net" } else { "McSolverEngine_$Variant" }
 $buildWithOcct     = ($Variant -eq "UseOcct")
 $occtDescription   = if ($buildWithOcct) { "BREP export enabled (requires OpenCASCADE)." }
                                           else { "BREP export returns OpenCascadeUnavailable." }
+$dotnetDescription = if ($IncludeDotNet) { "Includes .NET wrapper (net48 / net8.0)." } else { "" }
 
 Write-Host "============================================" -ForegroundColor Cyan
 Write-Host "Building $packageId v$Version ($Configuration)" -ForegroundColor Cyan
@@ -59,6 +61,18 @@ $staticLib = Join-Path $outDir "McSolverEngineCore.lib"
     }
 }
 
+# --- Collect .NET outputs if needed ---
+if ($IncludeDotNet) {
+    $dotnetWrapperNet48 = Join-Path $repoRoot "wrapper\csharp\bin\$Configuration\net48\McSolverEngine.Wrapper.dll"
+    $dotnetWrapperNet8  = Join-Path $repoRoot "wrapper\csharp\bin\$Configuration\net8.0\McSolverEngine.Wrapper.dll"
+
+    @($dotnetWrapperNet48, $dotnetWrapperNet8) | ForEach-Object {
+        if (-not (Test-Path $_)) {
+            throw "Missing .NET wrapper output: $_"
+        }
+    }
+}
+
 # --- Create staging layout ---
 $stageDir = Join-Path $buildDir "stage"
 Remove-Item -Recurse -Force $stageDir -ErrorAction SilentlyContinue
@@ -69,8 +83,13 @@ $stageRuntime = Join-Path $stageDir "runtimes\win-x64\native"
 $stagePython  = Join-Path $stageDir "runtimes\python\mcsolverengine_py"
 $stagePythonTests = Join-Path $stageDir "runtimes\python\tests"
 $stageTargets = Join-Path $stageDir "build\native"
+$stageBuildTargets = Join-Path $stageDir "build"
 
-New-Item -ItemType Directory -Force -Path $stageInclude, $stageLib, $stageRuntime, $stagePython, $stagePythonTests, $stageTargets | Out-Null
+$stageDirs = @($stageInclude, $stageLib, $stageRuntime, $stagePython, $stagePythonTests, $stageTargets)
+if ($IncludeDotNet) {
+    $stageDirs += $stageBuildTargets
+}
+New-Item -ItemType Directory -Force -Path $stageDirs | Out-Null
 
 Copy-Item "$headersDir\*.h"  $stageInclude
 Copy-Item $staticLib         $stageLib
@@ -95,8 +114,44 @@ if (Test-Path $pythonTests) {
     }
 }
 
+# --- .NET wrapper files ---
+if ($IncludeDotNet) {
+    $stageNet48 = Join-Path $stageDir "lib\net48"
+    $stageNet8  = Join-Path $stageDir "lib\net8.0"
+    New-Item -ItemType Directory -Force -Path $stageNet48, $stageNet8 | Out-Null
+    Copy-Item $dotnetWrapperNet48 $stageNet48
+    Copy-Item $dotnetWrapperNet8  $stageNet8
+
+    # For .NET projects using PackageReference, targets under build/ are auto-imported.
+    # Use the .NET-specific targets file (no C++ compilation settings).
+    Copy-Item "$PSScriptRoot\McSolverEngine_Net.targets" (Join-Path $stageBuildTargets "$packageId.targets")
+}
+
 # --- Generate nuspec ---
 $nuspecPath = Join-Path $stageDir "$packageId.nuspec"
+
+$dotnetFiles = ""
+$dotnetDeps  = ""
+if ($IncludeDotNet) {
+    $dotnetFiles = @"
+    <file src="build\$packageId.targets"                   target="build\$packageId.targets" />
+    <file src="lib\net48\*.dll"                              target="lib\net48\" />
+    <file src="lib\net8.0\*.dll"                             target="lib\net8.0\" />
+"@
+    $dotnetDeps = @"
+    <dependencies>
+      <group targetFramework="native0.0" />
+      <group targetFramework="net48" />
+      <group targetFramework="net8.0" />
+    </dependencies>
+"@
+} else {
+    $dotnetDeps = @"
+    <dependencies>
+      <group targetFramework="native0.0" />
+    </dependencies>
+"@
+}
 
 $nuspec = @"
 <?xml version="1.0" encoding="utf-8"?>
@@ -110,6 +165,7 @@ $nuspec = @"
     <description>
       Standalone extraction of FreeCAD Sketcher GCS constraint solver for Windows x64.
       $occtDescription
+      $dotnetDescription
 
       Provides C ABI (mcsolverengine_native.dll) and C++ static library (McSolverEngineCore.lib).
       Build variant: $Variant.
@@ -117,9 +173,7 @@ $nuspec = @"
     <license type="expression">LGPL-2.1-or-later</license>
     <projectUrl>https://github.com/goopat/McSolverEngine</projectUrl>
     <tags>native C++ CAD constraint-solver geometric-solver FreeCAD sketcher BREP OCCT</tags>
-    <dependencies>
-      <group targetFramework="native0.0" />
-    </dependencies>
+    $dotnetDeps
   </metadata>
   <files>
     <file src="License.md"                                target="License.md" />
@@ -127,6 +181,7 @@ $nuspec = @"
     <file src="lib\native\x64\Release\*.lib"              target="lib\native\x64\Release\" />
     <file src="runtimes\win-x64\native\*.dll"             target="runtimes\win-x64\native\" />
     <file src="build\native\$packageId.targets"             target="build\native\$packageId.targets" />
+    $dotnetFiles
     <file src="runtimes\python\mcsolverengine_py\*.py"     target="runtimes\python\mcsolverengine_py\" />
     <file src="runtimes\python\tests\*.py"                 target="runtimes\python\tests\" />
   </files>
