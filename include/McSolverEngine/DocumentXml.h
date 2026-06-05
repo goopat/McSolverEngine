@@ -22,6 +22,8 @@ enum class ImportErrorCode
 {
     None = 0,
     VarSetExpressionUnsupportedSubset = 1001,
+    VarSetParameterValidationFailed = 1002,
+    SketchNotFound = 1003,
 };
 
 enum class InspectStatus

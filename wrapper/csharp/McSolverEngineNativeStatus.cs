@@ -11,7 +11,9 @@ public enum McSolverEngineNativeStatus
     BRepExportFailed = 6,
     OpenCascadeUnavailable = 7,
     OutOfMemory = 8,
-    VarSetExpressionUnsupportedSubset = 9
+    VarSetExpressionUnsupportedSubset = 9,
+    VarSetParameterValidationFailed = 10,
+    SketchNotFound = 11
 }
 
 public enum McSolverEngineFCStdStatus

@@ -118,6 +118,10 @@ using McSolverEngine::Compat::Point2;
             return MCSOLVERENGINE_RESULT_IMPORT_FAILED;
         case McSolverEngine::DocumentXml::ImportErrorCode::VarSetExpressionUnsupportedSubset:
             return MCSOLVERENGINE_RESULT_VARSET_EXPRESSION_UNSUPPORTED_SUBSET;
+        case McSolverEngine::DocumentXml::ImportErrorCode::VarSetParameterValidationFailed:
+            return MCSOLVERENGINE_RESULT_VARSET_PARAMETER_VALIDATION_FAILED;
+        case McSolverEngine::DocumentXml::ImportErrorCode::SketchNotFound:
+            return MCSOLVERENGINE_RESULT_SKETCH_NOT_FOUND;
     }
     return MCSOLVERENGINE_RESULT_IMPORT_FAILED;
 }

@@ -839,7 +839,7 @@ public class WrapperRegressionTests
             new Dictionary<string, string> { ["Parameters.Angle"] = "45 deg" }
         );
 
-        Assert.AreEqual(McSolverEngineNativeStatus.ImportFailed, result.NativeStatus);
+        Assert.AreEqual(McSolverEngineNativeStatus.VarSetParameterValidationFailed, result.NativeStatus);
         Assert.AreEqual("Failed", result.ImportStatus);
         Assert.IsTrue(result.Messages.Any(message => message.Contains("must be a numeric value")));
     }

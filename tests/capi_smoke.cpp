@@ -858,8 +858,8 @@ int main()
             &invalidAngleGeometry
         );
         if (!expect(
-                invalidAngleGeometryCode == MCSOLVERENGINE_RESULT_IMPORT_FAILED,
-                "Expected non-numeric API parameter values to fail C API import."
+                invalidAngleGeometryCode == MCSOLVERENGINE_RESULT_VARSET_PARAMETER_VALIDATION_FAILED,
+                "Expected non-numeric API parameter values to return VARSET_PARAMETER_VALIDATION_FAILED."
             )) {
             return EXIT_FAILURE;
         }
@@ -1283,8 +1283,8 @@ int main()
         const auto code =
             McSolverEngine_SolveToGeometry(v1024Xml.c_str(), "NonExistentSketch", &result);
         if (!expect(
-                code == MCSOLVERENGINE_RESULT_IMPORT_FAILED,
-                "Expected non-existent sketch name to fail with IMPORT_FAILED."
+                code == MCSOLVERENGINE_RESULT_SKETCH_NOT_FOUND,
+                "Expected non-existent sketch name to fail with SKETCH_NOT_FOUND."
             )) {
             McSolverEngine_FreeGeometryResult(result);
             return EXIT_FAILURE;
@@ -1322,8 +1322,8 @@ int main()
         const auto code = McSolverEngine_SolveToGeometryWithParameters(
             v1024Xml.c_str(), "Sketch", keys, values, 1, &result);
         if (!expect(
-                code == MCSOLVERENGINE_RESULT_IMPORT_FAILED,
-                "Expected non-existent parameter key to fail with IMPORT_FAILED."
+                code == MCSOLVERENGINE_RESULT_VARSET_PARAMETER_VALIDATION_FAILED,
+                "Expected non-existent parameter key to fail with VARSET_PARAMETER_VALIDATION_FAILED."
             )) {
             McSolverEngine_FreeGeometryResult(result);
             return EXIT_FAILURE;

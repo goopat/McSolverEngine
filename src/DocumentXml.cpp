@@ -1622,6 +1622,7 @@ ImportResult importSketchFromDocumentXml(
             &invalidParameterKey,
             &parameterErrorKind)) {
         result.status = ImportStatus::Failed;
+        result.errorCode = ImportErrorCode::VarSetParameterValidationFailed;
         if (parameterErrorKind == McSolverEngine::Detail::ApiParameterParseErrorKind::InvalidKeyFormat) {
             result.messages.push_back(
                 "Parameter '" + invalidParameterKey
@@ -1642,6 +1643,11 @@ ImportResult importSketchFromDocumentXml(
     const auto objectBlocks = collectObjectDataBlocks(xml, objectTypes);
     const auto object = findSketchObjectBlock(objectBlocks, sketchName);
     if (!object) {
+        // Only emit SketchNotFound when the XML is structurally valid
+        // (contains <ObjectData>) but the requested sketch is missing.
+        if (xml.find("<ObjectData") != std::string_view::npos) {
+            result.errorCode = ImportErrorCode::SketchNotFound;
+        }
         result.messages.push_back(
             sketchName.empty() ? "No sketch-like object was found in Document.xml."
                                : "Requested sketch object was not found in Document.xml."
@@ -1663,8 +1669,12 @@ ImportResult importSketchFromDocumentXml(
     auto varSetCatalog = collectExpressionCatalog(objectBlocks);
     std::string error;
 
-    if (!VarSetExpressions::applyApiParametersToVarSets(varSetCatalog, parsedParameters, result.messages)
-        || !VarSetExpressions::evaluateExpressionProperties(varSetCatalog, result)
+    if (!VarSetExpressions::applyApiParametersToVarSets(varSetCatalog, parsedParameters, result.messages)) {
+        result.status = ImportStatus::Failed;
+        result.errorCode = ImportErrorCode::VarSetParameterValidationFailed;
+        return result;
+    }
+    if (!VarSetExpressions::evaluateExpressionProperties(varSetCatalog, result)
         || !VarSetExpressions::collectVarSetProperties(varSetCatalog, result)) {
         result.status = ImportStatus::Failed;
         return result;

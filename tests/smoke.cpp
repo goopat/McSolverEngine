@@ -1283,6 +1283,11 @@ int main()
         std::cerr << "Expected non-numeric API angle parameter input to fail import.\n";
         return 1;
     }
+    if (invalidAngleImport.errorCode
+        != McSolverEngine::DocumentXml::ImportErrorCode::VarSetParameterValidationFailed) {
+        std::cerr << "Expected non-numeric API angle parameter input to expose VarSetParameterValidationFailed error code.\n";
+        return 1;
+    }
 
     const auto makeSolveTimeAngleModel = [] {
         McSolverEngine::Compat::SketchModel model;
@@ -1862,6 +1867,11 @@ int main()
         std::cerr << "Expected unknown VarSet parameter override to fail import.\n";
         return 1;
     }
+    if (importedUnknownOverride.errorCode
+        != McSolverEngine::DocumentXml::ImportErrorCode::VarSetParameterValidationFailed) {
+        std::cerr << "Expected unknown VarSet parameter override to expose VarSetParameterValidationFailed error code.\n";
+        return 1;
+    }
     {
         bool sawOverrideMessage = false;
         for (const auto& message : importedUnknownOverride.messages) {
@@ -1885,6 +1895,11 @@ int main()
     if (importedBareOverride.imported()
         || importedBareOverride.status != McSolverEngine::DocumentXml::ImportStatus::Failed) {
         std::cerr << "Expected bare VarSet parameter override key to fail import.\n";
+        return 1;
+    }
+    if (importedBareOverride.errorCode
+        != McSolverEngine::DocumentXml::ImportErrorCode::VarSetParameterValidationFailed) {
+        std::cerr << "Expected bare VarSet parameter override key to expose VarSetParameterValidationFailed error code.\n";
         return 1;
     }
     {
