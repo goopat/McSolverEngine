@@ -534,6 +534,7 @@ public class WrapperRegressionTests
     [TestMethod]
     public void BRepResponse_ExposesEvaluatedVarSetProperties()
     {
+        AssumeOcctAvailable();
         var result = McSolverEngineClient.SolveBRepFromDocumentXml(EvaluatedVarSetPropertiesDocumentXml, "Sketch");
 
         Assert.AreEqual(McSolverEngineNativeStatus.Success, result.NativeStatus);
