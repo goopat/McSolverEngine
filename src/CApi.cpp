@@ -1078,8 +1078,12 @@ template<typename ResultT, typename ImportResultT, typename SolveResultT>
     return copyConstraintRefs(source.constraints, target);
 }
 
-template<typename ImportFn>
-McSolverEngineResultCode runStructuredGeometryPipeline(ImportFn&& importFn, McSolverEngineGeometryResult** result)
+template<typename ImportFn, typename SolveFn>
+McSolverEngineResultCode runStructuredGeometryPipeline(
+    ImportFn&& importFn,
+    SolveFn&& solveFn,
+    McSolverEngineGeometryResult** result
+)
 {
     resetOutput(result);
     auto imported = importFn();
@@ -1109,7 +1113,7 @@ McSolverEngineResultCode runStructuredGeometryPipeline(ImportFn&& importFn, McSo
         return toCApiImportFailureCode(imported.errorCode);
     }
 
-    const auto solveResult = McSolverEngine::Compat::solveSketch(imported.model);
+    const auto solveResult = solveFn(imported.model);
     nativeResult->placement = toCApiPlacement(imported.model.placement());
     if (!solveResult.solved()) {
         if (!fillSolveMetadata(*nativeResult, imported, &solveResult, imported.messages, "Geometry", "Skipped")) {
@@ -1174,8 +1178,12 @@ McSolverEngineResultCode runStructuredGeometryPipeline(ImportFn&& importFn, McSo
     return MCSOLVERENGINE_RESULT_SUCCESS;
 }
 
-template<typename ImportFn>
-McSolverEngineResultCode runBRepPipeline(ImportFn&& importFn, McSolverEngineBRepResult** result)
+template<typename ImportFn, typename SolveFn>
+McSolverEngineResultCode runBRepPipeline(
+    ImportFn&& importFn,
+    SolveFn&& solveFn,
+    McSolverEngineBRepResult** result
+)
 {
     resetOutput(result);
     auto imported = importFn();
@@ -1199,7 +1207,7 @@ McSolverEngineResultCode runBRepPipeline(ImportFn&& importFn, McSolverEngineBRep
         return toCApiImportFailureCode(imported.errorCode);
     }
 
-    const auto solveResult = McSolverEngine::Compat::solveSketch(imported.model);
+    const auto solveResult = solveFn(imported.model);
     nativeResult->placement = toCApiPlacement(imported.model.placement());
     if (!solveResult.solved()) {
         if (!fillSolveMetadata(*nativeResult, imported, &solveResult, imported.messages, "BRep", "Skipped")) {
@@ -1301,6 +1309,9 @@ McSolverEngineResultCode McSolverEngine_SolveToGeometry(
                     safeStringView(sketchNameUtf8)
                 );
             },
+            [](McSolverEngine::Compat::SketchModel& model) {
+                return McSolverEngine::Compat::solveSketch(model);
+            },
             result
         );
     } catch (const std::bad_alloc& e) {
@@ -1349,6 +1360,9 @@ McSolverEngineResultCode McSolverEngine_SolveToGeometryWithParameters(
                     safeStringView(sketchNameUtf8)
                 );
             },
+            [&](McSolverEngine::Compat::SketchModel& model) {
+                return McSolverEngine::Compat::solveSketch(model, parameters);
+            },
             result
         );
     } catch (const std::bad_alloc& e) {
@@ -1386,6 +1400,9 @@ McSolverEngineResultCode McSolverEngine_SolveToBRep(
                     safeStringView(documentXmlUtf8),
                     safeStringView(sketchNameUtf8)
                 );
+            },
+            [](McSolverEngine::Compat::SketchModel& model) {
+                return McSolverEngine::Compat::solveSketch(model);
             },
             result
         );
@@ -1434,6 +1451,9 @@ McSolverEngineResultCode McSolverEngine_SolveToBRepWithParameters(
                     parameters,
                     safeStringView(sketchNameUtf8)
                 );
+            },
+            [&](McSolverEngine::Compat::SketchModel& model) {
+                return McSolverEngine::Compat::solveSketch(model, parameters);
             },
             result
         );

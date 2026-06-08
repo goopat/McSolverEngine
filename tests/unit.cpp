@@ -4,8 +4,8 @@
 //     convertApiParameterToInternal, isLengthConstraintKind, isAngleConstraintKind)
 //   - CompatModel: empty(), setPlacement, addArcOfEllipse, addArcOfHyperbola,
 //     toString overloads, isPhase1ConstraintSupported for all kinds
-//   - CompatSolver: Diameter / Equal / Parallel constraints, degreesOfFreedom,
-//     conflicting / redundant detection
+//   - CompatSolver: Diameter / Equal / Parallel constraints, parameter overrides,
+//     degreesOfFreedom, conflicting / redundant detection
 //   - ZipExtract: graceful failure on a nonexistent file path
 //   - GeometryExport: construction and external flags are preserved in exported records
 //   - DocumentXml: empty sketch import, import with an empty sketchName
@@ -649,6 +649,36 @@ void testDegreesOfFreedom()
     check(result.degreesOfFreedom == 0, "DOF test: fully constrained sketch has 0 DOF");
 }
 
+void testSolveSketchParameterOverride()
+{
+    McSolverEngine::Compat::SketchModel model;
+    const int lineId = model.addLineSegment({0.0, 0.0}, {3.0, 1.0});
+    model.addConstraint({
+        .kind = McSolverEngine::Compat::ConstraintKind::Horizontal,
+        .first = {.geometryIndex = lineId, .role = McSolverEngine::Compat::PointRole::None},
+    });
+    model.addConstraint({
+        .kind = McSolverEngine::Compat::ConstraintKind::Distance,
+        .first = {.geometryIndex = lineId, .role = McSolverEngine::Compat::PointRole::None},
+        .value = 3.0,
+        .hasValue = true,
+        .parameterKey = "Parameters.Width",
+    });
+
+    McSolverEngine::ParameterMap parameters;
+    parameters.emplace("Parameters.Width", "8.5");
+
+    const auto result = McSolverEngine::Compat::solveSketch(model, parameters);
+    check(result.solved(), "parameter override: sketch solves");
+
+    const auto& segment =
+        std::get<McSolverEngine::Compat::LineSegmentGeometry>(model.geometries().front().data);
+    const double dx = segment.end.x - segment.start.x;
+    const double dy = segment.end.y - segment.start.y;
+    check(std::abs(std::sqrt(dx * dx + dy * dy) - 8.5) < 1e-8, "parameter override: overridden length applied");
+    check(std::abs(dy) < 1e-8, "parameter override: horizontal constraint still applied");
+}
+
 // ── ZipExtract ─────────────────────────────────────────────────────────────
 
 void testZipExtractMissingFile()
@@ -799,6 +829,7 @@ int main()
     testParallelConstraint();
     testSolveConflictingRedundant();
     testDegreesOfFreedom();
+    testSolveSketchParameterOverride();
 
     testZipExtractMissingFile();
 

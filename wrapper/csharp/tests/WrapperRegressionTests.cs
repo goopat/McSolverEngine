@@ -1020,6 +1020,46 @@ public class WrapperRegressionTests
     }
 
     [TestMethod]
+    public void FCStdRegression_ForV1027_L1_50_SolveGeometryMatchesReference()
+    {
+        Assert.IsTrue(File.Exists(_v1027FCStdPath), $"Missing {_v1027FCStdPath}");
+        var expectedXmlPath = Path.Combine(_projectRoot, "fcstdDoc", "V102.7.50.xml");
+        Assert.IsTrue(File.Exists(expectedXmlPath), $"Missing {expectedXmlPath}");
+
+        var extractedXml = McSolverEngineClient.ExtractFCStdDocumentXml(
+            _v1027FCStdPath, out var extractStatus);
+        Assert.AreEqual(McSolverEngineFCStdStatus.Success, extractStatus,
+            $"ExtractFCStdDoc failed: {extractStatus}; LastError: {McSolverEngineClient.GetLastError()}");
+        Assert.IsFalse(string.IsNullOrEmpty(extractedXml), "Extracted Document.xml is empty.");
+
+        var defaultResult = McSolverEngineClient.SolveGeometryFromDocumentXml(extractedXml, "Sketch");
+        Assert.AreEqual(McSolverEngineNativeStatus.Success, defaultResult.NativeStatus,
+            $"Default SolveGeometryFromDocumentXml failed: {defaultResult.NativeStatus}; LastError: {McSolverEngineClient.GetLastError()}");
+
+        var parameters = new Dictionary<string, string> { ["参数集1.L1"] = "50" };
+        var overriddenResult = McSolverEngineClient.SolveGeometryFromDocumentXml(
+            extractedXml, "Sketch", parameters);
+        Assert.AreEqual(McSolverEngineNativeStatus.Success, overriddenResult.NativeStatus,
+            $"Parameterized SolveGeometryFromDocumentXml failed: {overriddenResult.NativeStatus}; LastError: {McSolverEngineClient.GetLastError()}");
+
+        var expectedXml = File.ReadAllText(expectedXmlPath);
+        var expectedResult = McSolverEngineClient.SolveGeometryFromDocumentXml(expectedXml, "Sketch");
+        Assert.AreEqual(McSolverEngineNativeStatus.Success, expectedResult.NativeStatus,
+            $"Reference SolveGeometryFromDocumentXml failed: {expectedResult.NativeStatus}; LastError: {McSolverEngineClient.GetLastError()}");
+
+        Assert.IsTrue(
+            defaultResult.VarSetProperties.TryGetValue("VarSet.L1", out var defaultL1),
+            "Default geometry solve should expose VarSet.L1.");
+        Assert.IsTrue(
+            overriddenResult.VarSetProperties.TryGetValue("VarSet.L1", out var overriddenL1),
+            "Parameterized geometry solve should expose VarSet.L1.");
+        Assert.AreNotEqual(defaultL1.Value, overriddenL1.Value,
+            "Sequential default -> parameterized geometry solves should not reuse the default VarSet value.");
+
+        AssertStructuredGeometryEquivalent(expectedResult, overriddenResult, "V102.7.FCStd -> 参数集1.L1=50");
+    }
+
+    [TestMethod]
     public void FCStdRegression_ForV1027_L1_50_SolveBRepMatchesReference()
     {
         Assert.IsTrue(File.Exists(_v1027FCStdPath), $"Missing {_v1027FCStdPath}");
@@ -1107,6 +1147,100 @@ public class WrapperRegressionTests
         Assert.IsTrue(
             geometryResult.Geometries.All(r => r.OriginalId > -99999999),
             $"Expected all geometry OriginalId > -99999999 for {sketchName} in {xmlPath}");
+    }
+
+    private static void AssertStructuredGeometryEquivalent(
+        StructuredGeometrySolveResponse expected,
+        StructuredGeometrySolveResponse actual,
+        string context
+    )
+    {
+        Assert.AreEqual(expected.NativeStatus, actual.NativeStatus, $"{context}: NativeStatus mismatch.");
+        Assert.AreEqual(expected.SketchName, actual.SketchName, $"{context}: SketchName mismatch.");
+        Assert.AreEqual(expected.ImportStatus, actual.ImportStatus, $"{context}: ImportStatus mismatch.");
+        Assert.AreEqual(expected.SkippedConstraints, actual.SkippedConstraints, $"{context}: SkippedConstraints mismatch.");
+        Assert.AreEqual(expected.SolveStatus, actual.SolveStatus, $"{context}: SolveStatus mismatch.");
+        Assert.AreEqual(expected.DegreesOfFreedom, actual.DegreesOfFreedom, $"{context}: DegreesOfFreedom mismatch.");
+        CollectionAssert.AreEqual(expected.Conflicting, actual.Conflicting, $"{context}: Conflicting mismatch.");
+        CollectionAssert.AreEqual(expected.Redundant, actual.Redundant, $"{context}: Redundant mismatch.");
+        CollectionAssert.AreEqual(expected.PartiallyRedundant, actual.PartiallyRedundant, $"{context}: PartiallyRedundant mismatch.");
+        Assert.AreEqual(expected.ExportKind, actual.ExportKind, $"{context}: ExportKind mismatch.");
+        Assert.AreEqual(expected.ExportStatus, actual.ExportStatus, $"{context}: ExportStatus mismatch.");
+
+        Assert.AreEqual(expected.VarSetProperties.Count, actual.VarSetProperties.Count, $"{context}: VarSet property count mismatch.");
+        foreach (var entry in expected.VarSetProperties) {
+            var key = entry.Key;
+            var expectedValue = entry.Value;
+            Assert.IsTrue(actual.VarSetProperties.TryGetValue(key, out var actualValue), $"{context}: Missing VarSet property '{key}'.");
+            Assert.AreEqual(expectedValue.Value, actualValue.Value, $"{context}: VarSet property '{key}' value mismatch.");
+            Assert.AreEqual(expectedValue.Unit, actualValue.Unit, $"{context}: VarSet property '{key}' unit mismatch.");
+        }
+
+        Assert.AreEqual(expected.Placement.Px, actual.Placement.Px, 1e-12, $"{context}: Placement.Px mismatch.");
+        Assert.AreEqual(expected.Placement.Py, actual.Placement.Py, 1e-12, $"{context}: Placement.Py mismatch.");
+        Assert.AreEqual(expected.Placement.Pz, actual.Placement.Pz, 1e-12, $"{context}: Placement.Pz mismatch.");
+        Assert.AreEqual(expected.Placement.Qx, actual.Placement.Qx, 1e-12, $"{context}: Placement.Qx mismatch.");
+        Assert.AreEqual(expected.Placement.Qy, actual.Placement.Qy, 1e-12, $"{context}: Placement.Qy mismatch.");
+        Assert.AreEqual(expected.Placement.Qz, actual.Placement.Qz, 1e-12, $"{context}: Placement.Qz mismatch.");
+        Assert.AreEqual(expected.Placement.Qw, actual.Placement.Qw, 1e-12, $"{context}: Placement.Qw mismatch.");
+
+        Assert.AreEqual(expected.Geometries.Count, actual.Geometries.Count, $"{context}: Geometry count mismatch.");
+        for (var index = 0; index < expected.Geometries.Count; ++index) {
+            AssertGeometryRecordEquivalent(expected.Geometries[index], actual.Geometries[index], $"{context}: Geometry[{index}]");
+        }
+    }
+
+    private static void AssertGeometryRecordEquivalent(
+        StructuredGeometryRecord expected,
+        StructuredGeometryRecord actual,
+        string context
+    )
+    {
+        Assert.AreEqual(expected.GeometryIndex, actual.GeometryIndex, $"{context}: GeometryIndex mismatch.");
+        Assert.AreEqual(expected.OriginalId, actual.OriginalId, $"{context}: OriginalId mismatch.");
+        Assert.AreEqual(expected.Kind, actual.Kind, $"{context}: Kind mismatch.");
+        Assert.AreEqual(expected.Construction, actual.Construction, $"{context}: Construction mismatch.");
+        Assert.AreEqual(expected.External, actual.External, $"{context}: External mismatch.");
+        Assert.AreEqual(expected.Blocked, actual.Blocked, $"{context}: Blocked mismatch.");
+
+        AssertPoint2Equivalent(expected.Point, actual.Point, $"{context}: Point");
+        AssertPoint2Equivalent(expected.Start, actual.Start, $"{context}: Start");
+        AssertPoint2Equivalent(expected.End, actual.End, $"{context}: End");
+        AssertPoint2Equivalent(expected.Center, actual.Center, $"{context}: Center");
+        AssertPoint2Equivalent(expected.Focus1, actual.Focus1, $"{context}: Focus1");
+        AssertPoint2Equivalent(expected.Vertex, actual.Vertex, $"{context}: Vertex");
+
+        Assert.AreEqual(expected.Radius, actual.Radius, 1e-9, $"{context}: Radius mismatch.");
+        Assert.AreEqual(expected.MinorRadius, actual.MinorRadius, 1e-9, $"{context}: MinorRadius mismatch.");
+        Assert.AreEqual(expected.StartAngle, actual.StartAngle, 1e-9, $"{context}: StartAngle mismatch.");
+        Assert.AreEqual(expected.EndAngle, actual.EndAngle, 1e-9, $"{context}: EndAngle mismatch.");
+        Assert.AreEqual(expected.Degree, actual.Degree, $"{context}: Degree mismatch.");
+        Assert.AreEqual(expected.Periodic, actual.Periodic, $"{context}: Periodic mismatch.");
+
+        Assert.AreEqual(expected.Poles.Count, actual.Poles.Count, $"{context}: Pole count mismatch.");
+        for (var index = 0; index < expected.Poles.Count; ++index) {
+            AssertPoint2Equivalent(expected.Poles[index].Point, actual.Poles[index].Point, $"{context}: Pole[{index}]");
+            Assert.AreEqual(expected.Poles[index].Weight, actual.Poles[index].Weight, 1e-9, $"{context}: Pole[{index}] weight mismatch.");
+        }
+
+        Assert.AreEqual(expected.Knots.Count, actual.Knots.Count, $"{context}: Knot count mismatch.");
+        for (var index = 0; index < expected.Knots.Count; ++index) {
+            Assert.AreEqual(expected.Knots[index].Value, actual.Knots[index].Value, 1e-9, $"{context}: Knot[{index}] value mismatch.");
+            Assert.AreEqual(expected.Knots[index].Multiplicity, actual.Knots[index].Multiplicity, $"{context}: Knot[{index}] multiplicity mismatch.");
+        }
+
+        Assert.AreEqual(expected.Constraints.Count, actual.Constraints.Count, $"{context}: ConstraintRef count mismatch.");
+        for (var index = 0; index < expected.Constraints.Count; ++index) {
+            Assert.AreEqual(expected.Constraints[index].Kind, actual.Constraints[index].Kind, $"{context}: ConstraintRef[{index}] kind mismatch.");
+            Assert.AreEqual(expected.Constraints[index].OriginalIndex, actual.Constraints[index].OriginalIndex, $"{context}: ConstraintRef[{index}] originalIndex mismatch.");
+            Assert.AreEqual(expected.Constraints[index].Expression, actual.Constraints[index].Expression, $"{context}: ConstraintRef[{index}] expression mismatch.");
+        }
+    }
+
+    private static void AssertPoint2Equivalent(Point2Dto expected, Point2Dto actual, string context)
+    {
+        Assert.AreEqual(expected.X, actual.X, 1e-9, $"{context}.X mismatch.");
+        Assert.AreEqual(expected.Y, actual.Y, 1e-9, $"{context}.Y mismatch.");
     }
 
     private static int ParseGeometryCount(string documentXml, string sketchName)
