@@ -54,23 +54,62 @@ public static class McSolverEngineClient
         return ReadNativeUtf8String(versionPointer);
     }
 
-    public static StructuredGeometrySolveResponse SolveGeometryFromDocumentXml(
-        string documentXml,
-        string? sketchName = null
-    )
+    private static (McSolverEngineNativeStatus, IntPtr) SolveGeometryToNativePtr(
+        string documentXml, string? sketchName)
     {
         ValidateRequiredObject(documentXml, nameof(documentXml));
         EnsureNativeLibraryLoaded();
         using var documentXmlHandle = new NativeUtf8String(documentXml);
         using var sketchNameHandle = new NativeUtf8String(sketchName);
-
         var nativeStatus = McSolverEngine_SolveToGeometry(
             documentXmlHandle.Pointer,
             sketchNameHandle.Pointer,
-            out var resultPointer
-        );
+            out var resultPointer);
+        return (nativeStatus, resultPointer);
+    }
 
+    private static (McSolverEngineNativeStatus, IntPtr) SolveGeometryWithParamsToNativePtr(
+        string documentXml, string? sketchName, IReadOnlyDictionary<string, string> parameters)
+    {
+        ValidateRequiredObject(documentXml, nameof(documentXml));
+        ValidateRequiredObject(parameters, nameof(parameters));
+        if (parameters.Count == 0)
+            return SolveGeometryToNativePtr(documentXml, sketchName);
+        EnsureNativeLibraryLoaded();
+        using var documentXmlHandle = new NativeUtf8String(documentXml);
+        using var sketchNameHandle = new NativeUtf8String(sketchName);
+        using var parameterMapHandle = new NativeParameterMap(parameters);
+        var nativeStatus = McSolverEngine_SolveToGeometryWithParameters(
+            documentXmlHandle.Pointer,
+            sketchNameHandle.Pointer,
+            parameterMapHandle.KeysPointer,
+            parameterMapHandle.ValuesPointer,
+            parameterMapHandle.Count,
+            out var resultPointer);
+        return (nativeStatus, resultPointer);
+    }
+
+    public static StructuredGeometrySolveResponse SolveGeometryFromDocumentXml(
+        string documentXml,
+        string? sketchName = null
+    )
+    {
+        var (nativeStatus, resultPointer) = SolveGeometryToNativePtr(documentXml, sketchName);
         return ParseStructuredGeometryResponse(nativeStatus, resultPointer);
+    }
+
+    /// <summary>
+    /// Same as <see cref="SolveGeometryFromDocumentXml(string, string?)"/> but returns
+    /// the raw native result pointer. The caller must free it with
+    /// <see cref="FreeGeometryResult"/>.
+    /// </summary>
+    public static IntPtr SolveGeometryFromDocumentXmlNative(
+        string documentXml,
+        string? sketchName = null
+    )
+    {
+        var (_, resultPointer) = SolveGeometryToNativePtr(documentXml, sketchName);
+        return resultPointer;
     }
 
     public static StructuredGeometrySolveResponse SolveGeometryFromDocumentXml(
@@ -79,30 +118,29 @@ public static class McSolverEngineClient
         IReadOnlyDictionary<string, string> parameters
     )
     {
-        ValidateRequiredObject(documentXml, nameof(documentXml));
-        ValidateRequiredObject(parameters, nameof(parameters));
-        if (parameters.Count == 0) {
-            return SolveGeometryFromDocumentXml(documentXml, sketchName);
-        }
-
-        EnsureNativeLibraryLoaded();
-        using var documentXmlHandle = new NativeUtf8String(documentXml);
-        using var sketchNameHandle = new NativeUtf8String(sketchName);
-        using var parameterMapHandle = new NativeParameterMap(parameters);
-
-        var nativeStatus = McSolverEngine_SolveToGeometryWithParameters(
-            documentXmlHandle.Pointer,
-            sketchNameHandle.Pointer,
-            parameterMapHandle.KeysPointer,
-            parameterMapHandle.ValuesPointer,
-            parameterMapHandle.Count,
-            out var resultPointer
-        );
-
+        var (nativeStatus, resultPointer) = SolveGeometryWithParamsToNativePtr(
+            documentXml, sketchName, parameters);
         return ParseStructuredGeometryResponse(nativeStatus, resultPointer);
     }
 
-    public static BRepSolveResponse SolveBRepFromDocumentXml(string documentXml, string? sketchName = null)
+    /// <summary>
+    /// Same as <see cref="SolveGeometryFromDocumentXml(string, string?, IReadOnlyDictionary{string, string})"/>
+    /// but returns the raw native result pointer. The caller must free it with
+    /// <see cref="FreeGeometryResult"/>.
+    /// </summary>
+    public static IntPtr SolveGeometryFromDocumentXmlNative(
+        string documentXml,
+        string? sketchName,
+        IReadOnlyDictionary<string, string> parameters
+    )
+    {
+        var (_, resultPointer) = SolveGeometryWithParamsToNativePtr(
+            documentXml, sketchName, parameters);
+        return resultPointer;
+    }
+
+    private static (McSolverEngineNativeStatus, IntPtr) SolveBRepToNativePtr(
+        string documentXml, string? sketchName)
     {
         ValidateRequiredObject(documentXml, nameof(documentXml));
         EnsureNativeLibraryLoaded();
@@ -111,23 +149,17 @@ public static class McSolverEngineClient
         var nativeStatus = McSolverEngine_SolveToBRep(
             documentXmlHandle.Pointer,
             sketchNameHandle.Pointer,
-            out var resultPointer
-        );
-        return ParseBRepResponse(nativeStatus, resultPointer);
+            out var resultPointer);
+        return (nativeStatus, resultPointer);
     }
 
-    public static BRepSolveResponse SolveBRepFromDocumentXml(
-        string documentXml,
-        string? sketchName,
-        IReadOnlyDictionary<string, string> parameters
-    )
+    private static (McSolverEngineNativeStatus, IntPtr) SolveBRepWithParamsToNativePtr(
+        string documentXml, string? sketchName, IReadOnlyDictionary<string, string> parameters)
     {
         ValidateRequiredObject(documentXml, nameof(documentXml));
         ValidateRequiredObject(parameters, nameof(parameters));
-        if (parameters.Count == 0) {
-            return SolveBRepFromDocumentXml(documentXml, sketchName);
-        }
-
+        if (parameters.Count == 0)
+            return SolveBRepToNativePtr(documentXml, sketchName);
         EnsureNativeLibraryLoaded();
         using var documentXmlHandle = new NativeUtf8String(documentXml);
         using var sketchNameHandle = new NativeUtf8String(sketchName);
@@ -138,9 +170,52 @@ public static class McSolverEngineClient
             parameterMapHandle.KeysPointer,
             parameterMapHandle.ValuesPointer,
             parameterMapHandle.Count,
-            out var resultPointer
-        );
+            out var resultPointer);
+        return (nativeStatus, resultPointer);
+    }
+
+    public static BRepSolveResponse SolveBRepFromDocumentXml(string documentXml, string? sketchName = null)
+    {
+        var (nativeStatus, resultPointer) = SolveBRepToNativePtr(documentXml, sketchName);
         return ParseBRepResponse(nativeStatus, resultPointer);
+    }
+
+    /// <summary>
+    /// Same as <see cref="SolveBRepFromDocumentXml(string, string?)"/> but returns
+    /// the raw native result pointer. The caller must free it with
+    /// <see cref="FreeBRepResult"/>.
+    /// </summary>
+    public static IntPtr SolveBRepFromDocumentXmlNative(string documentXml, string? sketchName = null)
+    {
+        var (_, resultPointer) = SolveBRepToNativePtr(documentXml, sketchName);
+        return resultPointer;
+    }
+
+    public static BRepSolveResponse SolveBRepFromDocumentXml(
+        string documentXml,
+        string? sketchName,
+        IReadOnlyDictionary<string, string> parameters
+    )
+    {
+        var (nativeStatus, resultPointer) = SolveBRepWithParamsToNativePtr(
+            documentXml, sketchName, parameters);
+        return ParseBRepResponse(nativeStatus, resultPointer);
+    }
+
+    /// <summary>
+    /// Same as <see cref="SolveBRepFromDocumentXml(string, string?, IReadOnlyDictionary{string, string})"/>
+    /// but returns the raw native result pointer. The caller must free it with
+    /// <see cref="FreeBRepResult"/>.
+    /// </summary>
+    public static IntPtr SolveBRepFromDocumentXmlNative(
+        string documentXml,
+        string? sketchName,
+        IReadOnlyDictionary<string, string> parameters
+    )
+    {
+        var (_, resultPointer) = SolveBRepWithParamsToNativePtr(
+            documentXml, sketchName, parameters);
+        return resultPointer;
     }
 
     private static StructuredGeometrySolveResponse ParseStructuredGeometryResponse(
@@ -1069,8 +1144,22 @@ public static class McSolverEngineClient
     [DllImport(NativeLibraryName, CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
     private static extern void McSolverEngine_FreeGeometryResult(IntPtr value);
 
+    /// <summary>Free a native geometry result pointer returned by <see cref="SolveGeometryFromDocumentXmlNative"/>.</summary>
+    public static void FreeGeometryResult(IntPtr value)
+    {
+        if (value != IntPtr.Zero)
+            McSolverEngine_FreeGeometryResult(value);
+    }
+
     [DllImport(NativeLibraryName, CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
     private static extern void McSolverEngine_FreeBRepResult(IntPtr value);
+
+    /// <summary>Free a native BRep result pointer returned by <see cref="SolveBRepFromDocumentXmlNative"/>.</summary>
+    public static void FreeBRepResult(IntPtr value)
+    {
+        if (value != IntPtr.Zero)
+            McSolverEngine_FreeBRepResult(value);
+    }
 
     [DllImport(NativeLibraryName, CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
     private static extern McSolverEngineNativeStatus McSolverEngine_InspectDocumentXml(
