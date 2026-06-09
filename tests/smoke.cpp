@@ -2859,7 +2859,7 @@ int main()
             return false;
         }
 
-        const auto importedSampleSolve = McSolverEngine::Compat::solveSketch(importedSample.model);
+        const auto importedSampleSolve = McSolverEngine::Compat::solveSketch(importedSample.model, parameters);
         if (!importedSampleSolve.solved()) {
             std::cerr << "Expected " << label << " to solve successfully.\n";
             return false;
@@ -3088,6 +3088,21 @@ int main()
             true,
             false,
             McSolverEngine::ParameterMap {{"VarSet.L1", "400"}})) {
+        return 1;
+    }
+
+    const std::string sampleV1027XmlPath = fcstdDocDir + "V102.7.xml";
+    const std::string sampleV1117_100ExpectedPath = fcstdDocDir + "V111.7.100.brp";
+    const std::string sampleV1117_100ActualPath = fcstdDocDir + "V111.7.100.solver.brp";
+    if (!verifySampleRegression(
+            sampleV1027XmlPath,
+            "Sketch",
+            sampleV1117_100ExpectedPath,
+            sampleV1117_100ActualPath,
+            "fcstdDoc/V102.7.xml / Sketch with VarSet.L1=100",
+            true,
+            false,
+            McSolverEngine::ParameterMap {{"VarSet.L1", "100"}})) {
         return 1;
     }
 

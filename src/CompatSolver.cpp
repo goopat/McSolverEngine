@@ -2727,7 +2727,6 @@ SolveResult solveSketch(SketchModel& model, const McSolverEngine::ParameterMap& 
         if (resolvedValue) {
             effectiveConstraint.value = *resolvedValue;
         }
-
         if (!addConstraint(context, effectiveConstraint)) {
             return {.status = SolveStatus::Unsupported};
         }
@@ -2754,6 +2753,7 @@ SolveResult solveSketch(SketchModel& model, const McSolverEngine::ParameterMap& 
     }
 
     SolveResult result;
+    bool usedAugmentedSolve = false;
     int gcsStatus = context.system.solve(true, GCS::DogLeg);
 
     if (gcsStatus != GCS::Success) {
@@ -2771,7 +2771,7 @@ SolveResult solveSketch(SketchModel& model, const McSolverEngine::ParameterMap& 
 
         context.system.initSolution();
         gcsStatus = context.system.solve(true);
-        context.system.clearByTag(GCS::DefaultTemporaryConstraint);
+        usedAugmentedSolve = true;
     }
 
     result.status = fromGcsStatus(gcsStatus);
@@ -2783,6 +2783,10 @@ SolveResult solveSketch(SketchModel& model, const McSolverEngine::ParameterMap& 
     if (result.status == SolveStatus::Success) {
         context.system.applySolution();
         updateSolvedGeometry(model, context);
+    }
+
+    if (usedAugmentedSolve) {
+        context.system.clearByTag(GCS::DefaultTemporaryConstraint);
     }
 
     return result;
