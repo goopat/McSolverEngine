@@ -57,10 +57,13 @@ struct SolveContext
     std::vector<GCS::BSpline> bSplines;
     std::vector<GeometryBinding> geometries;
     std::vector<bool> blockedGeometry;
+    std::vector<double*> constraintValueParameters;
+    std::vector<double*> constraintSecondaryValueParameters;
     std::unordered_map<double*, int> geometryParameterOwners;
     std::unordered_map<int, BSplineKnotAlignment> bsplineKnotAlignments;
     GCS::System system;
     int constraintsCounter {0};
+    int activeConstraintIndex {-1};
 
     [[nodiscard]] double* ownParameter(double value)
     {
@@ -77,6 +80,10 @@ struct SolveContext
         else {
             parameters.push_back(parameter);
             drivenParameters.push_back(parameter);
+            if (activeConstraintIndex >= 0
+                && activeConstraintIndex < static_cast<int>(constraintValueParameters.size())) {
+                constraintValueParameters[static_cast<std::size_t>(activeConstraintIndex)] = parameter;
+            }
         }
         return parameter;
     }
@@ -2515,6 +2522,11 @@ bool addConstraint(SolveContext& context, const Constraint& constraint)
 
             auto* n1 = context.ownConstraintValue(constraint.value, constraint.driving);
             auto* n2 = context.ownConstraintValue(constraint.value, constraint.driving);
+            if (!constraint.driving && context.activeConstraintIndex >= 0
+                && context.activeConstraintIndex < static_cast<int>(context.constraintValueParameters.size())) {
+                context.constraintValueParameters[static_cast<std::size_t>(context.activeConstraintIndex)] = n2;
+                context.constraintSecondaryValueParameters[static_cast<std::size_t>(context.activeConstraintIndex)] = n1;
+            }
             const double ratio = constraint.value;
             if (std::abs(ratio) <= 1e-12) {
                 return false;
@@ -2664,6 +2676,163 @@ void updateSolvedGeometry(SketchModel& model, const SolveContext& context)
     }
 }
 
+void updateNonDrivingConstraints(SketchModel& model, const SolveContext& context)
+{
+    for (std::size_t constraintIndex = 0; constraintIndex < model.constraintCount(); ++constraintIndex) {
+        auto& constraint = model.constraints()[constraintIndex];
+        if (constraint.driving || !constraint.hasValue || constraintIndex >= context.constraintValueParameters.size()) {
+            continue;
+        }
+
+        const auto* solvedValue = context.constraintValueParameters[constraintIndex];
+        if (solvedValue == nullptr) {
+            continue;
+        }
+
+        switch (constraint.kind) {
+            case ConstraintKind::Angle: {
+                constraint.value = std::fmod(*solvedValue, 2.0 * std::numbers::pi);
+                break;
+            }
+            case ConstraintKind::Diameter: {
+                const int geometryIndex = constraint.first.geometryIndex;
+                const bool geometryFixed = geometryIndex >= 0
+                    && geometryIndex < static_cast<int>(model.geometryCount())
+                    && (model.geometries()[static_cast<std::size_t>(geometryIndex)].external
+                        || (geometryIndex < static_cast<int>(context.blockedGeometry.size())
+                            && context.blockedGeometry[static_cast<std::size_t>(geometryIndex)]));
+                constraint.value = geometryFixed ? *solvedValue : (2.0 * *solvedValue);
+                break;
+            }
+            case ConstraintKind::SnellsLaw: {
+                const auto* solvedPrimary = constraintIndex < context.constraintSecondaryValueParameters.size()
+                    ? context.constraintSecondaryValueParameters[constraintIndex]
+                    : nullptr;
+                if (solvedPrimary != nullptr && std::abs(*solvedPrimary) > 1e-12) {
+                    constraint.value = *solvedValue / *solvedPrimary;
+                }
+                else {
+                    constraint.value = *solvedValue;
+                }
+                break;
+            }
+            default:
+                constraint.value = *solvedValue;
+                break;
+        }
+    }
+}
+
+[[nodiscard]] bool isFinitePoint(const Point2& point) noexcept
+{
+    return std::isfinite(point.x) && std::isfinite(point.y);
+}
+
+[[nodiscard]] bool hasValidSolvedGeometry(const SketchModel& model) noexcept
+{
+    for (const auto& geometry : model.geometries()) {
+        switch (geometry.kind) {
+            case GeometryKind::Point: {
+                const auto& point = std::get<PointGeometry>(geometry.data);
+                if (!isFinitePoint(point.point)) {
+                    return false;
+                }
+                break;
+            }
+            case GeometryKind::LineSegment: {
+                const auto& line = std::get<LineSegmentGeometry>(geometry.data);
+                if (!isFinitePoint(line.start) || !isFinitePoint(line.end)) {
+                    return false;
+                }
+                break;
+            }
+            case GeometryKind::Circle: {
+                const auto& circle = std::get<CircleGeometry>(geometry.data);
+                if (!isFinitePoint(circle.center) || !std::isfinite(circle.radius) || circle.radius <= 0.0) {
+                    return false;
+                }
+                break;
+            }
+            case GeometryKind::Arc: {
+                const auto& arc = std::get<ArcGeometry>(geometry.data);
+                if (!isFinitePoint(arc.center) || !std::isfinite(arc.radius) || arc.radius <= 0.0
+                    || !std::isfinite(arc.startAngle) || !std::isfinite(arc.endAngle)) {
+                    return false;
+                }
+                break;
+            }
+            case GeometryKind::Ellipse: {
+                const auto& ellipse = std::get<EllipseGeometry>(geometry.data);
+                if (!isFinitePoint(ellipse.center) || !isFinitePoint(ellipse.focus1)
+                    || !std::isfinite(ellipse.minorRadius) || ellipse.minorRadius <= 0.0) {
+                    return false;
+                }
+                break;
+            }
+            case GeometryKind::ArcOfEllipse: {
+                const auto& arc = std::get<ArcOfEllipseGeometry>(geometry.data);
+                if (!isFinitePoint(arc.center) || !isFinitePoint(arc.focus1)
+                    || !std::isfinite(arc.minorRadius) || arc.minorRadius <= 0.0
+                    || !std::isfinite(arc.startAngle) || !std::isfinite(arc.endAngle)) {
+                    return false;
+                }
+                break;
+            }
+            case GeometryKind::ArcOfHyperbola: {
+                const auto& arc = std::get<ArcOfHyperbolaGeometry>(geometry.data);
+                if (!isFinitePoint(arc.center) || !isFinitePoint(arc.focus1)
+                    || !std::isfinite(arc.minorRadius) || arc.minorRadius <= 0.0
+                    || !std::isfinite(arc.startAngle) || !std::isfinite(arc.endAngle)) {
+                    return false;
+                }
+                break;
+            }
+            case GeometryKind::ArcOfParabola: {
+                const auto& arc = std::get<ArcOfParabolaGeometry>(geometry.data);
+                if (!isFinitePoint(arc.vertex) || !isFinitePoint(arc.focus1)
+                    || !std::isfinite(arc.startAngle) || !std::isfinite(arc.endAngle)) {
+                    return false;
+                }
+                break;
+            }
+            case GeometryKind::BSpline: {
+                const auto& spline = std::get<BSplineGeometry>(geometry.data);
+                for (const auto& pole : spline.poles) {
+                    if (!isFinitePoint(pole.point) || !std::isfinite(pole.weight) || pole.weight <= 0.0) {
+                        return false;
+                    }
+                }
+                break;
+            }
+        }
+    }
+
+    return true;
+}
+
+[[nodiscard]] bool applySolvedState(SketchModel& model, SolveContext& context)
+{
+    context.system.applySolution();
+    updateSolvedGeometry(model, context);
+    if (!hasValidSolvedGeometry(model)) {
+        context.system.undoSolution();
+        updateSolvedGeometry(model, context);
+        return false;
+    }
+
+    updateNonDrivingConstraints(model, context);
+    return true;
+}
+
+[[nodiscard]] bool requiresResolveAfterGeometryUpdated(const SketchModel& model) noexcept
+{
+    return std::any_of(
+        model.geometries().begin(),
+        model.geometries().end(),
+        [](const Geometry& geometry) { return geometry.kind == GeometryKind::BSpline; }
+    );
+}
+
 SolveStatus fromGcsStatus(int status)
 {
     switch (status) {
@@ -2681,20 +2850,13 @@ SolveStatus fromGcsStatus(int status)
 
 }  // namespace
 
-SolveResult solveSketch(SketchModel& model)
-{
-    return solveSketch(model, McSolverEngine::ParameterMap {});
-}
-
-SolveResult solveSketch(SketchModel& model, const McSolverEngine::ParameterMap& parameters)
+template <typename ValueResolver>
+SolveResult solveSketchWithResolvedValues(SketchModel& model, const ValueResolver& resolveValue)
 {
     SolveContext context;
-    ParsedApiParameterMap parsedParameters;
-    if (!McSolverEngine::Detail::tryParseApiParameters(parameters, parsedParameters)) {
-        return {.status = SolveStatus::Invalid};
-    }
-
     indexBSplineKnotAlignments(context, model);
+    context.constraintValueParameters.resize(model.constraintCount(), nullptr);
+    context.constraintSecondaryValueParameters.resize(model.constraintCount(), nullptr);
     const auto blockAnalysis = analyzeBlockConstraints(model);
     context.blockedGeometry = blockAnalysis.onlyBlockedGeometry;
     for (std::size_t geometryIndex = 0; geometryIndex < model.geometryCount(); ++geometryIndex) {
@@ -2723,13 +2885,16 @@ SolveResult solveSketch(SketchModel& model, const McSolverEngine::ParameterMap& 
         }
 
         Constraint effectiveConstraint = constraint;
-        const auto resolvedValue = resolveConstraintValue(constraint, parsedParameters);
+        const auto resolvedValue = resolveValue(constraint, constraintIndex);
         if (resolvedValue) {
             effectiveConstraint.value = *resolvedValue;
         }
+        context.activeConstraintIndex = static_cast<int>(constraintIndex);
         if (!addConstraint(context, effectiveConstraint)) {
+            context.activeConstraintIndex = -1;
             return {.status = SolveStatus::Unsupported};
         }
+        context.activeConstraintIndex = -1;
     }
 
     context.system.declareUnknowns(context.parameters);
@@ -2754,15 +2919,29 @@ SolveResult solveSketch(SketchModel& model, const McSolverEngine::ParameterMap& 
 
     SolveResult result;
     bool usedAugmentedSolve = false;
+    bool appliedSolution = false;
+    bool sawInvalidSolution = false;
     int gcsStatus = context.system.solve(true, GCS::DogLeg);
+    if (gcsStatus == GCS::Success) {
+        appliedSolution = applySolvedState(model, context);
+        sawInvalidSolution = !appliedSolution;
+    }
 
-    if (gcsStatus != GCS::Success) {
+    if (!appliedSolution) {
         gcsStatus = context.system.solve(true, GCS::LevenbergMarquardt);
+        if (gcsStatus == GCS::Success) {
+            appliedSolution = applySolvedState(model, context);
+            sawInvalidSolution = sawInvalidSolution || !appliedSolution;
+        }
     }
-    if (gcsStatus != GCS::Success) {
+    if (!appliedSolution) {
         gcsStatus = context.system.solve(true, GCS::BFGS);
+        if (gcsStatus == GCS::Success) {
+            appliedSolution = applySolvedState(model, context);
+            sawInvalidSolution = sawInvalidSolution || !appliedSolution;
+        }
     }
-    if (gcsStatus != GCS::Success) {
+    if (!appliedSolution) {
         for (auto* p : context.parameters) {
             double* initParam = context.ownParameter(*p);
             context.system.addConstraintEqual(
@@ -2772,23 +2951,48 @@ SolveResult solveSketch(SketchModel& model, const McSolverEngine::ParameterMap& 
         context.system.initSolution();
         gcsStatus = context.system.solve(true);
         usedAugmentedSolve = true;
+        if (gcsStatus == GCS::Success) {
+            appliedSolution = applySolvedState(model, context);
+            sawInvalidSolution = sawInvalidSolution || !appliedSolution;
+        }
     }
 
-    result.status = fromGcsStatus(gcsStatus);
+    if (!appliedSolution && sawInvalidSolution && gcsStatus != GCS::Success) {
+        gcsStatus = GCS::SuccessfulSolutionInvalid;
+    }
+
+    result.status = appliedSolution ? SolveStatus::Success : fromGcsStatus(gcsStatus);
     result.degreesOfFreedom = context.system.dofsNumber();
     context.system.getConflicting(result.conflicting);
     context.system.getRedundant(result.redundant);
     context.system.getPartiallyRedundant(result.partiallyRedundant);
 
-    if (result.status == SolveStatus::Success) {
-        context.system.applySolution();
-        updateSolvedGeometry(model, context);
-    }
-
     if (usedAugmentedSolve) {
         context.system.clearByTag(GCS::DefaultTemporaryConstraint);
     }
 
+    return result;
+}
+
+SolveResult solveSketch(SketchModel& model)
+{
+    return solveSketch(model, McSolverEngine::ParameterMap {});
+}
+
+SolveResult solveSketch(SketchModel& model, const McSolverEngine::ParameterMap& parameters)
+{
+    ParsedApiParameterMap parsedParameters;
+    if (!McSolverEngine::Detail::tryParseApiParameters(parameters, parsedParameters)) {
+        return {.status = SolveStatus::Invalid};
+    }
+
+    auto directResolver = [&](const Constraint& constraint, std::size_t) -> std::optional<double> {
+        return resolveConstraintValue(constraint, parsedParameters);
+    };
+    auto result = solveSketchWithResolvedValues(model, directResolver);
+    if (result.status == SolveStatus::Success && requiresResolveAfterGeometryUpdated(model)) {
+        result = solveSketchWithResolvedValues(model, directResolver);
+    }
     return result;
 }
 
