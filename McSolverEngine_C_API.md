@@ -30,6 +30,8 @@ McSolverEngine 通过 `mcsolverengine_native.dll`（Windows）/ `libmcsolverengi
 | 7 | `MCSOLVERENGINE_RESULT_OPEN_CASCADE_UNAVAILABLE` | 未链接 OCCT（BREP 不可用） |
 | 8 | `MCSOLVERENGINE_RESULT_OUT_OF_MEMORY` | 内存分配失败 |
 | 9 | `MCSOLVERENGINE_RESULT_VARSET_EXPRESSION_UNSUPPORTED_SUBSET` | VarSet 表达式使用了不支持的 FreeCAD 表达式特性 |
+| 10 | `MCSOLVERENGINE_RESULT_VARSET_PARAMETER_VALIDATION_FAILED` | VarSet 参数校验失败（键格式错误或值含单位后缀） |
+| 11 | `MCSOLVERENGINE_RESULT_SKETCH_NOT_FOUND` | 在 Document.xml 中未找到指定名称的草图 |
 
 #### `McSolverEngineFCStdResultCode` — FCStd 提取返回码
 
@@ -387,7 +389,7 @@ McSolverEngineResultCode McSolverEngine_SolveToGeometryWithParameters(
 - 角度约束（Angle）：值按 **degree** 解析（内部转换为弧度）
 - 覆盖值在表达式求值之前写入 VarSet 数据
 
-**空参数处理**：`parameterCount = 0` 或 `parameterKeysUtf8 = NULL` 且 `result` 有效时，等价于调用不带参数的 `SolveToGeometry`。
+**空参数处理**：`parameterCount = 0` 时，无论 `parameterKeysUtf8` 是否为 NULL，均等价于调用不带参数的 `SolveToGeometry`。
 
 ---
 

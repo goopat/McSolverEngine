@@ -51,7 +51,7 @@ Standalone extraction of FreeCAD Sketcher's GCS constraint solver. 12 layers, to
 
 **Shim**: `SketcherGlobal.h` maps `SketcherExport` → `MCSOLVERENGINE_EXPORT` so planegcs compiles unchanged.
 
-**Namespaces**: `McSolverEngine::Compat` | `::DocumentXml` | `::BRep` | `::Geometry` | `::ZipExtract` | `McSolverEngine` (root: `Engine` + `ParameterMap`).
+**Namespaces**: `McSolverEngine::Compat` | `McSolverEngine::DocumentXml` | `McSolverEngine::BRep` | `McSolverEngine::Geometry` | `McSolverEngine::ZipExtract` | `McSolverEngine` (root: `Engine` + `ParameterMap`).
 
 **Parameter flow**: Document.xml → VarSet defaults + ExpressionEngine bindings → `Compat::Constraint` stores `parameterName/key/defaultValue` → caller overrides via `ParameterMap` (keys: `VarSetName.PropertyName` only; bare property names are rejected) → solver applies values. API values must be pure numeric strings (no unit suffixes). Lengths = mm, angles = degrees (converted to radians internally).
 

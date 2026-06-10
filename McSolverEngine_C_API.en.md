@@ -30,6 +30,8 @@ McSolverEngine exposes a stable C ABI via `mcsolverengine_native.dll` (Windows) 
 | 7 | `MCSOLVERENGINE_RESULT_OPEN_CASCADE_UNAVAILABLE` | OCCT not linked (BREP unavailable) |
 | 8 | `MCSOLVERENGINE_RESULT_OUT_OF_MEMORY` | Allocation failure |
 | 9 | `MCSOLVERENGINE_RESULT_VARSET_EXPRESSION_UNSUPPORTED_SUBSET` | VarSet expression uses unsupported FreeCAD expression features |
+| 10 | `MCSOLVERENGINE_RESULT_VARSET_PARAMETER_VALIDATION_FAILED` | VarSet parameter validation failed (invalid key format or value contains unit suffix) |
+| 11 | `MCSOLVERENGINE_RESULT_SKETCH_NOT_FOUND` | Specified sketch not found in Document.xml |
 
 #### `McSolverEngineFCStdResultCode` — FCStd extraction return codes
 
@@ -381,7 +383,7 @@ Same as `SolveToGeometry` but with VarSet parameter overrides.
 - Angle constraints (Angle): values interpreted as **degrees** (converted to radians internally)
 - Overrides are applied to VarSet data before expression evaluation
 
-**Null handling**: `parameterCount = 0` or `parameterKeysUtf8 = NULL` with valid `result` is equivalent to calling `SolveToGeometry` without parameters.
+**Null handling**: `parameterCount = 0` is equivalent to calling `SolveToGeometry` without parameters, regardless of whether `parameterKeysUtf8` is NULL.
 
 ---
 
