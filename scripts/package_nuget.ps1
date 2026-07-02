@@ -3,7 +3,7 @@ param(
     [ValidateSet("UseOcct", "NoOcct")]
     [string]$Variant,
 
-    [string]$Version = "0.1.0",
+    [string]$Version = "0.1.1",
     [string]$Configuration = "Release",
     [switch]$IncludeDotNet
 )
@@ -32,6 +32,27 @@ Write-Host "============================================" -ForegroundColor Cyan
 Write-Host "Building $packageId v$Version ($Configuration)" -ForegroundColor Cyan
 Write-Host "============================================" -ForegroundColor Cyan
 
+# --- Resolve Visual Studio 2022 instance ---
+# Prefer full VS2022 (Community/Professional/Enterprise) over BuildTools.
+# CMAKE_GENERATOR_INSTANCE tells CMake which VS installation to use.
+$vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
+if (Test-Path $vswhere) {
+    $vsFullProducts = @(
+        "Microsoft.VisualStudio.Product.Enterprise",
+        "Microsoft.VisualStudio.Product.Professional",
+        "Microsoft.VisualStudio.Product.Community"
+    )
+    $vsInstance = & $vswhere -latest -products $vsFullProducts -property installationPath 2>$null
+    if ($vsInstance) {
+        Write-Host "Found full Visual Studio 2022: $vsInstance" -ForegroundColor Green
+        $env:CMAKE_GENERATOR_INSTANCE = $vsInstance
+    } else {
+        Write-Host "Full Visual Studio 2022 not found; falling back to default (may use BuildTools)." -ForegroundColor Yellow
+    }
+} else {
+    Write-Host "vswhere not found; skipping VS2022 instance detection." -ForegroundColor Yellow
+}
+
 # --- CMake configure ---
 $cmakeArgs = @(
     "-G", "Visual Studio 17 2022",
@@ -41,6 +62,9 @@ $cmakeArgs = @(
     "-DMCSOLVERENGINE_WITH_OCCT=$(if ($buildWithOcct) { 'ON' } else { 'OFF' })"
 )
 Write-Host "CMake configure: cmake $cmakeArgs"
+if ($env:CMAKE_GENERATOR_INSTANCE) {
+    Write-Host "  CMAKE_GENERATOR_INSTANCE = $env:CMAKE_GENERATOR_INSTANCE"
+}
 & cmake @cmakeArgs
 if ($LASTEXITCODE -ne 0) { throw "CMake configure failed." }
 
@@ -54,8 +78,9 @@ $outDir = Join-Path $buildDir $Configuration
 $dll       = Join-Path $outDir "mcsolverengine_native.dll"
 $dllLib    = Join-Path $outDir "mcsolverengine_native.lib"
 $staticLib = Join-Path $outDir "McSolverEngineCore.lib"
+$zipLib    = Join-Path $outDir "McSolverEngineZip.lib"
 
-@($dll, $dllLib, $staticLib) | ForEach-Object {
+@($dll, $dllLib, $staticLib, $zipLib) | ForEach-Object {
     if (-not (Test-Path $_)) {
         throw "Missing build output: $_"
     }
@@ -93,6 +118,7 @@ New-Item -ItemType Directory -Force -Path $stageDirs | Out-Null
 
 Copy-Item "$headersDir\*.h"  $stageInclude
 Copy-Item $staticLib         $stageLib
+Copy-Item $zipLib            $stageLib
 Copy-Item $dllLib            $stageLib
 Copy-Item $dll               $stageRuntime
 Copy-Item "$PSScriptRoot\McSolverEngine.targets" (Join-Path $stageTargets "$packageId.targets")

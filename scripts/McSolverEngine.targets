@@ -15,7 +15,7 @@
     </ClCompile>
     <Link>
       <AdditionalLibraryDirectories>$(McSolverEngineLibDir);%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
-      <AdditionalDependencies>McSolverEngineCore.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>McSolverEngineCore.lib;McSolverEngineZip.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
 

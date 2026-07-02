@@ -1,5 +1,15 @@
 cmake_minimum_required(VERSION 3.22)
 
+if(MSVC)
+    if(DEFINED ENV{CMAKE_GENERATOR_INSTANCE})
+        message(STATUS "Using Visual Studio instance: $ENV{CMAKE_GENERATOR_INSTANCE}")
+    elseif(CMAKE_GENERATOR_INSTANCE)
+        message(STATUS "Using Visual Studio instance: ${CMAKE_GENERATOR_INSTANCE}")
+    else()
+        message(STATUS "Using default Visual Studio generator (Visual Studio 17 2022)")
+    endif()
+endif()
+
 option(MCSOLVERENGINE_WITH_OCCT "Build OCCT-backed BREP export when OpenCASCADE is available" OFF)
 
 set(MCSOLVERENGINE_HAS_OCCT OFF)
