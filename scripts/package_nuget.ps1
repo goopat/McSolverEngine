@@ -68,12 +68,17 @@ if ($env:CMAKE_GENERATOR_INSTANCE) {
 & cmake @cmakeArgs
 if ($LASTEXITCODE -ne 0) { throw "CMake configure failed." }
 
-# --- CMake build ---
-Write-Host "CMake build..."
+# --- CMake build (Release) ---
+Write-Host "CMake build Release..."
 & cmake --build $buildDir --config $Configuration
-if ($LASTEXITCODE -ne 0) { throw "CMake build failed." }
+if ($LASTEXITCODE -ne 0) { throw "CMake build Release failed." }
 
-# --- Collect outputs ---
+# --- CMake build (Debug) ---
+Write-Host "CMake build Debug..."
+& cmake --build $buildDir --config Debug
+if ($LASTEXITCODE -ne 0) { throw "CMake build Debug failed." }
+
+# --- Collect Release outputs ---
 $outDir = Join-Path $buildDir $Configuration
 $dll       = Join-Path $outDir "mcsolverengine_native.dll"
 $dllLib    = Join-Path $outDir "mcsolverengine_native.lib"
@@ -83,6 +88,19 @@ $zipLib    = Join-Path $outDir "McSolverEngineZip.lib"
 @($dll, $dllLib, $staticLib, $zipLib) | ForEach-Object {
     if (-not (Test-Path $_)) {
         throw "Missing build output: $_"
+    }
+}
+
+# --- Collect Debug outputs ---
+$debugOutDir = Join-Path $buildDir "Debug"
+$debugDll       = Join-Path $debugOutDir "mcsolverengine_native.dll"
+$debugDllLib    = Join-Path $debugOutDir "mcsolverengine_native.lib"
+$debugStaticLib = Join-Path $debugOutDir "McSolverEngineCore.lib"
+$debugZipLib    = Join-Path $debugOutDir "McSolverEngineZip.lib"
+
+@($debugDll, $debugDllLib, $debugStaticLib, $debugZipLib) | ForEach-Object {
+    if (-not (Test-Path $_)) {
+        throw "Missing debug build output: $_"
     }
 }
 
@@ -103,14 +121,16 @@ $stageDir = Join-Path $buildDir "stage"
 Remove-Item -Recurse -Force $stageDir -ErrorAction SilentlyContinue
 
 $stageInclude = Join-Path $stageDir "build\native\include\McSolverEngine"
-$stageLib     = Join-Path $stageDir "lib\native\x64\Release"
-$stageRuntime = Join-Path $stageDir "runtimes\win-x64\native"
+$stageLib        = Join-Path $stageDir "lib\native\x64\Release"
+$stageLibDebug   = Join-Path $stageDir "lib\native\x64\Debug"
+$stageRuntime     = Join-Path $stageDir "runtimes\win-x64\native"
+$stageRuntimeDebug = Join-Path $stageDir "runtimes\win-x64\native-debug"
 $stagePython  = Join-Path $stageDir "runtimes\python\mcsolverengine_py"
 $stagePythonTests = Join-Path $stageDir "runtimes\python\tests"
 $stageTargets = Join-Path $stageDir "build\native"
 $stageBuildTargets = Join-Path $stageDir "build"
 
-$stageDirs = @($stageInclude, $stageLib, $stageRuntime, $stagePython, $stagePythonTests, $stageTargets)
+$stageDirs = @($stageInclude, $stageLib, $stageLibDebug, $stageRuntime, $stageRuntimeDebug, $stagePython, $stagePythonTests, $stageTargets)
 if ($IncludeDotNet) {
     $stageDirs += $stageBuildTargets
 }
@@ -121,6 +141,12 @@ Copy-Item $staticLib         $stageLib
 Copy-Item $zipLib            $stageLib
 Copy-Item $dllLib            $stageLib
 Copy-Item $dll               $stageRuntime
+
+# Debug outputs
+Copy-Item $debugStaticLib    $stageLibDebug
+Copy-Item $debugZipLib       $stageLibDebug
+Copy-Item $debugDllLib       $stageLibDebug
+Copy-Item $debugDll          $stageRuntimeDebug
 Copy-Item "$PSScriptRoot\McSolverEngine.targets" (Join-Path $stageTargets "$packageId.targets")
 
 # License
@@ -205,7 +231,9 @@ $nuspec = @"
     <file src="License.md"                                target="License.md" />
     <file src="build\native\include\McSolverEngine\*.h"  target="build\native\include\McSolverEngine\" />
     <file src="lib\native\x64\Release\*.lib"              target="lib\native\x64\Release\" />
+    <file src="lib\native\x64\Debug\*.lib"               target="lib\native\x64\Debug\" />
     <file src="runtimes\win-x64\native\*.dll"             target="runtimes\win-x64\native\" />
+    <file src="runtimes\win-x64\native-debug\*.dll"       target="runtimes\win-x64\native-debug\" />
     <file src="build\native\$packageId.targets"             target="build\native\$packageId.targets" />
     $dotnetFiles
     <file src="runtimes\python\mcsolverengine_py\*.py"     target="runtimes\python\mcsolverengine_py\" />

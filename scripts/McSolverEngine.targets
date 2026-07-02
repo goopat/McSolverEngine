@@ -2,10 +2,21 @@
 <Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <PropertyGroup>
     <McSolverEngineRoot>$(MSBuildThisFileDirectory)</McSolverEngineRoot>
-    <McSolverEngineDllDir>$(McSolverEngineRoot)..\..\runtimes\win-x64\native</McSolverEngineDllDir>
   </PropertyGroup>
 
-  <PropertyGroup Condition="'$(Platform)' == 'x64'">
+  <!-- Debug configuration: use debug DLL and debug import/static libs -->
+  <PropertyGroup Condition="'$(Configuration)' == 'Debug'">
+    <McSolverEngineDllDir>$(McSolverEngineRoot)..\..\runtimes\win-x64\native-debug</McSolverEngineDllDir>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)' == 'Debug' AND '$(Platform)' == 'x64'">
+    <McSolverEngineLibDir>$(McSolverEngineRoot)..\..\lib\native\x64\Debug</McSolverEngineLibDir>
+  </PropertyGroup>
+
+  <!-- Release (and other) configurations: use release DLL and release libs -->
+  <PropertyGroup Condition="'$(Configuration)' != 'Debug'">
+    <McSolverEngineDllDir>$(McSolverEngineRoot)..\..\runtimes\win-x64\native</McSolverEngineDllDir>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)' != 'Debug' AND '$(Platform)' == 'x64'">
     <McSolverEngineLibDir>$(McSolverEngineRoot)..\..\lib\native\x64\Release</McSolverEngineLibDir>
   </PropertyGroup>
 
