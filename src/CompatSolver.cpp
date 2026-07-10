@@ -2106,7 +2106,16 @@ bool addConstraint(SolveContext& context, const Constraint& constraint)
                     return true;
                 }
                 if (auto* arc = arcFor(context, constraint.first.geometryIndex)) {
-                    context.system.addConstraintL2LAngle(
+                    // L2LAngle between center→start and center→end vectors encodes
+                    // the arc's angular span.  For arcs with large radii the Jacobian
+                    // of this constraint w.r.t. point coordinates is ~1/r while the
+                    // arc rules have gradients ~r for the angle parameters.  The r²
+                    // scale disparity (e.g. ≈ 4.5×10⁷ for r=6700) makes the combined
+                    // system ill-conditioned and prevents convergence when the angle
+                    // value differs from the initial geometry.  Rescaling the
+                    // constraint by r normalises the Jacobian entries to ~1.
+                    const double radius = *arc->rad;
+                    const int idx = context.system.addConstraintL2LAngle(
                         arc->center,
                         arc->start,
                         arc->center,
@@ -2115,6 +2124,9 @@ bool addConstraint(SolveContext& context, const Constraint& constraint)
                         nextTag(context),
                         constraint.driving
                     );
+                    if (radius > 0.0 && std::isfinite(radius)) {
+                        context.system.rescaleConstraint(idx, radius);
+                    }
                     return true;
                 }
                 return false;

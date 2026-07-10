@@ -360,6 +360,11 @@ if(MCSOLVERENGINE_BUILD_TESTS)
     )
     mcsolverengine_enable_cxx20(McSolverEngineFreeCadSourcesTest PRIVATE)
 
+    add_executable(McSolverEngineV111T003DebugTest
+        tests/v111t003_debug.cpp
+    )
+    mcsolverengine_enable_cxx20(McSolverEngineV111T003DebugTest PRIVATE)
+
     add_executable(McSolverEngineUnitTest
         tests/unit.cpp
     )
@@ -400,6 +405,17 @@ if(MCSOLVERENGINE_BUILD_TESTS)
             ${CMAKE_CURRENT_SOURCE_DIR}/src
     )
 
+    target_include_directories(McSolverEngineV111T003DebugTest
+        PRIVATE
+            ${CMAKE_CURRENT_SOURCE_DIR}
+            ${CMAKE_CURRENT_SOURCE_DIR}/src
+    )
+
+    target_compile_definitions(McSolverEngineV111T003DebugTest
+        PRIVATE
+            MCSOLVERENGINE_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}"
+    )
+
     if(TARGET Eigen3::Eigen)
         target_link_libraries(McSolverEngineSmokeTest PRIVATE Eigen3::Eigen)
     elseif(EIGEN3_INCLUDE_DIR)
@@ -430,6 +446,11 @@ if(MCSOLVERENGINE_BUILD_TESTS)
     )
 
     target_link_libraries(McSolverEngineFreeCadSourcesTest
+        PRIVATE
+            McSolverEngineCore
+    )
+
+    target_link_libraries(McSolverEngineV111T003DebugTest
         PRIVATE
             McSolverEngineCore
     )
@@ -471,6 +492,12 @@ if(MCSOLVERENGINE_BUILD_TESTS)
                     ${CMAKE_COMMAND} -E env "${MCSOLVERENGINE_LIB_PATH_VAR}=$<TARGET_FILE_DIR:McSolverEngineNative>${MCSOLVERENGINE_PATH_SEP}${MCSOLVERENGINE_RUNTIME_PATH}${MCSOLVERENGINE_PATH_SEP}$ENV{${MCSOLVERENGINE_LIB_PATH_VAR}}"
                     $<TARGET_FILE:McSolverEngineFreeCadSourcesTest>
             )
+            add_test(
+                NAME McSolverEngineV111T003DebugTest
+                COMMAND
+                    ${CMAKE_COMMAND} -E env "${MCSOLVERENGINE_LIB_PATH_VAR}=$<TARGET_FILE_DIR:McSolverEngineNative>${MCSOLVERENGINE_PATH_SEP}${MCSOLVERENGINE_RUNTIME_PATH}${MCSOLVERENGINE_PATH_SEP}$ENV{${MCSOLVERENGINE_LIB_PATH_VAR}}"
+                    $<TARGET_FILE:McSolverEngineV111T003DebugTest>
+            )
         else()
             add_test(NAME McSolverEngineSmokeTest COMMAND McSolverEngineSmokeTest)
             add_test(
@@ -490,6 +517,12 @@ if(MCSOLVERENGINE_BUILD_TESTS)
                 COMMAND
                     ${CMAKE_COMMAND} -E env "${MCSOLVERENGINE_LIB_PATH_VAR}=$<TARGET_FILE_DIR:McSolverEngineNative>${MCSOLVERENGINE_PATH_SEP}$ENV{${MCSOLVERENGINE_LIB_PATH_VAR}}"
                     $<TARGET_FILE:McSolverEngineFreeCadSourcesTest>
+            )
+            add_test(
+                NAME McSolverEngineV111T003DebugTest
+                COMMAND
+                    ${CMAKE_COMMAND} -E env "${MCSOLVERENGINE_LIB_PATH_VAR}=$<TARGET_FILE_DIR:McSolverEngineNative>${MCSOLVERENGINE_PATH_SEP}$ENV{${MCSOLVERENGINE_LIB_PATH_VAR}}"
+                    $<TARGET_FILE:McSolverEngineV111T003DebugTest>
             )
         endif()
 

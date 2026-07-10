@@ -703,5 +703,59 @@ class TestV1119500SolveWithNoChangeParameters(unittest.TestCase):
         _assert_brep_geometry_equivalent_unordered(self, expected_brep, result.brepUtf8)
 
 
+class TestV111T003ArcOfArcParameter(unittest.TestCase):
+    """Solve V111.T003.FCStd with VarSet.a_of_arc=60 (overrides default 50°)."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.fcstd_path = os.path.join(REPO_ROOT, "fcstdDoc", "V111.T003.FCStd")
+        if not os.path.isfile(cls.fcstd_path):
+            raise unittest.SkipTest(f"Missing {cls.fcstd_path}")
+        cls.xml = Engine.extract_fcstd_doc(cls.fcstd_path)
+
+    def test_solve_with_default_parameter_succeeds(self):
+        """Solve with the default a_of_arc=50° (no parameter override)."""
+        result = Engine.solve_to_geometry(self.xml, "Sketch")
+        self.assertIn("success", result.importStatus.lower())
+        self.assertIn("success", result.solveStatus.lower())
+        self.assertGreater(len(result.geometries), 0)
+        # Verify arc geometry is present
+        arcs = [g for g in result.geometries if g.kind == GEOMETRY_ARC]
+        self.assertGreater(len(arcs), 0, "Expected at least one arc geometry")
+
+    def test_solve_with_a_of_arc_60_succeeds(self):
+        """Solve with VarSet.a_of_arc=60° parameter override."""
+        result = Engine.solve_to_geometry(
+            self.xml, "Sketch", parameters={"VarSet.a_of_arc": "60"}
+        )
+        self.assertIn("success", result.importStatus.lower())
+        self.assertIn("success", result.solveStatus.lower())
+        self.assertGreater(len(result.geometries), 0)
+        # Verify the VarSet property was overridden
+        self.assertIn("VarSet.a_of_arc", result.varSetProperties)
+        self.assertEqual(
+            "60", result.varSetProperties["VarSet.a_of_arc"].value,
+            "Expected a_of_arc to be overridden to 60",
+        )
+
+    def test_solve_with_a_of_arc_60_produces_different_angles(self):
+        """Overriding a_of_arc must change the arc's angular span."""
+        default_result = Engine.solve_to_geometry(self.xml, "Sketch")
+        param_result = Engine.solve_to_geometry(
+            self.xml, "Sketch", parameters={"VarSet.a_of_arc": "60"}
+        )
+        default_arcs = [g for g in default_result.geometries if g.kind == GEOMETRY_ARC]
+        param_arcs = [g for g in param_result.geometries if g.kind == GEOMETRY_ARC]
+        self.assertEqual(len(default_arcs), len(param_arcs))
+        # The Angle constraint changes the arc's angular span, so
+        # startAngle/endAngle must differ between the two solves.
+        for da, pa in zip(default_arcs, param_arcs):
+            self.assertFalse(
+                abs(da.startAngle - pa.startAngle) < 1e-9
+                and abs(da.endAngle - pa.endAngle) < 1e-9,
+                "Expected arc angles to differ after overriding a_of_arc=60",
+            )
+
+
 if __name__ == "__main__":
     unittest.main()
