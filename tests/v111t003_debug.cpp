@@ -342,6 +342,109 @@ int main()
         }
     }
 
+    // ── V111.T001.FCStd ─────────────────────────────────────────
+    std::cout << "=== V111.T001.FCStd ===\n";
+
+    const std::string fcstdPathT001 = sourceDir + "/fcstdDoc/V111.T001.FCStd";
+    auto extrT001 = McSolverEngine::ZipExtract::extractDocumentXml(fcstdPathT001);
+    if (!expect(extrT001.success, "Extract Document.xml from V111.T001.FCStd")) {
+        std::cerr << "  Error: " << extrT001.errorMessage << '\n';
+        return EXIT_FAILURE;
+    }
+    const std::string xmlT001(extrT001.documentXml.get(), extrT001.documentXmlSize);
+    std::cout << "  Extracted: " << xmlT001.size() << " bytes\n\n";
+
+    // Quick inspect
+    auto inspect001 = McSolverEngine::DocumentXml::inspectDocumentXml(xmlT001);
+    if (inspect001.succeeded()) {
+        for (const auto& sk : inspect001.sketches) {
+            if (sk.objectName == "Sketch") {
+                std::cout << "  Sketch geometries: " << sk.geometries.size()
+                          << "  constraints: " << sk.constraints.size() << '\n';
+                std::cout << "  Angle constraint: ["
+                          << sk.constraints.back().originalIndex << "] "
+                          << sk.constraints.back().kind
+                          << " value=" << sk.constraints.back().value << '\n';
+            }
+        }
+    }
+    std::cout << '\n';
+
+    // Default solve with full diagnostics
+    std::cout << "  Default solve (no params):\n";
+    {
+        auto imported = McSolverEngine::DocumentXml::importSketchFromDocumentXml(
+            xmlT001, ParameterMap{}, "Sketch");
+        std::cout << "    import: " << (imported.imported() ? "OK" : "FAILED") << '\n';
+        if (!imported.messages.empty()) {
+            for (const auto& m : imported.messages) {
+                std::cout << "    msg: " << m << '\n';
+            }
+        }
+
+        auto solveResult = McSolverEngine::Compat::solveSketch(imported.model, ParameterMap{});
+        std::cout << "    solve: "
+                  << (solveResult.solved() ? "OK" : "FAILED")
+                  << "  dof=" << solveResult.degreesOfFreedom
+                  << "  conflicting=" << solveResult.conflicting.size()
+                  << "  redundant=" << solveResult.redundant.size()
+                  << "  partialRedundant=" << solveResult.partiallyRedundant.size()
+                  << '\n';
+
+        if (!solveResult.conflicting.empty()) {
+            std::cout << "    conflicting constraints:";
+            for (int c : solveResult.conflicting) std::cout << " " << c;
+            std::cout << '\n';
+        }
+        if (!solveResult.redundant.empty()) {
+            std::cout << "    redundant constraints:";
+            for (int c : solveResult.redundant) std::cout << " " << c;
+            std::cout << '\n';
+        }
+
+        // Print initial geometry state (arc start/end points, point coords)
+        std::cout << "    initial arc params:\n";
+        for (std::size_t gi = 0; gi < imported.model.geometries().size(); ++gi) {
+            const auto& g = imported.model.geometries()[gi];
+            if (auto* arc = std::get_if<McSolverEngine::Compat::ArcGeometry>(&g.data)) {
+                std::cout << "      arc[" << gi << "]: c=(" << arc->center.x << "," << arc->center.y
+                          << ") r=" << arc->radius
+                          << " sa=" << arc->startAngle
+                          << " ea=" << arc->endAngle << '\n';
+            } else if (auto* pt = std::get_if<McSolverEngine::Compat::PointGeometry>(&g.data)) {
+                std::cout << "      point[" << gi << "]: (" << pt->point.x << "," << pt->point.y << ")\n";
+            } else if (auto* ln = std::get_if<McSolverEngine::Compat::LineSegmentGeometry>(&g.data)) {
+                std::cout << "      line[" << gi << "]: (" << ln->start.x << "," << ln->start.y
+                          << ")->(" << ln->end.x << "," << ln->end.y << ")"
+                          << " ext=" << g.external << " constr=" << g.construction << '\n';
+            }
+        }
+    }
+
+    // Parameter sweep
+    std::cout << "  Parameter sweep (VarSet.a_of_arc):\n";
+    {
+        int pass001 = 0, fail001 = 0;
+        for (int val : {30, 40, 50, 60, 70, 90}) {
+            auto r = runSolve(xmlT001,
+                              "V111.T001/a_of_arc=" + std::to_string(val),
+                              ParameterMap{{"VarSet.a_of_arc", std::to_string(val)}});
+            if (r.solveOk) {
+                ++pass001;
+                std::cout << "    [PASS] a_of_arc=" << val << "°";
+            } else {
+                ++fail001;
+                std::cout << "    [FAIL] a_of_arc=" << val << "°";
+            }
+            std::cout << "  geometryCount=" << r.geometryCount
+                      << "  importOk=" << r.importOk << '\n';
+        }
+        std::cout << "    Summary: " << pass001 << " passed, " << fail001 << " failed\n\n";
+        if (!expect(pass001 == 6, "All V111.T001 parameter values should solve")) {
+            return EXIT_FAILURE;
+        }
+    }
+
     std::cout << "\nDone.\n";
     return EXIT_SUCCESS;
 }

@@ -1317,7 +1317,19 @@ void addArcGeometry(SolveContext& context, const ArcGeometry& geometry, bool fix
     }
 
     if (!fixed) {
-        context.system.addConstraintArcRules(context.arcs.back(), nextTag(context));
+        // addConstraintArcRules adds two CurveValue constraints (start + end).
+        // Their gradient w.r.t. the angle parameter is ~r while other
+        // constraints (Coincident, PointOnObject) have gradients ~1 for
+        // point coordinates.  For large radii the r-fold scale disparity
+        // makes the combined system ill-conditioned.  Rescale both arc
+        // rules by 1/r to normalise the angle-parameter Jacobian to ~1.
+        const int secondIdx = context.system.addConstraintArcRules(
+            context.arcs.back(), nextTag(context));
+        const double r = *radius;
+        if (r > 0.0 && std::isfinite(r)) {
+            context.system.rescaleConstraint(secondIdx - 1, 1.0 / r);
+            context.system.rescaleConstraint(secondIdx, 1.0 / r);
+        }
     }
 }
 
