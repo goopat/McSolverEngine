@@ -1317,23 +1317,29 @@ void addArcGeometry(SolveContext& context, const ArcGeometry& geometry, bool fix
     }
 
     if (!fixed) {
-        // addConstraintArcRules issues two addConstraintCurveValue calls (start
-        // and end), and each call adds two ConstraintCurveValue constraints (one
-        // for x, one for y) — so four constraints total, occupying the last four
-        // slots ending at the returned index.  Their gradient w.r.t. the angle
-        // parameter is ~r while other constraints (Coincident, PointOnObject)
-        // have gradients ~1 for point coordinates.  For large radii the r-fold
-        // scale disparity makes the combined system ill-conditioned.  Rescale
-        // all four arc rules by 1/r to normalise the angle-parameter Jacobian
-        // to ~1.
+        // ArcRules: each ConstraintCurveValue's gradient w.r.t. the angle
+        // parameter (u) is ~r (from Curve::Value(u,du) where dx/du = -r sin u
+        // etc.) while the gradient w.r.t. point coordinates is 1.  The L2LAngle
+        // constraint (added elsewhere for the Angle constraint kind) has the
+        // inverse: gradient w.r.t. point coordinates ~1/r and w.r.t. angle ~1.
+        //
+        // To balance the Jacobian columns, both families are scaled by r^p
+        // (ArcRules: 1/r^p, L2LAngle: r^p) with p = 1/2.  This gives every
+        // column a norm ~sqrt(r), and the column ratio between angle and
+        // point-coordinate parameters is ~1.  In contrast, scaling ArcRules by
+        // 1/r and L2LAngle by r amplifies the L2LAngle residual by the full
+        // radius, making the DogLeg error-based convergence criterion
+        // (tolf=1e-10) unreachable for large radii (r * angular_error <= 1e-10
+        // demands angular_error ~1e-14 rad, which is ~68x double epsilon).
         const int secondIdx = context.system.addConstraintArcRules(
             context.arcs.back(), nextTag(context));
         const double r = *radius;
         if (r > 0.0 && std::isfinite(r)) {
-            context.system.rescaleConstraint(secondIdx - 3, 1.0 / r);
-            context.system.rescaleConstraint(secondIdx - 2, 1.0 / r);
-            context.system.rescaleConstraint(secondIdx - 1, 1.0 / r);
-            context.system.rescaleConstraint(secondIdx, 1.0 / r);
+            const double invSqrtR = 1.0 / std::sqrt(r);
+            context.system.rescaleConstraint(secondIdx - 3, invSqrtR);
+            context.system.rescaleConstraint(secondIdx - 2, invSqrtR);
+            context.system.rescaleConstraint(secondIdx - 1, invSqrtR);
+            context.system.rescaleConstraint(secondIdx, invSqrtR);
         }
     }
 }
@@ -2124,13 +2130,9 @@ bool addConstraint(SolveContext& context, const Constraint& constraint)
                 }
                 if (auto* arc = arcFor(context, constraint.first.geometryIndex)) {
                     // L2LAngle between center→start and center→end vectors encodes
-                    // the arc's angular span.  For arcs with large radii the Jacobian
-                    // of this constraint w.r.t. point coordinates is ~1/r while the
-                    // arc rules have gradients ~r for the angle parameters.  The r²
-                    // scale disparity (e.g. ≈ 4.5×10⁷ for r=6700) makes the combined
-                    // system ill-conditioned and prevents convergence when the angle
-                    // value differs from the initial geometry.  Rescaling the
-                    // constraint by r normalises the Jacobian entries to ~1.
+                    // the arc's angular span.  Scaled by sqrt(r) to match the
+                    // arc rules' 1/sqrt(r) scaling — see the ArcRules comment
+                    // above for the rationale.
                     const double radius = *arc->rad;
                     const int idx = context.system.addConstraintL2LAngle(
                         arc->center,
@@ -2142,7 +2144,7 @@ bool addConstraint(SolveContext& context, const Constraint& constraint)
                         constraint.driving
                     );
                     if (radius > 0.0 && std::isfinite(radius)) {
-                        context.system.rescaleConstraint(idx, radius);
+                        context.system.rescaleConstraint(idx, std::sqrt(radius));
                     }
                     return true;
                 }
