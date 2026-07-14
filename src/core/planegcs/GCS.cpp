@@ -2297,14 +2297,19 @@ int System::solve_DL(SubSystem* subsys, bool isRedundantsolving, bool useScaling
     Eigen::MatrixXd Jx(csize, xsize), Jx_new(csize, xsize);
     Eigen::VectorXd g(xsize), h_sd(xsize), h_gn(xsize), h_dl(xsize);
 
-    // Column scaling (More/Marquardt style). scal(i) tracks the running maximum
-    // of the i-th Jacobian column norm (floored at 1). When useScaling is set,
-    // the dogleg direction and trust region are evaluated in the scaled
+    // Column scaling (Jacobian column-norm scaling). scal(i) is the current
+    // Euclidean norm of the i-th Jacobian column, floored at 1. When useScaling
+    // is set, the dogleg direction and trust region are evaluated in the scaled
     // coordinates y = diag(scal)*x so the step is invariant to parameter
     // scaling; badly-scaled sketches (huge arc radii / long lines coupled to
-    // angle parameters) then converge instead of stalling. When useScaling is
-    // false scal stays all-ones and every computation below is bit-identical to
-    // the original unscaled DogLeg.
+    // angle parameters) then converge instead of stalling. The scale is
+    // recomputed every accepted iteration rather than kept as a running maximum:
+    // a running max can be inflated by a single transient bad iterate and then
+    // permanently freeze a stiff parameter, which stalled the solver on some
+    // configurations. Recomputing is self-correcting because the trust region
+    // adapts to the current scaling via the usual gain-ratio test. When
+    // useScaling is false scal stays empty and every computation below is
+    // bit-identical to the original unscaled DogLeg.
     Eigen::VectorXd scal;
     if (useScaling) {
         scal = Eigen::VectorXd::Ones(xsize);
@@ -2314,10 +2319,7 @@ int System::solve_DL(SubSystem* subsys, bool isRedundantsolving, bool useScaling
             return;
         }
         for (int i = 0; i < xsize; ++i) {
-            const double columnNorm = Jx.col(i).norm();
-            if (columnNorm > scal(i)) {
-                scal(i) = columnNorm;
-            }
+            scal(i) = std::max(1.0, Jx.col(i).norm());
         }
     };
 

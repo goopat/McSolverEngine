@@ -69,33 +69,24 @@ int main()
         const char* label;
     };
 
-    // Hard-regression cases: the .shortR variants have small radii so the
-    // constraint-level Jacobian rescaling (arc-rules ~1/r, L2LAngle ~r) keeps
-    // column norms well-conditioned. With the DogLegScaled fallback solver,
-    // these must pass every value in the sweep.
-    const Case shortRCases[] = {
+    // Hard-regression cases: every sketch must solve at every value in the
+    // full 0.5°–359.5° sweep. The .shortR variants have small radii; the
+    // full-radius originals are badly scaled (large arc radii / long lines
+    // coupled to angle parameters) and rely on the constraint-level Jacobian
+    // rescaling (arc-rules ~1/r, L2LAngle ~r) plus the DogLegScaled column-
+    // scaling fallback solver. All six gate the test.
+    const Case cases[] = {
         {"V111.T003.shortR.FCStd", "VarSet.a_of_arc", "a_of_arc"},
         {"V111.T001.shortR.FCStd", "VarSet.a_of_arc", "a_of_arc"},
         {"V101.T002.shortR.FCStd", "VarSet.a_of_l2l", "a_of_l2l"},
-    };
-
-    // Informational sweep: the large-radius originals exercise both the
-    // constraint-level rescaling and the DogLegScaled column scaling. A
-    // handful of values near the extremes may still not converge because
-    // the arc-rules and L2LAngle Jacobian rows are not per-parameter
-    // scaled in the GCS core. These sweeps document the coverage; only
-    // the shortR cases above gate CI.
-    const Case fullCases[] = {
-        {"V111.T003.FCStd", "VarSet.a_of_arc", "a_of_arc"},
-        {"V111.T001.FCStd", "VarSet.a_of_arc", "a_of_arc"},
-        {"V101.T002.FCStd", "VarSet.a_of_l2l", "a_of_l2l"},
+        {"V111.T003.FCStd",        "VarSet.a_of_arc", "a_of_arc"},
+        {"V111.T001.FCStd",        "VarSet.a_of_arc", "a_of_arc"},
+        {"V101.T002.FCStd",        "VarSet.a_of_l2l", "a_of_l2l"},
     };
 
     int totalFail = 0;
-
-    // ── Hard-regression sweep (.shortR) ──────────────────────────
-    std::cout << "=== Hard-regression (.shortR) ===\n";
-    for (const auto& c : shortRCases) {
+    std::cout << "=== Hard-regression (all cases gate) ===\n";
+    for (const auto& c : cases) {
         std::cout << "-- " << c.file << "  (" << c.label
                   << "  0.5°–359.5°  /  0.5°) --\n";
         const auto e = McSolverEngine::ZipExtract::extractDocumentXml(
@@ -103,21 +94,6 @@ int main()
         if (!expect(e.success, c.file)) { ++totalFail; continue; }
         const std::string xml(e.documentXml.get(), e.documentXmlSize);
         totalFail += fullSweep(xml, c.paramKey, c.label, 0.5, 359.5, 0.5);
-    }
-
-    // ── Informational sweep (full-radius, not gating) ────────────
-    std::cout << "\n=== Informational (full-radius) ===\n";
-    for (const auto& c : fullCases) {
-        std::cout << "-- " << c.file << "  (" << c.label
-                  << "  0.5°–359.5°  /  0.5°) --\n";
-        const auto e = McSolverEngine::ZipExtract::extractDocumentXml(
-            sourceDir + "/fcstdDoc/" + c.file);
-        if (!expect(e.success, c.file)) continue;
-        const std::string xml(e.documentXml.get(), e.documentXmlSize);
-        const int f = fullSweep(xml, c.paramKey, c.label, 0.5, 359.5, 0.5);
-        if (f > 0) {
-            std::cout << "    (informational — does not fail the test)\n";
-        }
     }
 
     std::cout << "\nDone.\n";
