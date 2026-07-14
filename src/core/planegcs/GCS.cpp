@@ -1925,6 +1925,9 @@ int System::solve(SubSystem* subsys, bool isFine, Algorithm alg, bool isRedundan
     else if (alg == DogLeg) {
         return solve_DL(subsys, isRedundantsolving);
     }
+    else if (alg == DogLegScaled) {
+        return solve_DL(subsys, isRedundantsolving, /*useScaling=*/true);
+    }
     else {
         return Failed;
     }
@@ -2236,7 +2239,7 @@ int System::solve_LM(SubSystem* subsys, bool isRedundantsolving)
     return (stop == 1) ? Success : Failed;
 }
 
-int System::solve_DL(SubSystem* subsys, bool isRedundantsolving)
+int System::solve_DL(SubSystem* subsys, bool isRedundantsolving, bool useScaling)
 {
 #ifdef _GCS_EXTRACT_SOLVER_SUBSYSTEM_
     extractSubsystem(subsys, isRedundantsolving);
@@ -2262,6 +2265,17 @@ int System::solve_DL(SubSystem* subsys, bool isRedundantsolving)
         maxIterNumber = (sketchSizeMultiplierRedundant ? maxIterRedundant * xsize : maxIterRedundant);
     }
 
+    if (useScaling) {
+        // The scaled fallback only runs on badly-scaled sketches that the
+        // default solvers could not handle. Column scaling makes them converge,
+        // but starting from a distant configuration they need many more than the
+        // default iteration budget (measured up to ~830 across the regression
+        // corpus). Raise the cap well above that; each iteration is cheap on the
+        // small fallback subsystems and divergence/NaN are still caught below.
+        constexpr int scaledMaxIter = 4000;
+        maxIterNumber = std::max(maxIterNumber, scaledMaxIter);
+    }
+
     if (debugMode == IterationLevel) {
         std::stringstream stream;
         stream << "DL: tolg: " << tolg << ", tolx: " << tolx << ", tolf: " << tolf
@@ -2283,12 +2297,44 @@ int System::solve_DL(SubSystem* subsys, bool isRedundantsolving)
     Eigen::MatrixXd Jx(csize, xsize), Jx_new(csize, xsize);
     Eigen::VectorXd g(xsize), h_sd(xsize), h_gn(xsize), h_dl(xsize);
 
+    // Column scaling (More/Marquardt style). scal(i) tracks the running maximum
+    // of the i-th Jacobian column norm (floored at 1). When useScaling is set,
+    // the dogleg direction and trust region are evaluated in the scaled
+    // coordinates y = diag(scal)*x so the step is invariant to parameter
+    // scaling; badly-scaled sketches (huge arc radii / long lines coupled to
+    // angle parameters) then converge instead of stalling. When useScaling is
+    // false scal stays all-ones and every computation below is bit-identical to
+    // the original unscaled DogLeg.
+    Eigen::VectorXd scal;
+    if (useScaling) {
+        scal = Eigen::VectorXd::Ones(xsize);
+    }
+    auto updateScale = [&]() {
+        if (!useScaling) {
+            return;
+        }
+        for (int i = 0; i < xsize; ++i) {
+            const double columnNorm = Jx.col(i).norm();
+            if (columnNorm > scal(i)) {
+                scal(i) = columnNorm;
+            }
+        }
+    };
+
+    // Pre-allocated working-space temporaries for the scaled path.
+    // Declared outside the loop to avoid repeated heap allocations.
+    Eigen::VectorXd sinv;
+    Eigen::MatrixXd Jscaled;
+    Eigen::VectorXd gwScaled;
+    Eigen::VectorXd h_stepScaled;
+
     subsys->redirectParams();
 
     double err;
     subsys->getParams(x);
     subsys->calcResidual(fx, err);
     subsys->calcJacobi(Jx);
+    updateScale();
 
     g = Jx.transpose() * (-fx);
 
@@ -2327,31 +2373,42 @@ int System::solve_DL(SubSystem* subsys, bool isRedundantsolving)
             break;
         }
 
-        // get the steepest descent direction
-        alpha = g.squaredNorm() / (Jx * g).squaredNorm();
-        h_sd = alpha * g;
+        // Build the working-space Jacobian and gradient. Without scaling these
+        // alias the parameter-space quantities, so the dogleg math below is
+        // unchanged; with scaling they are expressed in y = diag(scal)*x.
+        if (useScaling) {
+            sinv = scal.cwiseInverse();
+            Jscaled = Jx * sinv.asDiagonal();
+            gwScaled = g.cwiseProduct(sinv);
+        }
+        const Eigen::MatrixXd& Jw = useScaling ? Jscaled : Jx;
+        const Eigen::VectorXd& gw = useScaling ? gwScaled : g;
 
-        // get the gauss-newton step
+        // get the steepest descent direction (working space)
+        alpha = gw.squaredNorm() / (Jw * gw).squaredNorm();
+        h_sd = alpha * gw;
+
+        // get the gauss-newton step (working space)
         // https://forum.freecad.org/viewtopic.php?f=10&t=12769&start=50#p106220
         // https://forum.kde.org/viewtopic.php?f=74&t=129439#p346104
         switch (dogLegGaussStep) {
             case FullPivLU:
-                h_gn = Jx.fullPivLu().solve(-fx);
+                h_gn = Jw.fullPivLu().solve(-fx);
                 break;
             case LeastNormFullPivLU:
-                h_gn = Jx.adjoint() * (Jx * Jx.adjoint()).fullPivLu().solve(-fx);
+                h_gn = Jw.adjoint() * (Jw * Jw.adjoint()).fullPivLu().solve(-fx);
                 break;
             case LeastNormLdlt:
-                h_gn = Jx.adjoint() * (Jx * Jx.adjoint()).ldlt().solve(-fx);
+                h_gn = Jw.adjoint() * (Jw * Jw.adjoint()).ldlt().solve(-fx);
                 break;
         }
 
-        double rel_error = (Jx * h_gn + fx).norm() / fx.norm();
+        double rel_error = (Jw * h_gn + fx).norm() / fx.norm();
         if (rel_error > 1e15) {
             break;
         }
 
-        // compute the dogleg step
+        // compute the dogleg step (working space)
         if (h_gn.norm() < delta) {
             h_dl = h_gn;
             if (h_dl.norm() <= tolx * (tolx + x.norm())) {
@@ -2359,8 +2416,8 @@ int System::solve_DL(SubSystem* subsys, bool isRedundantsolving)
                 break;
             }
         }
-        else if (alpha * g.norm() >= delta) {
-            h_dl = (delta / (alpha * g.norm())) * h_sd;
+        else if (alpha * gw.norm() >= delta) {
+            h_dl = (delta / (alpha * gw.norm())) * h_sd;
         }
         else {
             // compute beta
@@ -2381,15 +2438,21 @@ int System::solve_DL(SubSystem* subsys, bool isRedundantsolving)
             h_dl = h_sd + beta * b;
         }
 
+        // map the working-space step back to parameter space
+        if (useScaling) {
+            h_stepScaled = h_dl.cwiseProduct(sinv);
+        }
+        const Eigen::VectorXd& h_step = useScaling ? h_stepScaled : h_dl;
+
         // get the new values
         double err_new;
-        x_new = x + h_dl;
+        x_new = x + h_step;
         subsys->setParams(x_new);
         subsys->calcResidual(fx_new, err_new);
         subsys->calcJacobi(Jx_new);
 
         // calculate the linear model and the update ratio
-        double dL = err - 0.5 * (fx + Jx * h_dl).squaredNorm();
+        double dL = err - 0.5 * (fx + Jx * h_step).squaredNorm();
         double dF = err - err_new;
         double rho = dL / dF;
 
@@ -2398,6 +2461,7 @@ int System::solve_DL(SubSystem* subsys, bool isRedundantsolving)
             Jx = Jx_new;
             fx = fx_new;
             err = err_new;
+            updateScale();
 
             g = Jx.transpose() * (-fx);
 
@@ -5563,14 +5627,17 @@ void System::identifyConflictingRedundantConstraints(
     if (debugMode == Minimal || debugMode == IterationLevel) {
         std::string solvername;
         switch (alg) {
-            case 0:
+            case BFGS:
                 solvername = "BFGS";
                 break;
-            case 1:  // solving with the LevenbergMarquardt solver
+            case LevenbergMarquardt:
                 solvername = "LevenbergMarquardt";
                 break;
-            case 2:  // solving with the BFGS solver
+            case DogLeg:
                 solvername = "DogLeg";
+                break;
+            case DogLegScaled:
+                solvername = "DogLegScaled";
                 break;
         }
 

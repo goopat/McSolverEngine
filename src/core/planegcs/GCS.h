@@ -62,7 +62,14 @@ enum Algorithm
 {
     BFGS = 0,
     LevenbergMarquardt = 1,
-    DogLeg = 2
+    DogLeg = 2,
+    // DogLeg with column (per-parameter) scaling of the trust region and
+    // steepest-descent direction. It is invariant to parameter scaling while
+    // keeping DogLeg's globalisation, so it converges on badly-scaled sketches
+    // (e.g. very large arc radii or long lines mixed with angle parameters)
+    // where the unscaled solvers stall. Used as an additive last-resort
+    // fallback, so well-scaled sketches keep their existing solve path.
+    DogLegScaled = 3
 };
 
 enum DogLegGaussStep
@@ -145,7 +152,7 @@ private:
 
     int solve_BFGS(SubSystem* subsys, bool isFine = true, bool isRedundantsolving = false);
     int solve_LM(SubSystem* subsys, bool isRedundantsolving = false);
-    int solve_DL(SubSystem* subsys, bool isRedundantsolving = false);
+    int solve_DL(SubSystem* subsys, bool isRedundantsolving = false, bool useScaling = false);
 
     void makeReducedJacobian(
         Eigen::MatrixXd& J,

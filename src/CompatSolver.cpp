@@ -1317,16 +1317,21 @@ void addArcGeometry(SolveContext& context, const ArcGeometry& geometry, bool fix
     }
 
     if (!fixed) {
-        // addConstraintArcRules adds two CurveValue constraints (start + end).
-        // Their gradient w.r.t. the angle parameter is ~r while other
-        // constraints (Coincident, PointOnObject) have gradients ~1 for
-        // point coordinates.  For large radii the r-fold scale disparity
-        // makes the combined system ill-conditioned.  Rescale both arc
-        // rules by 1/r to normalise the angle-parameter Jacobian to ~1.
+        // addConstraintArcRules issues two addConstraintCurveValue calls (start
+        // and end), and each call adds two ConstraintCurveValue constraints (one
+        // for x, one for y) — so four constraints total, occupying the last four
+        // slots ending at the returned index.  Their gradient w.r.t. the angle
+        // parameter is ~r while other constraints (Coincident, PointOnObject)
+        // have gradients ~1 for point coordinates.  For large radii the r-fold
+        // scale disparity makes the combined system ill-conditioned.  Rescale
+        // all four arc rules by 1/r to normalise the angle-parameter Jacobian
+        // to ~1.
         const int secondIdx = context.system.addConstraintArcRules(
             context.arcs.back(), nextTag(context));
         const double r = *radius;
         if (r > 0.0 && std::isfinite(r)) {
+            context.system.rescaleConstraint(secondIdx - 3, 1.0 / r);
+            context.system.rescaleConstraint(secondIdx - 2, 1.0 / r);
             context.system.rescaleConstraint(secondIdx - 1, 1.0 / r);
             context.system.rescaleConstraint(secondIdx, 1.0 / r);
         }
@@ -2960,6 +2965,18 @@ SolveResult solveSketchWithResolvedValues(SketchModel& model, const ValueResolve
     }
     if (!appliedSolution) {
         gcsStatus = context.system.solve(true, GCS::BFGS);
+        if (gcsStatus == GCS::Success) {
+            appliedSolution = applySolvedState(model, context);
+            sawInvalidSolution = sawInvalidSolution || !appliedSolution;
+        }
+    }
+    if (!appliedSolution) {
+        // Scale-invariant DogLeg. Reached only when the unscaled solvers above
+        // have all failed, which happens on badly-scaled sketches where length
+        // parameters (large arc radii, long lines) dwarf the angle parameters
+        // they are coupled to. Column scaling conditions those cases without
+        // altering the well-scaled sketches handled by the earlier stages.
+        gcsStatus = context.system.solve(true, GCS::DogLegScaled);
         if (gcsStatus == GCS::Success) {
             appliedSolution = applySolvedState(model, context);
             sawInvalidSolution = sawInvalidSolution || !appliedSolution;
