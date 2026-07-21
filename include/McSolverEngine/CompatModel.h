@@ -2,8 +2,10 @@
 
 #include <cstddef>
 #include <map>
+#include <optional>
 #include <string>
 #include <string_view>
+#include <unordered_map>
 #include <variant>
 #include <vector>
 
@@ -18,6 +20,10 @@ using ParameterMap = std::map<std::string, std::string>;
 
 namespace McSolverEngine::Compat
 {
+
+// Forward declarations for friend declarations in SketchModel
+enum class SolveStatus;
+struct SolveResult;
 
 struct Point2
 {
@@ -138,6 +144,12 @@ using GeometryData = std::variant<
     ArcOfParabolaGeometry,
     BSplineGeometry>;
 
+struct ExternalGeometrySource
+{
+    std::string sourceObject;   // source sketch object name, e.g. "SketchB"
+    std::string sourceSub;      // sub-element name, e.g. "Edge1"
+};
+
 struct Geometry
 {
     GeometryKind kind {GeometryKind::Point};
@@ -146,6 +158,7 @@ struct Geometry
     bool external {false};
     bool blocked {false};
     int originalId {-99999999};
+    std::optional<ExternalGeometrySource> externalSource;
 };
 
 enum class PointRole
@@ -312,11 +325,59 @@ private:
     std::vector<Geometry> geometries_;
     std::vector<Constraint> constraints_;
     Placement placement_ {};
+
+    // ──── Cross-sketch cascade context ────
+    // Dependency sketches imported from the same Document.xml.
+    // Key: source object name (e.g. "SketchB").
+    // Populated by importSketchFromDocumentXml when ExternalGeometry
+    // links reference other sketches in the same document.
+    std::unordered_map<std::string, SketchModel> dependencyModels_;
+
+    // Topologically sorted dependency names (DFS post-order).
+    // Empty when there are no cross-sketch references or a cycle
+    // was detected during import.
+    std::vector<std::string> dependencySolveOrder_;
+
+    friend SolveResult solveSketch(SketchModel& model);
+    friend SolveResult solveSketch(SketchModel& model, const McSolverEngine::ParameterMap& parameters);
+    friend class SketchModelInternalAccess;
 };
 
 [[nodiscard]] MCSOLVERENGINE_EXPORT bool isPhase1ConstraintSupported(ConstraintKind kind) noexcept;
 [[nodiscard]] MCSOLVERENGINE_EXPORT std::string_view toString(GeometryKind kind) noexcept;
 [[nodiscard]] MCSOLVERENGINE_EXPORT std::string_view toString(ConstraintKind kind) noexcept;
 [[nodiscard]] MCSOLVERENGINE_EXPORT std::string_view toString(InternalAlignmentType kind) noexcept;
+
+// Internal accessor for DocumentXml import functions.
+// Not part of the public API.
+class SketchModelInternalAccess
+{
+public:
+    static void emplaceDependency(
+        SketchModel& model,
+        const std::string& name,
+        SketchModel&& dep
+    )
+    {
+        model.dependencyModels_.emplace(name, std::move(dep));
+    }
+
+    static void setDependencySolveOrder(
+        SketchModel& model,
+        std::vector<std::string>&& order
+    )
+    {
+        model.dependencySolveOrder_ = std::move(order);
+    }
+
+    [[nodiscard]] static SketchModel* findDependency(
+        SketchModel& model,
+        const std::string& name
+    )
+    {
+        auto it = model.dependencyModels_.find(name);
+        return it != model.dependencyModels_.end() ? &it->second : nullptr;
+    }
+};
 
 }  // namespace McSolverEngine::Compat

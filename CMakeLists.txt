@@ -241,7 +241,10 @@ set(MCSOLVERENGINE_CORE_SOURCES
     src/BRepExport.cpp
     src/CompatModel.cpp
     src/CompatSolver.cpp
+    src/DocumentSolver.cpp
     src/DocumentXml.cpp
+    src/PlaneTransform.cpp
+    src/SubElementResolver.cpp
     src/Engine.cpp
     src/GeometryExport.cpp
     src/VarSetExpressionEngine.cpp

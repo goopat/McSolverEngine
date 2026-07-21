@@ -7,11 +7,13 @@
 #include <cctype>
 #include <cmath>
 #include <fstream>
+#include <functional>
 #include <optional>
 #include <sstream>
 #include <string>
 #include <string_view>
 #include <unordered_map>
+#include <unordered_set>
 #include <utility>
 #include <vector>
 
@@ -32,6 +34,12 @@ struct ObjectBlock
     std::string name;
     std::string type;
     std::string_view content;
+};
+
+struct ExternalGeometryLink
+{
+    std::string sourceObject;
+    std::string sourceSub;
 };
 
 struct PropertyBlock
@@ -1599,6 +1607,209 @@ void applyConstraintExpressionBindings(
 
 }  // namespace
 
+// ────────────────────────────────────────────────────────────────
+// Cross-sketch dependency import helpers
+//
+// After a sketch is imported, its ExternalGeometry links may reference
+// other sketches in the same document.  These helpers locate the source
+// sketches, import them recursively, and build a topological solve order
+// (DFS post-order with cycle detection) so that solveSketch can cascade
+// automatically.
+// ────────────────────────────────────────────────────────────────
+
+namespace
+{
+
+/// Look up an ObjectBlock by its object name (e.g. "SketchB").
+/// All ObjectBlocks are pre-collected by collectObjectDataBlocks.
+[[nodiscard]] const ObjectBlock* findObjectBlockByName(
+    const std::vector<ObjectBlock>& blocks,
+    std::string_view name
+)
+{
+    for (const auto& block : blocks) {
+        if (block.name == name) {
+            return &block;
+        }
+    }
+    return nullptr;
+}
+
+/// Import a single sketch from its ObjectBlock.
+///
+/// Encapsulates the full import pipeline for one sketch: placement, geometry
+/// (internal + ExternalGeo), ExternalGeometry link parsing, constraints, and
+/// expression-engine bindings.  The VarSet catalog must already have API
+/// parameters applied and expressions evaluated before calling this function.
+///
+/// Shared by the main importSketchFromDocumentXml path and the recursive
+/// dependency import loop.
+// NOLINTNEXTLINE(readability-function-size)
+[[nodiscard]] bool importOneSketch(
+    const ObjectBlock& object,
+    const std::vector<ObjectBlock>& allObjectBlocks,
+    const VarSetCatalog& varSetCatalog,
+    Compat::SketchModel& outModel,
+    std::vector<std::string>& outMessages,
+    std::size_t& outSkippedConstraints,
+    bool& outHadBindingGaps,
+    bool& outHadFatalBindingError,
+    bool& outHadVarSetExpressionUnsupportedSubset,
+    std::string& outError
+)
+{
+    outHadBindingGaps = false;
+    outHadFatalBindingError = false;
+    outHadVarSetExpressionUnsupportedSubset = false;
+    outSkippedConstraints = 0;
+
+    const auto geometryProperty = findPropertyBlock(object.content, "Geometry");
+    if (!geometryProperty) {
+        outError = "Sketch object does not contain a Geometry property.";
+        return false;
+    }
+
+    std::vector<int> internalGeometryMap;
+    std::unordered_map<int, int> externalGeometryMap;
+    ImportedConstraintLookup importedConstraints;
+
+    if (!importPlacementProperty(object.content, outModel, outError)) {
+        return false;
+    }
+
+    if (!importGeometryProperty(
+            *geometryProperty,
+            false,
+            outModel,
+            internalGeometryMap,
+            externalGeometryMap,
+            outError)) {
+        return false;
+    }
+
+    if (const auto externalProperty = findPropertyBlock(object.content, "ExternalGeo")) {
+        if (!importGeometryProperty(
+                *externalProperty,
+                true,
+                outModel,
+                internalGeometryMap,
+                externalGeometryMap,
+                outError)) {
+            return false;
+        }
+    }
+
+    // ── Parse ExternalGeometry links ──
+    {
+        const auto extLinksProp = findPropertyBlock(object.content, "ExternalGeometry");
+        if (extLinksProp) {
+            const auto listStart = extLinksProp->find("<LinkSubList");
+            if (listStart != std::string_view::npos) {
+                const auto listEnd = extLinksProp->find("</LinkSubList>", listStart);
+                if (listEnd != std::string_view::npos) {
+                    std::vector<ExternalGeometryLink> links;
+                    auto cursor = extLinksProp->find('>', listStart);
+                    if (cursor != std::string_view::npos) {
+                        ++cursor;
+                        while (cursor < listEnd) {
+                            const auto linkStart = extLinksProp->find("<Link ", cursor);
+                            if (linkStart == std::string_view::npos || linkStart >= listEnd) break;
+                            const auto linkEnd = extLinksProp->find("/>", linkStart);
+                            if (linkEnd == std::string_view::npos || linkEnd >= listEnd) break;
+                            const auto linkEl = extLinksProp->substr(
+                                linkStart, linkEnd + 2 - linkStart);
+                            const auto obj = extractAttribute(linkEl, "obj");
+                            const auto sub = extractAttribute(linkEl, "sub");
+                            if (obj && sub) {
+                                links.push_back({makeString(*obj), makeString(*sub)});
+                            }
+                            cursor = linkEnd + 2;
+                        }
+                    }
+                    if (!links.empty()) {
+                        std::size_t linkIdx = 0;
+                        for (auto& geo : outModel.geometries()) {
+                            if (geo.external && linkIdx < links.size()) {
+                                geo.externalSource = Compat::ExternalGeometrySource{
+                                    .sourceObject = std::move(links[linkIdx].sourceObject),
+                                    .sourceSub = std::move(links[linkIdx].sourceSub),
+                                };
+                                ++linkIdx;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // Wrap the model in an ImportResult so addConstraintFromRaw can populate it.
+    ImportResult localResult;
+    localResult.model = std::move(outModel);
+
+    const auto constraintsProperty = findPropertyBlock(object.content, "Constraints");
+    if (constraintsProperty) {
+        auto cursor = std::size_t {0};
+        int rawConstraintIndex = 0;
+        while (true) {
+            const auto constraintStart = constraintsProperty->find("<Constrain ", cursor);
+            if (constraintStart == std::string_view::npos) break;
+
+            const auto constraintEnd = constraintsProperty->find("/>", constraintStart);
+            if (constraintEnd == std::string_view::npos) {
+                outError = "Malformed <Constrain/> entry.";
+                return false;
+            }
+
+            const auto constraintElement =
+                constraintsProperty->substr(constraintStart, constraintEnd + 2 - constraintStart);
+            const auto rawConstraint = parseRawConstraint(constraintElement);
+            if (!rawConstraint) {
+                outError = "Constraint entry is missing required attributes.";
+                return false;
+            }
+
+            if (rawConstraint->isActive && !rawConstraint->isVirtualSpace) {
+                if (!addConstraintFromRaw(
+                        *rawConstraint,
+                        rawConstraintIndex,
+                        internalGeometryMap,
+                        externalGeometryMap,
+                        importedConstraints,
+                        localResult)) {
+                    outError = "Failed to add constraint.";
+                    return false;
+                }
+            }
+
+            ++rawConstraintIndex;
+            cursor = constraintEnd + 2;
+        }
+
+        applyConstraintExpressionBindings(
+            localResult.model,
+            importedConstraints,
+            collectConstraintExpressionBindings(object.content),
+            varSetCatalog,
+            object.name,
+            outMessages,
+            outHadBindingGaps,
+            outHadFatalBindingError,
+            outHadVarSetExpressionUnsupportedSubset
+        );
+    }
+
+    outModel = std::move(localResult.model);
+    outSkippedConstraints = localResult.skippedConstraints;
+    for (auto& msg : localResult.messages) {
+        outMessages.push_back(std::move(msg));
+    }
+
+    return true;
+}
+
+}  // namespace
+
 ImportResult importSketchFromDocumentXml(std::string_view xml, std::string_view sketchName)
 {
     return importSketchFromDocumentXml(xml, McSolverEngine::ParameterMap {}, sketchName);
@@ -1657,18 +1868,7 @@ ImportResult importSketchFromDocumentXml(
 
     result.sketchName = object->name;
 
-    const auto geometryProperty = findPropertyBlock(object->content, "Geometry");
-    if (!geometryProperty) {
-        result.messages.push_back("Sketch object does not contain a Geometry property.");
-        return result;
-    }
-
-    std::vector<int> internalGeometryMap;
-    std::unordered_map<int, int> externalGeometryMap;
-    ImportedConstraintLookup importedConstraints;
     auto varSetCatalog = collectExpressionCatalog(objectBlocks);
-    std::string error;
-
     if (!VarSetExpressions::applyApiParametersToVarSets(varSetCatalog, parsedParameters, result.messages)) {
         result.status = ImportStatus::Failed;
         result.errorCode = ImportErrorCode::VarSetParameterValidationFailed;
@@ -1680,91 +1880,107 @@ ImportResult importSketchFromDocumentXml(
         return result;
     }
 
-    if (!importPlacementProperty(object->content, result.model, error)) {
-        result.messages.push_back(error);
-        return result;
-    }
-
-    if (!importGeometryProperty(
-            *geometryProperty,
-            false,
-            result.model,
-            internalGeometryMap,
-            externalGeometryMap,
-            error)) {
-        result.messages.push_back(error);
-        return result;
-    }
-
-    if (const auto externalProperty = findPropertyBlock(object->content, "ExternalGeo")) {
-        if (!importGeometryProperty(
-                *externalProperty,
-                true,
-                result.model,
-                internalGeometryMap,
-                externalGeometryMap,
-                error)) {
-            result.messages.push_back(error);
-            return result;
-        }
-    }
-
+    std::string error;
     bool hadBindingGaps = false;
     bool hadFatalBindingError = false;
     bool hadVarSetExpressionUnsupportedSubset = false;
-    const auto constraintsProperty = findPropertyBlock(object->content, "Constraints");
-    if (constraintsProperty) {
-        auto cursor = std::size_t {0};
-        int rawConstraintIndex = 0;
-        while (true) {
-            const auto constraintStart = constraintsProperty->find("<Constrain ", cursor);
-            if (constraintStart == std::string_view::npos) {
-                break;
-            }
 
-            const auto constraintEnd = constraintsProperty->find("/>", constraintStart);
-            if (constraintEnd == std::string_view::npos) {
-                result.messages.push_back("Malformed <Constrain/> entry.");
-                result.status = ImportStatus::Failed;
-                return result;
-            }
+    if (!importOneSketch(*object, objectBlocks, varSetCatalog,
+                         result.model, result.messages, result.skippedConstraints,
+                         hadBindingGaps, hadFatalBindingError,
+                         hadVarSetExpressionUnsupportedSubset, error)) {
+        result.messages.push_back(error);
+        return result;
+    }
 
-            const auto constraintElement =
-                constraintsProperty->substr(constraintStart, constraintEnd + 2 - constraintStart);
-            const auto rawConstraint = parseRawConstraint(constraintElement);
-            if (!rawConstraint) {
-                result.messages.push_back("Constraint entry is missing required attributes.");
-                result.status = ImportStatus::Failed;
-                return result;
-            }
+    // ── Recursively import dependency sketches ────────────────────────
+    // The requested sketch may have external geometry referencing other
+    // sketches (Geometry.externalSource populated during importOneSketch).
+    // We walk those references, find and import each source sketch, and
+    // build a topological solve order so that solveSketch can cascade.
+    //
+    // The DFS ensures transitive dependencies are handled: if A depends
+    // on B which depends on C, all three are imported.  A cycle guard
+    // (unordered_set<string> imported) prevents infinite recursion.
+    {
+        std::unordered_set<std::string> imported;
+        std::function<void(const std::string&)> importDeps =
+            [&](const std::string& depName) {
+                if (imported.count(depName)) return;
+                auto depObject = findObjectBlockByName(objectBlocks, depName);
+                if (!depObject) return;
 
-            if (rawConstraint->isActive && !rawConstraint->isVirtualSpace) {
-                if (!addConstraintFromRaw(
-                        *rawConstraint,
-                        rawConstraintIndex,
-                        internalGeometryMap,
-                        externalGeometryMap,
-                        importedConstraints,
-                        result)) {
-                    return result;
+                ImportResult depResult;
+                depResult.sketchName = depObject->name;
+                bool depBindingGaps = false;
+                bool depFatalError = false;
+                bool depUnsupportedSubset = false;
+                std::string depError;
+
+                if (!importOneSketch(*depObject, objectBlocks, varSetCatalog,
+                                     depResult.model, depResult.messages,
+                                     depResult.skippedConstraints,
+                                     depBindingGaps, depFatalError,
+                                     depUnsupportedSubset, depError)) {
+                    return;
                 }
-            }
+                if (depFatalError) return;
 
-            ++rawConstraintIndex;
-            cursor = constraintEnd + 2;
+                // Recursively import sub-dependencies first
+                for (const auto& geo : depResult.model.geometries()) {
+                    if (geo.externalSource.has_value()) {
+                        importDeps(geo.externalSource->sourceObject);
+                    }
+                }
+
+                imported.insert(depName);
+                Compat::SketchModelInternalAccess::emplaceDependency(
+                    result.model, depName, std::move(depResult.model));
+            };
+
+        for (const auto& geo : result.model.geometries()) {
+            if (geo.externalSource.has_value()) {
+                importDeps(geo.externalSource->sourceObject);
+            }
         }
 
-        applyConstraintExpressionBindings(
-            result.model,
-            importedConstraints,
-            collectConstraintExpressionBindings(object->content),
-            varSetCatalog,
-            object->name,
-            result.messages,
-            hadBindingGaps,
-            hadFatalBindingError,
-            hadVarSetExpressionUnsupportedSubset
-        );
+        // Build topological solve order (DFS post-order with cycle detection)
+        if (!imported.empty()) {
+            std::unordered_set<std::string> visited;
+            std::unordered_set<std::string> inStack;
+            std::vector<std::string> order;
+            bool hasCycle = false;
+
+            std::function<void(const std::string&)> topoVisit =
+                [&](const std::string& name) {
+                    if (hasCycle) return;
+                    if (inStack.count(name)) { hasCycle = true; return; }
+                    if (visited.count(name)) return;
+
+                    inStack.insert(name);
+                    if (const auto* depModel =
+                            Compat::SketchModelInternalAccess::findDependency(
+                                result.model, name)) {
+                        for (const auto& geo : depModel->geometries()) {
+                            if (geo.externalSource.has_value()) {
+                                topoVisit(geo.externalSource->sourceObject);
+                            }
+                        }
+                    }
+                    inStack.erase(name);
+                    visited.insert(name);
+                    order.push_back(name);
+                };
+
+            for (const auto& name : imported) {
+                topoVisit(name);
+            }
+
+            if (!hasCycle) {
+                Compat::SketchModelInternalAccess::setDependencySolveOrder(
+                    result.model, std::move(order));
+            }
+        }
     }
 
     if (hadFatalBindingError) {

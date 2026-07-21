@@ -1,5 +1,7 @@
 #include "McSolverEngine/CompatSolver.h"
 
+#include "DocumentSolver.h"
+
 #include <algorithm>
 #include <cctype>
 #include <cmath>
@@ -3024,6 +3026,33 @@ SolveResult solveSketch(SketchModel& model)
 
 SolveResult solveSketch(SketchModel& model, const McSolverEngine::ParameterMap& parameters)
 {
+    // ──── Cross-sketch cascade preamble ────
+    // dependencySolveOrder_ is non-empty only when:
+    //   (a) ExternalGeometry links were parsed successfully, AND
+    //   (b) dependency sketches were found and imported, AND
+    //   (c) no cycles were detected in the dependency graph
+    if (!model.dependencySolveOrder_.empty()) {
+        // Solve dependencies in topological order (DFS post-order from import).
+        // Each recursive call handles its own transitive dependencies.
+        for (const auto& depName : model.dependencySolveOrder_) {
+            auto* depModel = SketchModelInternalAccess::findDependency(model, depName);
+            if (!depModel) continue;
+
+            auto depResult = solveSketch(*depModel, parameters);
+            if (!depResult.solved()) {
+                return {SolveStatus::Failed, -1, {}, {}, {}};
+            }
+        }
+
+        // All sources solved — project their geometry onto this sketch.
+        for (const auto& depName : model.dependencySolveOrder_) {
+            auto* depModel = SketchModelInternalAccess::findDependency(model, depName);
+            if (!depModel) continue;
+            updateExternalGeometry(model, depName, *depModel);
+        }
+    }
+
+    // ──── Existing solve logic ────
     ParsedApiParameterMap parsedParameters;
     if (!McSolverEngine::Detail::tryParseApiParameters(parameters, parsedParameters)) {
         return {.status = SolveStatus::Invalid};

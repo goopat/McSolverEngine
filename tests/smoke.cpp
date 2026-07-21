@@ -3649,6 +3649,540 @@ int main()
         }
     }
 
+    // ────────────────────────────────────────────────
+    // Cross-sketch cascade solve
+    // ────────────────────────────────────────────────
+    {
+        constexpr std::string_view cascadeDocumentXml = R"(<?xml version="1.0" encoding="UTF-8"?>
+<Document>
+    <ObjectData Count="2">
+        <Object name="SketchB" type="Sketcher::SketchObject">
+            <Properties Count="2" TransientCount="0">
+                <Property name="Constraints" type="Sketcher::PropertyConstraintList">
+                    <ConstraintList count="2">
+                        <Constrain Name="" Type="2" Value="0.0" First="0" FirstPos="0" Second="-2000" SecondPos="0" Third="-2000" ThirdPos="0" LabelDistance="10.0" LabelPosition="0.0" IsDriving="1" IsInVirtualSpace="0" IsActive="1" />
+                        <Constrain Name="" Type="3" Value="0.0" First="0" FirstPos="0" Second="-2000" SecondPos="0" Third="-2000" ThirdPos="0" LabelDistance="10.0" LabelPosition="0.0" IsDriving="1" IsInVirtualSpace="0" IsActive="1" />
+                    </ConstraintList>
+                </Property>
+                <Property name="Geometry" type="Part::PropertyGeometryList">
+                    <GeometryList count="1">
+                        <Geometry type="Part::GeomLineSegment" id="1">
+                            <LineSegment StartX="0.0" StartY="0.0" StartZ="0.0" EndX="10.0" EndY="0.0" EndZ="0.0"/>
+                            <Construction value="0"/>
+                        </Geometry>
+                    </GeometryList>
+                </Property>
+            </Properties>
+        </Object>
+        <Object name="SketchA" type="Sketcher::SketchObject">
+            <Properties Count="4" TransientCount="0">
+                <Property name="Constraints" type="Sketcher::PropertyConstraintList">
+                    <ConstraintList count="2">
+                        <Constrain Name="" Type="1" Value="0.0" First="-1" FirstPos="1" Second="0" SecondPos="1" Third="-2000" ThirdPos="0" LabelDistance="10.0" LabelPosition="0.0" IsDriving="1" IsInVirtualSpace="0" IsActive="1" />
+                        <Constrain Name="" Type="2" Value="0.0" First="0" FirstPos="0" Second="-2000" SecondPos="0" Third="-2000" ThirdPos="0" LabelDistance="10.0" LabelPosition="0.0" IsDriving="1" IsInVirtualSpace="0" IsActive="1" />
+                    </ConstraintList>
+                </Property>
+                <Property name="ExternalGeo" type="Part::PropertyGeometryList">
+                    <GeometryList count="1">
+                        <Geometry type="Part::GeomLineSegment" id="-1" migrated="1">
+                            <LineSegment StartX="0.0" StartY="0.0" StartZ="0.0" EndX="1.0" EndY="0.0" EndZ="0.0"/>
+                            <Construction value="1"/>
+                        </Geometry>
+                    </GeometryList>
+                </Property>
+                <Property name="ExternalGeometry" type="App::PropertyLinkSubList">
+                    <LinkSubList count="1">
+                        <Link obj="SketchB" sub="Edge1"/>
+                    </LinkSubList>
+                </Property>
+                <Property name="Geometry" type="Part::PropertyGeometryList">
+                    <GeometryList count="1">
+                        <Geometry type="Part::GeomLineSegment" id="1">
+                            <LineSegment StartX="5.0" StartY="5.0" StartZ="0.0" EndX="15.0" EndY="5.0" EndZ="0.0"/>
+                            <Construction value="0"/>
+                        </Geometry>
+                    </GeometryList>
+                </Property>
+            </Properties>
+        </Object>
+    </ObjectData>
+</Document>)";
+
+        // Import SketchA -- should also import SketchB as a dependency
+        auto imported = McSolverEngine::DocumentXml::importSketchFromDocumentXml(
+            cascadeDocumentXml, "SketchA");
+        if (!imported.imported()) {
+            std::cerr << "Expected cascade sketch to import successfully.\n";
+            for (const auto& msg : imported.messages) {
+                std::cerr << "  " << msg << "\n";
+            }
+            return 1;
+        }
+
+        // Verify SketchB was imported as a dependency
+        bool hasDep = false;
+        for (const auto& geo : imported.model.geometries()) {
+            if (geo.externalSource.has_value()
+                && geo.externalSource->sourceObject == "SketchB") {
+                hasDep = true;
+                break;
+            }
+        }
+        if (!hasDep) {
+            std::cerr << "Expected SketchA to have external geometry referencing SketchB.\n";
+            return 1;
+        }
+
+        // Verify the external geometry has stale coordinates before solve
+        const auto& staleExtGeo = imported.model.geometries().back();
+        if (!staleExtGeo.external) {
+            std::cerr << "Expected last geometry element to be external.\n";
+            return 1;
+        }
+        const auto& staleLine =
+            std::get<McSolverEngine::Compat::LineSegmentGeometry>(staleExtGeo.data);
+        if (std::abs(staleLine.end.x - 1.0) > 1e-6) {
+            std::cerr << "Expected stale external geo end.x=1.0 before cascade solve.\n";
+            return 1;
+        }
+
+        // Solve -- cascade should update external geo from solved SketchB
+        auto result = McSolverEngine::Compat::solveSketch(imported.model);
+        if (!result.solved()) {
+            std::cerr << "Expected cascade sketch to solve successfully.\n";
+            return 1;
+        }
+
+        // Verify external geometry was updated (no longer has stale coords)
+        const auto& updatedExtGeo = imported.model.geometries().back();
+        const auto& updatedLine =
+            std::get<McSolverEngine::Compat::LineSegmentGeometry>(updatedExtGeo.data);
+
+        // Check the line was updated from stale (0,0)-(1,0) to solved source coords:
+        // SketchB's line is constrained horizontal + vertical at start →
+        // start.x ≈ 0, start.y free, end.y = start.y (horizontal)
+        if (std::abs(updatedLine.end.x - 1.0) < 1e-6) {
+            std::cerr << "External geometry was NOT updated after cascade solve.\n";
+            return 1;
+        }
+        // Verify external geo is now horizontal (matching solved source constraint)
+        if (std::abs(updatedLine.start.y - updatedLine.end.y) > 1e-6) {
+            std::cerr << "Expected external geo horizontal after cascade (source was constrained horizontal).\n";
+            return 1;
+        }
+
+        // Verify SketchA's internal line solved correctly:
+        // Snap start to external start (coincident) + horizontal
+        const auto& internalGeo = imported.model.geometries().front();
+        const auto& internalLine =
+            std::get<McSolverEngine::Compat::LineSegmentGeometry>(internalGeo.data);
+        if (std::abs(internalLine.start.x - updatedLine.start.x) > 1e-6
+            || std::abs(internalLine.start.y - updatedLine.start.y) > 1e-6) {
+            std::cerr << "Expected internal line start to snap to external geo start after cascade.\n";
+            return 1;
+        }
+        if (std::abs(internalLine.start.y - internalLine.end.y) > 1e-6) {
+            std::cerr << "Expected internal line horizontal after cascade solve.\n";
+            return 1;
+        }
+
+        std::cout << "Cross-sketch cascade test passed.\n";
+    }
+
+    // ────────────────────────────────────────────────
+    // Three-sketch cascade: A → B → C
+    // ────────────────────────────────────────────────
+    {
+        constexpr std::string_view chainDocumentXml = R"(<?xml version="1.0" encoding="UTF-8"?>
+<Document>
+    <ObjectData Count="3">
+        <Object name="SketchC" type="Sketcher::SketchObject">
+            <Properties Count="2" TransientCount="0">
+                <Property name="Constraints" type="Sketcher::PropertyConstraintList">
+                    <ConstraintList count="2">
+                        <Constrain Name="" Type="2" Value="0.0" First="0" FirstPos="0" Second="-2000" SecondPos="0" Third="-2000" ThirdPos="0" LabelDistance="10.0" LabelPosition="0.0" IsDriving="1" IsInVirtualSpace="0" IsActive="1" />
+                        <Constrain Name="" Type="3" Value="0.0" First="0" FirstPos="1" Second="-2000" SecondPos="0" Third="-2000" ThirdPos="0" LabelDistance="10.0" LabelPosition="0.0" IsDriving="1" IsInVirtualSpace="0" IsActive="1" />
+                    </ConstraintList>
+                </Property>
+                <Property name="Geometry" type="Part::PropertyGeometryList">
+                    <GeometryList count="1">
+                        <Geometry type="Part::GeomLineSegment" id="1">
+                            <LineSegment StartX="0.0" StartY="0.0" StartZ="0.0" EndX="10.0" EndY="0.0" EndZ="0.0"/>
+                            <Construction value="0"/>
+                        </Geometry>
+                    </GeometryList>
+                </Property>
+            </Properties>
+        </Object>
+        <Object name="SketchB" type="Sketcher::SketchObject">
+            <Properties Count="4" TransientCount="0">
+                <Property name="Constraints" type="Sketcher::PropertyConstraintList">
+                    <ConstraintList count="2">
+                        <Constrain Name="" Type="1" Value="0.0" First="-1" FirstPos="2" Second="0" SecondPos="1" Third="-2000" ThirdPos="0" LabelDistance="10.0" LabelPosition="0.0" IsDriving="1" IsInVirtualSpace="0" IsActive="1" />
+                        <Constrain Name="" Type="2" Value="0.0" First="0" FirstPos="0" Second="-2000" SecondPos="0" Third="-2000" ThirdPos="0" LabelDistance="10.0" LabelPosition="0.0" IsDriving="1" IsInVirtualSpace="0" IsActive="1" />
+                    </ConstraintList>
+                </Property>
+                <Property name="ExternalGeo" type="Part::PropertyGeometryList">
+                    <GeometryList count="1">
+                        <Geometry type="Part::GeomLineSegment" id="-1" migrated="1">
+                            <LineSegment StartX="0.0" StartY="0.0" StartZ="0.0" EndX="1.0" EndY="0.0" EndZ="0.0"/>
+                            <Construction value="1"/>
+                        </Geometry>
+                    </GeometryList>
+                </Property>
+                <Property name="ExternalGeometry" type="App::PropertyLinkSubList">
+                    <LinkSubList count="1">
+                        <Link obj="SketchC" sub="Edge1"/>
+                    </LinkSubList>
+                </Property>
+                <Property name="Geometry" type="Part::PropertyGeometryList">
+                    <GeometryList count="1">
+                        <Geometry type="Part::GeomLineSegment" id="1">
+                            <LineSegment StartX="5.0" StartY="5.0" StartZ="0.0" EndX="15.0" EndY="5.0" EndZ="0.0"/>
+                            <Construction value="0"/>
+                        </Geometry>
+                    </GeometryList>
+                </Property>
+            </Properties>
+        </Object>
+        <Object name="SketchA" type="Sketcher::SketchObject">
+            <Properties Count="4" TransientCount="0">
+                <Property name="Constraints" type="Sketcher::PropertyConstraintList">
+                    <ConstraintList count="2">
+                        <Constrain Name="" Type="1" Value="0.0" First="-1" FirstPos="2" Second="0" SecondPos="1" Third="-2000" ThirdPos="0" LabelDistance="10.0" LabelPosition="0.0" IsDriving="1" IsInVirtualSpace="0" IsActive="1" />
+                        <Constrain Name="" Type="2" Value="0.0" First="0" FirstPos="0" Second="-2000" SecondPos="0" Third="-2000" ThirdPos="0" LabelDistance="10.0" LabelPosition="0.0" IsDriving="1" IsInVirtualSpace="0" IsActive="1" />
+                    </ConstraintList>
+                </Property>
+                <Property name="ExternalGeo" type="Part::PropertyGeometryList">
+                    <GeometryList count="1">
+                        <Geometry type="Part::GeomLineSegment" id="-1" migrated="1">
+                            <LineSegment StartX="0.0" StartY="0.0" StartZ="0.0" EndX="1.0" EndY="0.0" EndZ="0.0"/>
+                            <Construction value="1"/>
+                        </Geometry>
+                    </GeometryList>
+                </Property>
+                <Property name="ExternalGeometry" type="App::PropertyLinkSubList">
+                    <LinkSubList count="1">
+                        <Link obj="SketchB" sub="Edge1"/>
+                    </LinkSubList>
+                </Property>
+                <Property name="Geometry" type="Part::PropertyGeometryList">
+                    <GeometryList count="1">
+                        <Geometry type="Part::GeomLineSegment" id="1">
+                            <LineSegment StartX="3.0" StartY="3.0" StartZ="0.0" EndX="13.0" EndY="3.0" EndZ="0.0"/>
+                            <Construction value="0"/>
+                        </Geometry>
+                    </GeometryList>
+                </Property>
+            </Properties>
+        </Object>
+    </ObjectData>
+</Document>)";
+
+        // Import SketchA -- should transitively import B and C
+        auto imported = McSolverEngine::DocumentXml::importSketchFromDocumentXml(
+            chainDocumentXml, "SketchA");
+        if (!imported.imported()) {
+            std::cerr << "[chain] Expected import to succeed.\n";
+            for (const auto& msg : imported.messages) {
+                std::cerr << "  " << msg << "\n";
+            }
+            return 1;
+        }
+
+        // Verify external geo references SketchB
+        bool hasBref = false;
+        for (const auto& geo : imported.model.geometries()) {
+            if (geo.externalSource.has_value()
+                && geo.externalSource->sourceObject == "SketchB") {
+                hasBref = true;
+                break;
+            }
+        }
+        if (!hasBref) {
+            std::cerr << "[chain] Expected SketchA to reference SketchB.\n";
+            return 1;
+        }
+
+        // Solve -- should cascade C → B → A
+        auto result = McSolverEngine::Compat::solveSketch(imported.model);
+        if (!result.solved()) {
+            std::cerr << "[chain] Expected cascade solve to succeed.\n";
+            return 1;
+        }
+
+        // Verify A's external geo was updated from solved B
+        // (B's external geo was updated from solved C first)
+        const auto& extGeo = imported.model.geometries().back();
+        if (!extGeo.external) {
+            std::cerr << "[chain] Expected last geometry to be external.\n";
+            return 1;
+        }
+        const auto& extLine =
+            std::get<McSolverEngine::Compat::LineSegmentGeometry>(extGeo.data);
+        if (std::abs(extLine.end.x - 1.0) < 1e-6
+            && std::abs(extLine.start.x) < 1e-6) {
+            std::cerr << "[chain] External geo was NOT updated after cascade.\n";
+            return 1;
+        }
+        if (std::abs(extLine.start.y - extLine.end.y) > 1e-6) {
+            std::cerr << "[chain] Expected external geo horizontal after cascade.\n";
+            return 1;
+        }
+
+        // Verify A's internal line snapped to external end (coincident constraint)
+        const auto& intGeo = imported.model.geometries().front();
+        if (intGeo.external) {
+            std::cerr << "[chain] Expected first geometry to be internal.\n";
+            return 1;
+        }
+        const auto& intLine =
+            std::get<McSolverEngine::Compat::LineSegmentGeometry>(intGeo.data);
+        if (std::abs(intLine.start.x - extLine.end.x) > 1e-6
+            || std::abs(intLine.start.y - extLine.end.y) > 1e-6) {
+            std::cerr << "[chain] Expected internal line start to snap to external end.\n";
+            return 1;
+        }
+        if (std::abs(intLine.start.y - intLine.end.y) > 1e-6) {
+            std::cerr << "[chain] Expected internal line horizontal.\n";
+            return 1;
+        }
+
+        std::cout << "Three-sketch cascade chain test passed.\n";
+    }
+
+    // ────────────────────────────────────────────────
+    // Cascade geometry kind coverage
+    // ────────────────────────────────────────────────
+
+    // Shared helper: builds a two-sketch doc with one source sketch,
+    // one dependent sketch referencing it, imports, solves, and returns
+    // the solved model for inspection.
+    // Helper: build a minimal two-sketch cascade document.
+    auto makeCascadeDoc = [](
+        std::string_view srcGeom,
+        std::string_view srcConstraints,
+        std::string_view extGeom,
+        std::string_view intGeom,
+        std::string_view tgtConstraints,
+        std::string_view subElement = "Edge1"
+    ) -> std::string {
+        std::string doc;
+        doc += "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n";
+        doc += "<Document>\n  <ObjectData Count=\"2\">\n";
+        // Source sketch
+        doc += "    <Object name=\"SketchSrc\" type=\"Sketcher::SketchObject\">\n";
+        doc += "      <Properties Count=\"2\" TransientCount=\"0\">\n";
+        doc += "        <Property name=\"Constraints\" type=\"Sketcher::PropertyConstraintList\">\n";
+        if (srcConstraints.empty()) {
+            doc += "          <ConstraintList count=\"0\"/>\n";
+        } else {
+            doc += "          <ConstraintList count=\"1\">";
+            doc += std::string(srcConstraints);
+            doc += "</ConstraintList>\n";
+        }
+        doc += "        </Property>\n";
+        doc += "        <Property name=\"Geometry\" type=\"Part::PropertyGeometryList\">\n";
+        doc += "          <GeometryList count=\"1\">";
+        doc += std::string(srcGeom);
+        doc += "</GeometryList>\n";
+        doc += "        </Property>\n";
+        doc += "      </Properties>\n";
+        doc += "    </Object>\n";
+        // Target sketch
+        doc += "    <Object name=\"SketchTgt\" type=\"Sketcher::SketchObject\">\n";
+        doc += "      <Properties Count=\"4\" TransientCount=\"0\">\n";
+        doc += "        <Property name=\"Constraints\" type=\"Sketcher::PropertyConstraintList\">\n";
+        doc += "          <ConstraintList count=\"1\">";
+        doc += std::string(tgtConstraints);
+        doc += "</ConstraintList>\n";
+        doc += "        </Property>\n";
+        doc += "        <Property name=\"ExternalGeo\" type=\"Part::PropertyGeometryList\">\n";
+        doc += "          <GeometryList count=\"1\">";
+        doc += std::string(extGeom);
+        doc += "</GeometryList>\n";
+        doc += "        </Property>\n";
+        doc += "        <Property name=\"ExternalGeometry\" type=\"App::PropertyLinkSubList\">\n";
+        doc += "          <LinkSubList count=\"1\">\n";
+        doc += "            <Link obj=\"SketchSrc\" sub=\"";
+        doc += std::string(subElement);
+        doc += "\"/>\n";
+        doc += "          </LinkSubList>\n";
+        doc += "        </Property>\n";
+        doc += "        <Property name=\"Geometry\" type=\"Part::PropertyGeometryList\">\n";
+        doc += "          <GeometryList count=\"1\">";
+        doc += std::string(intGeom);
+        doc += "</GeometryList>\n";
+        doc += "        </Property>\n";
+        doc += "      </Properties>\n";
+        doc += "    </Object>\n";
+        doc += "  </ObjectData>\n</Document>";
+        return doc;
+    };
+
+    auto runCascadeKindTest = [&](
+        const char* label,
+        const char* srcGeom, const char* srcCon,
+        const char* extGeom, const char* intGeom, const char* tgtCon,
+        bool (*verifyExt)(const McSolverEngine::Compat::SketchModel&),
+        bool (*verifyInt)(const McSolverEngine::Compat::SketchModel&),
+        const char* subElement = "Edge1"
+    ) -> int {
+        auto doc = makeCascadeDoc(srcGeom, srcCon, extGeom, intGeom, tgtCon, subElement);
+        auto imported = McSolverEngine::DocumentXml::importSketchFromDocumentXml(doc, "SketchTgt");
+        if (!imported.imported()) {
+            std::cerr << "[" << label << "] import failed:";
+            for (const auto& m : imported.messages) std::cerr << " " << m;
+            std::cerr << "\n";
+            return 1;
+        }
+        auto result = McSolverEngine::Compat::solveSketch(imported.model);
+        if (!result.solved()) {
+            std::cerr << "[" << label << "] solve failed.\n";
+            return 1;
+        }
+        if (!verifyExt(imported.model)) {
+            std::cerr << "[" << label << "] external verification failed.\n";
+            return 1;
+        }
+        if (!verifyInt(imported.model)) {
+            std::cerr << "[" << label << "] internal verification failed.\n";
+            return 1;
+        }
+        std::cout << "  cascade " << label << " passed.\n";
+        return 0;
+    };
+
+    // ---- Point ----
+    {
+        auto vP = [](const McSolverEngine::Compat::SketchModel& m) -> bool {
+            const auto& p = std::get<McSolverEngine::Compat::PointGeometry>(m.geometries().back().data);
+            return std::abs(p.point.x - 4.0) < 1e-6 && std::abs(p.point.y - 2.0) < 1e-6;
+        };
+        if (runCascadeKindTest("Point",
+            "<Geometry type=\"Part::GeomPoint\" id=\"1\"><GeomPoint X=\"4.0\" Y=\"2.0\" Z=\"0.0\"/><Construction value=\"0\"/></Geometry>",
+            "", /* no source constraint needed */
+            "<Geometry type=\"Part::GeomPoint\" id=\"-1\" migrated=\"1\"><GeomPoint X=\"0.0\" Y=\"0.0\" Z=\"0.0\"/><Construction value=\"1\"/></Geometry>",
+            "<Geometry type=\"Part::GeomPoint\" id=\"1\"><GeomPoint X=\"99.0\" Y=\"99.0\" Z=\"0.0\"/><Construction value=\"0\"/></Geometry>",
+            "<Constrain Name=\"\" Type=\"1\" Value=\"0.0\" First=\"-1\" FirstPos=\"1\" Second=\"0\" SecondPos=\"1\" Third=\"-2000\" ThirdPos=\"0\" LabelDistance=\"10.0\" LabelPosition=\"0.0\" IsDriving=\"1\" IsInVirtualSpace=\"0\" IsActive=\"1\" />",
+            vP, vP
+        )) return 1;
+    }
+
+    // ---- Circle ----
+    if (runCascadeKindTest(
+        "Circle",
+        // Source: circle at (5, 0) radius 3
+        R"(<Geometry type="Part::GeomCircle" id="1">
+                <Circle CenterX="5.0" CenterY="0.0" CenterZ="0.0" NormalX="0.0" NormalY="0.0" NormalZ="1.0" AngleXU="0.0" Radius="3.0"/>
+                <Construction value="0"/>
+            </Geometry>)",
+        // Source constraint: radius
+        R"(<Constrain Name="" Type="11" Value="3.0" First="0" FirstPos="0" Second="-2000" SecondPos="0" Third="-2000" ThirdPos="0" LabelDistance="10.0" LabelPosition="0.0" IsDriving="1" IsInVirtualSpace="0" IsActive="1" />)",
+        // ExternalGeo: stale circle at (0, 0) radius 1
+        R"(<Geometry type="Part::GeomCircle" id="-1" migrated="1">
+                <Circle CenterX="0.0" CenterY="0.0" CenterZ="0.0" NormalX="0.0" NormalY="0.0" NormalZ="1.0" AngleXU="0.0" Radius="1.0"/>
+                <Construction value="1"/>
+            </Geometry>)",
+        // Internal: point at (99, 0)
+        R"(<Geometry type="Part::GeomPoint" id="1">
+                <GeomPoint X="99.0" Y="0.0" Z="0.0"/>
+                <Construction value="0"/>
+            </Geometry>)",
+        // Constraint: PointOnObject(point on external circle)
+        R"(<Constrain Name="" Type="13" Value="0.0" First="-1" FirstPos="0" Second="0" SecondPos="0" Third="-2000" ThirdPos="0" LabelDistance="10.0" LabelPosition="0.0" IsDriving="1" IsInVirtualSpace="0" IsActive="1" />)",
+        // Verify: stale radius (1.0) was updated → 3.0. Center may drift.
+        [](const auto& m) {
+            const auto& g = m.geometries().back();
+            if (!g.external) return false;
+            const auto& c = std::get<McSolverEngine::Compat::CircleGeometry>(g.data);
+            return std::abs(c.radius - 3.0) < 1e-6;
+        },
+        [](const auto& /*m*/) { return true; }
+    )) return 1;
+
+    // ---- Arc ----
+    if (runCascadeKindTest(
+        "Arc",
+        // Source: arc centered at (0,0) radius 2 from 0 to pi/2
+        R"(<Geometry type="Part::GeomArcOfCircle" id="1">
+                <ArcOfCircle CenterX="0.0" CenterY="0.0" CenterZ="0.0" NormalX="0.0" NormalY="0.0" NormalZ="1.0" AngleXU="0.0" Radius="2.0" StartAngle="0.0" EndAngle="1.5707963267948966"/>
+                <Construction value="0"/>
+            </Geometry>)",
+        // Source constraint: radius
+        R"(<Constrain Name="" Type="11" Value="2.0" First="0" FirstPos="0" Second="-2000" SecondPos="0" Third="-2000" ThirdPos="0" LabelDistance="10.0" LabelPosition="0.0" IsDriving="1" IsInVirtualSpace="0" IsActive="1" />)",
+        // ExternalGeo: stale arc at (0, 0) radius 1, angles 0 to 1
+        R"(<Geometry type="Part::GeomArcOfCircle" id="-1" migrated="1">
+                <ArcOfCircle CenterX="0.0" CenterY="0.0" CenterZ="0.0" NormalX="0.0" NormalY="0.0" NormalZ="1.0" AngleXU="0.0" Radius="1.0" StartAngle="0.0" EndAngle="1.0"/>
+                <Construction value="1"/>
+            </Geometry>)",
+        // Internal: point at (10, 0)
+        R"(<Geometry type="Part::GeomPoint" id="1">
+                <GeomPoint X="10.0" Y="0.0" Z="0.0"/>
+                <Construction value="0"/>
+            </Geometry>)",
+        R"(<Constrain Name="" Type="13" Value="0.0" First="-1" FirstPos="0" Second="0" SecondPos="0" Third="-2000" ThirdPos="0" LabelDistance="10.0" LabelPosition="0.0" IsDriving="1" IsInVirtualSpace="0" IsActive="1" />)",
+        // Verify: stale radius (1.0) updated → 2.0, angles preserved. Center may drift.
+        [](const auto& m) {
+            const auto& g = m.geometries().back();
+            if (!g.external) return false;
+            const auto& a = std::get<McSolverEngine::Compat::ArcGeometry>(g.data);
+            return std::abs(a.radius - 2.0) < 1e-6
+                && std::abs(a.startAngle) < 1e-6
+                && std::abs(a.endAngle - 1.5707963267948966) < 1e-6;
+        },
+        [](const auto& /*m*/) { return true; }
+    )) return 1;
+
+    // ---- LineSegment Vertex → Point (start point) ----
+    {
+        // Source: line from (3,1) to (8,5). Point references Vertex1 (start).
+        auto vfy = [](const McSolverEngine::Compat::SketchModel& m) -> bool {
+            const auto& g = m.geometries().back();
+            if (!g.external) return false;
+            const auto& p = std::get<McSolverEngine::Compat::PointGeometry>(g.data);
+            return std::abs(p.point.x - 3.0) < 1e-6 && std::abs(p.point.y - 1.0) < 1e-6;
+        };
+        if (runCascadeKindTest("LineVertex→Point",
+            R"(<Geometry type="Part::GeomLineSegment" id="1">
+                    <LineSegment StartX="3.0" StartY="1.0" StartZ="0.0" EndX="8.0" EndY="5.0" EndZ="0.0"/>
+                    <Construction value="0"/>
+                </Geometry>)",
+            R"(<Constrain Name="" Type="2" Value="0.0" First="0" FirstPos="0" Second="-2000" SecondPos="0" Third="-2000" ThirdPos="0" LabelDistance="10.0" LabelPosition="0.0" IsDriving="1" IsInVirtualSpace="0" IsActive="1" />)",
+            // ExternalGeo: stale point at (0,0)
+            R"(<Geometry type="Part::GeomPoint" id="-1" migrated="1"><GeomPoint X="0.0" Y="0.0" Z="0.0"/><Construction value="1"/></Geometry>)",
+            // Internal: point at (99,99) with coincident
+            R"(<Geometry type="Part::GeomPoint" id="1"><GeomPoint X="99.0" Y="99.0" Z="0.0"/><Construction value="0"/></Geometry>)",
+            R"(<Constrain Name="" Type="1" Value="0.0" First="-1" FirstPos="1" Second="0" SecondPos="1" Third="-2000" ThirdPos="0" LabelDistance="10.0" LabelPosition="0.0" IsDriving="1" IsInVirtualSpace="0" IsActive="1" />)",
+            vfy, vfy, "Vertex1"
+        )) return 1;
+    }
+
+    // ---- Arc Vertex → Point (endpoint) ----
+    {
+        // Source: arc at (0,0) radius 2 from 0 to pi/2. Endpoint = (0, 2).
+        // Point references Vertex2 (end).
+        auto vfy = [](const McSolverEngine::Compat::SketchModel& m) -> bool {
+            const auto& g = m.geometries().back();
+            if (!g.external) return false;
+            const auto& p = std::get<McSolverEngine::Compat::PointGeometry>(g.data);
+            return std::abs(p.point.x) < 1e-6 && std::abs(p.point.y - 2.0) < 1e-6;
+        };
+        if (runCascadeKindTest("ArcVertex→Point",
+            R"(<Geometry type="Part::GeomArcOfCircle" id="1">
+                    <ArcOfCircle CenterX="0.0" CenterY="0.0" CenterZ="0.0" NormalX="0.0" NormalY="0.0" NormalZ="1.0" AngleXU="0.0" Radius="2.0" StartAngle="0.0" EndAngle="1.5707963267948966"/>
+                    <Construction value="0"/>
+                </Geometry>)",
+            R"(<Constrain Name="" Type="11" Value="2.0" First="0" FirstPos="0" Second="-2000" SecondPos="0" Third="-2000" ThirdPos="0" LabelDistance="10.0" LabelPosition="0.0" IsDriving="1" IsInVirtualSpace="0" IsActive="1" />)",
+            // ExternalGeo: stale point at (0,0)
+            R"(<Geometry type="Part::GeomPoint" id="-1" migrated="1"><GeomPoint X="0.0" Y="0.0" Z="0.0"/><Construction value="1"/></Geometry>)",
+            // Internal: point at (99,99)
+            R"(<Geometry type="Part::GeomPoint" id="1"><GeomPoint X="99.0" Y="99.0" Z="0.0"/><Construction value="0"/></Geometry>)",
+            R"(<Constrain Name="" Type="1" Value="0.0" First="-1" FirstPos="1" Second="0" SecondPos="1" Third="-2000" ThirdPos="0" LabelDistance="10.0" LabelPosition="0.0" IsDriving="1" IsInVirtualSpace="0" IsActive="1" />)",
+            vfy, vfy, "Vertex2"
+        )) return 1;
+    }
+
     const auto totalMs = std::chrono::duration<double, std::milli>(
         std::chrono::steady_clock::now() - mainStart).count();
     std::cout << "\nTotal elapsed: " << totalMs << " ms" << std::endl;
