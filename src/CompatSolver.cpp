@@ -3026,18 +3026,24 @@ SolveResult solveSketch(SketchModel& model)
 
 SolveResult solveSketch(SketchModel& model, const McSolverEngine::ParameterMap& parameters)
 {
+    // ──── Input validation (no side effects) ────
+    // Must run before any cascade logic so that invalid parameters
+    // produce Invalid without mutating dependency models.
+    ParsedApiParameterMap parsedParameters;
+    if (!McSolverEngine::Detail::tryParseApiParameters(parameters, parsedParameters)) {
+        return {.status = SolveStatus::Invalid};
+    }
+
     // ──── Cross-sketch cascade preamble ────
-    // dependencySolveOrder_ is non-empty only when:
-    //   (a) ExternalGeometry links were parsed successfully, AND
-    //   (b) dependency sketches were found and imported, AND
-    //   (c) no cycles were detected in the dependency graph
-    //
-    // If a cycle was detected during import, fail immediately rather than
-    // falling through to a stale-geometry solve.
+    // If a cycle was detected during import, fail immediately.
     if (SketchModelInternalAccess::hasDependencyCycle(model)) {
         return {SolveStatus::Failed, -1, {}, {}, {}};
     }
 
+    // dependencySolveOrder_ is non-empty only when:
+    //   (a) ExternalGeometry links were parsed successfully, AND
+    //   (b) dependency sketches were found and imported, AND
+    //   (c) no cycles were detected in the dependency graph
     if (!model.dependencySolveOrder_.empty()) {
         // Solve dependencies in topological order (DFS post-order from import).
         // Each recursive call handles its own transitive dependencies.
@@ -3060,10 +3066,6 @@ SolveResult solveSketch(SketchModel& model, const McSolverEngine::ParameterMap& 
     }
 
     // ──── Existing solve logic ────
-    ParsedApiParameterMap parsedParameters;
-    if (!McSolverEngine::Detail::tryParseApiParameters(parameters, parsedParameters)) {
-        return {.status = SolveStatus::Invalid};
-    }
 
     auto directResolver = [&](const Constraint& constraint, std::size_t) -> std::optional<double> {
         return resolveConstraintValue(constraint, parsedParameters);
