@@ -3031,6 +3031,13 @@ SolveResult solveSketch(SketchModel& model, const McSolverEngine::ParameterMap& 
     //   (a) ExternalGeometry links were parsed successfully, AND
     //   (b) dependency sketches were found and imported, AND
     //   (c) no cycles were detected in the dependency graph
+    //
+    // If a cycle was detected during import, fail immediately rather than
+    // falling through to a stale-geometry solve.
+    if (SketchModelInternalAccess::hasDependencyCycle(model)) {
+        return {SolveStatus::Failed, -1, {}, {}, {}};
+    }
+
     if (!model.dependencySolveOrder_.empty()) {
         // Solve dependencies in topological order (DFS post-order from import).
         // Each recursive call handles its own transitive dependencies.

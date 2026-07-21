@@ -338,6 +338,9 @@ private:
     // was detected during import.
     std::vector<std::string> dependencySolveOrder_;
 
+    // Set when a dependency cycle is detected during import.
+    bool hasDependencyCycle_ {false};
+
     friend SolveResult solveSketch(SketchModel& model);
     friend SolveResult solveSketch(SketchModel& model, const McSolverEngine::ParameterMap& parameters);
     friend class SketchModelInternalAccess;
@@ -377,6 +380,16 @@ public:
     {
         auto it = model.dependencyModels_.find(name);
         return it != model.dependencyModels_.end() ? &it->second : nullptr;
+    }
+
+    static void setHasDependencyCycle(SketchModel& model, bool value)
+    {
+        model.hasDependencyCycle_ = value;
+    }
+
+    [[nodiscard]] static bool hasDependencyCycle(const SketchModel& model)
+    {
+        return model.hasDependencyCycle_;
     }
 };
 

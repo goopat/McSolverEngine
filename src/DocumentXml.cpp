@@ -1903,12 +1903,24 @@ ImportResult importSketchFromDocumentXml(
     // on B which depends on C, all three are imported.  A cycle guard
     // (unordered_set<string> imported) prevents infinite recursion.
     {
-        std::unordered_set<std::string> imported;
+        std::unordered_set<std::string> imported;      // import completed
+        std::unordered_set<std::string> inProgress;    // currently importing
+        bool cycleDetected = false;
         std::function<void(const std::string&)> importDeps =
             [&](const std::string& depName) {
                 if (imported.count(depName)) return;
+                if (!inProgress.insert(depName).second) {
+                    // Cycle: this sketch is already on the call stack.
+                    // Record it and abort the branch — the solver will
+                    // reject the whole cascade below.
+                    cycleDetected = true;
+                    return;
+                }
                 auto depObject = findObjectBlockByName(objectBlocks, depName);
-                if (!depObject) return;
+                if (!depObject) {
+                    inProgress.erase(depName);
+                    return;
+                }
 
                 ImportResult depResult;
                 depResult.sketchName = depObject->name;
@@ -1922,9 +1934,13 @@ ImportResult importSketchFromDocumentXml(
                                      depResult.skippedConstraints,
                                      depBindingGaps, depFatalError,
                                      depUnsupportedSubset, depError)) {
+                    inProgress.erase(depName);
                     return;
                 }
-                if (depFatalError) return;
+                if (depFatalError) {
+                    inProgress.erase(depName);
+                    return;
+                }
 
                 // Recursively import sub-dependencies first
                 for (const auto& geo : depResult.model.geometries()) {
@@ -1933,6 +1949,7 @@ ImportResult importSketchFromDocumentXml(
                     }
                 }
 
+                inProgress.erase(depName);
                 imported.insert(depName);
                 Compat::SketchModelInternalAccess::emplaceDependency(
                     result.model, depName, std::move(depResult.model));
@@ -1942,6 +1959,10 @@ ImportResult importSketchFromDocumentXml(
             if (geo.externalSource.has_value()) {
                 importDeps(geo.externalSource->sourceObject);
             }
+        }
+
+        if (cycleDetected) {
+            Compat::SketchModelInternalAccess::setHasDependencyCycle(result.model, true);
         }
 
         // Build topological solve order (DFS post-order with cycle detection)
