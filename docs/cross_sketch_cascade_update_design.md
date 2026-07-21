@@ -489,3 +489,61 @@ Phase 5 depends on 2+3+4.
 | `tests/smoke.cpp` | Edit: cascade test cases |
 | `tests/unit.cpp` | Edit: unit tests |
 | `CMakeLists.txt` | Edit: add new source files |
+
+---
+
+## 6. Addendum: Real FreeCAD 1.0.1 Documents (2026-07-21)
+
+The original design was written against hand-simplified Document.xml.
+Regression testing with real FreeCAD 1.0.1 documents (`fcstdDoc/V101.Cascade*.FCStd`)
+required three corrections; the implementation now handles both formats.
+
+### 6.1 External geometry constraint ids are positional
+
+In-memory, constraints reference external geometry by **position** in the
+`ExternalGeo` list, not by the XML `id` attribute:
+
+```
+ExternalGeo[0] → geo id -1 (H axis)     ExternalGeo[2] → geo id -3
+ExternalGeo[1] → geo id -2 (V axis)     ExternalGeo[3] → geo id -4 ...
+```
+
+(FreeCAD: `_getGeometry`, `GeoEnum::RefExt`.) The XML `id` attribute carries
+the persistent element-map id instead (e.g. `id="75"`). Import registers
+both mappings in `externalGeometryMap`.
+
+### 6.2 H/V axes are always ExternalGeo[0]/[1]
+
+Real documents always store the sketch H/V axes as the first two
+`ExternalGeo` entries (ids -1/-2, construction lines). They are **not**
+part of the `ExternalGeometry` link list, so the ordered link pairing
+skips them (detected by `originalId == -1 && -2` on the first two
+external entries). Hand-written documents without axes are unaffected.
+
+### 6.3 Topological-naming refs are authoritative
+
+Real documents bind each external geometry to its source element with a
+`ref` attribute on the `<Geometry>` element:
+
+```xml
+<Geometry type="Part::GeomPoint" id="1" ref="Sketch002.;g3v2;SKT" ...>
+```
+
+The g-id matches the source geometry's persistent id (saved as its XML
+`id` attribute); `v` selects a vertex (`v1`=start, `v2`=end, `v3`=mid).
+The `Edge`/`Vertex` names in the `<Link>` elements may be **stale** (they
+are element-map display names from an older sketch state), so the ref
+overrides the link pairing wherever present. `SubElementResolver`
+resolves `gN` (edge by `originalId`) and `gNvM` (vertex + role)
+directly; `isVertexSubElementName()` covers both naming styles.
+
+### 6.4 Regression: V101.Cascade
+
+`tests/smoke.cpp` imports `fcstdDoc/V101.Cascade.xml` with the four VarSet
+parameters from `V101.Cascade.solver.FCStd` (the FreeCAD recompute) and
+compares exported BREPs token-by-token for Sketch/Sketch001/Sketch002.
+Sketch003's internal line chain admits multiple solution branches (the
+downstream zigzag folds either way; the cascaded arc and external point
+match FreeCAD exactly), so its BREP comparison is non-fatal — same
+policy as V111.10 — with an explicit assertion on the cascaded external
+point coordinates instead.

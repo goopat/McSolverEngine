@@ -5,6 +5,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Rules
 
 - **Do not execute git write operations** (commit, push, etc.) unless the user explicitly asks. Ask for confirmation first.
+- **Never commit automatically** after finishing a task — leave changes in the working tree. A commit only happens when the user explicitly requests it for that specific change, and an earlier approval does not carry over to later changes.
 
 ## Build
 

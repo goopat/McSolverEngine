@@ -27,6 +27,18 @@ std::string extractSimpleElementName(const std::string_view subElement)
     return std::string(subElement);
 }
 
+bool isVertexSubElementName(const std::string_view simpleName)
+{
+    if (simpleName.size() >= 6 && simpleName.substr(0, 6) == "Vertex") {
+        return true;
+    }
+    // Topological-naming vertex ref "gNvM": 'g', digits, 'v', digits.
+    return simpleName.size() >= 4
+        && simpleName.front() == 'g'
+        && std::isdigit(static_cast<unsigned char>(simpleName[1]))
+        && simpleName.find('v') != std::string_view::npos;
+}
+
 namespace
 {
 
@@ -67,6 +79,24 @@ int resolveSubElementToGeoIndex(
 )
 {
     const auto simpleName = extractSimpleElementName(subElement);
+
+    // Topological-naming element ref: "gN", where N is the source
+    // geometry's persistent id (saved as its XML id attribute).  Unlike
+    // the indexed Edge/Vertex names, this never goes stale.
+    if (simpleName.size() >= 2 && simpleName.front() == 'g'
+        && std::isdigit(static_cast<unsigned char>(simpleName[1]))) {
+        const int geoId = parseElementIndex(std::string_view(simpleName).substr(1));
+        if (geoId <= 0) {
+            return -1;
+        }
+        const auto& geos = model.geometries();
+        for (std::size_t i = 0; i < geos.size(); ++i) {
+            if (!geos[i].external && geos[i].originalId == geoId) {
+                return static_cast<int>(i);
+            }
+        }
+        return -1;
+    }
 
     // Currently only Edge references are supported.
     // Format: "EdgeN" where N is 1-based.
@@ -169,6 +199,39 @@ ResolvedVertexRef resolveVertexSubElement(
 )
 {
     const auto simpleName = extractSimpleElementName(subElement);
+
+    // Topological-naming vertex ref: "gNvM" — geometry persistent id N,
+    // vertex M (1=start, 2=end, 3=mid).
+    if (simpleName.size() >= 3 && simpleName.front() == 'g'
+        && std::isdigit(static_cast<unsigned char>(simpleName[1]))) {
+        const auto vPos = simpleName.find('v');
+        if (vPos == std::string::npos) {
+            return {};
+        }
+        const int geoId = parseElementIndex(std::string_view(simpleName).substr(1, vPos - 1));
+        const int vertexNum = parseElementIndex(std::string_view(simpleName).substr(vPos + 1));
+        if (geoId <= 0 || vertexNum <= 0) {
+            return {};
+        }
+        const auto& geos = model.geometries();
+        for (std::size_t i = 0; i < geos.size(); ++i) {
+            if (!geos[i].external && geos[i].originalId == geoId) {
+                const PointRole role =
+                    vertexNum == 1 ? PointRole::Start
+                  : vertexNum == 2 ? PointRole::End
+                  : vertexNum == 3 ? PointRole::Mid
+                  : PointRole::None;
+                if (role == PointRole::None) {
+                    return {};
+                }
+                return {
+                    .geometryIndex = static_cast<int>(i),
+                    .pointRole = role,
+                };
+            }
+        }
+        return {};
+    }
 
     if (simpleName.size() < 7 || simpleName.substr(0, 6) != "Vertex") {
         return {};

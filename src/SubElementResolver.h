@@ -14,6 +14,10 @@ namespace McSolverEngine::Compat
 ///   ";:H1234:5,Edge5" → "Edge5"
 [[nodiscard]] std::string extractSimpleElementName(std::string_view subElement);
 
+/// True when the simple sub-element name references a single vertex:
+/// legacy "VertexN" or topological-naming "gNvM".
+[[nodiscard]] bool isVertexSubElementName(std::string_view simpleName);
+
 /// Maps a FreeCAD Sketcher sub-element name to a geometry index.
 ///
 /// In the Sketcher, every non-construction geometry IS an edge:

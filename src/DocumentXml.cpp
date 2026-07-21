@@ -1218,9 +1218,11 @@ void applyConstraintExpressionBindings(
     Compat::SketchModel& model,
     std::vector<int>& internalGeometryMap,
     std::unordered_map<int, int>& externalGeometryMap,
+    std::unordered_map<int, std::string>& externalRefMap,
     std::string& error
 )
 {
+    int externalPositionalCount = 0;
     auto cursor = std::size_t {0};
     while (true) {
         const auto geometryStart = propertyBlock.find("<Geometry ", cursor);
@@ -1249,12 +1251,30 @@ void applyConstraintExpressionBindings(
         }
 
         if (external) {
+            // FreeCAD references external geometry in constraints by its
+            // position in the ExternalGeo list: index 0 → geo id -1 (the
+            // H axis), 1 → -2 (V axis), 2 → -3 (first real external), ...
+            // The XML id attribute carries the persistent element-map id
+            // instead, so register the positional id as well.
+            const int positionalId = -(externalPositionalCount + 1);
+            ++externalPositionalCount;
+            externalGeometryMap[positionalId] = importedIndex;
             if (auto rawId = extractIntAttribute(geometryHeader, "id")) {
                 externalGeometryMap[*rawId] = importedIndex;
             }
             else {
                 error = "External geometry missing id attribute.";
                 return false;
+            }
+            // Real FreeCAD documents bind each external geometry to its
+            // source element with a topological-naming ref, e.g.
+            //   <Geometry ... ref="Sketch.;g59v1;SKT">
+            // Capture it — it is authoritative, unlike the (possibly
+            // stale) Edge/Vertex names in the ExternalGeometry links.
+            if (const auto ref = extractAttribute(geometryHeader, "ref")) {
+                if (!ref->empty()) {
+                    externalRefMap[importedIndex] = makeString(*ref);
+                }
             }
         }
         else {
@@ -1699,6 +1719,7 @@ namespace
 
     std::vector<int> internalGeometryMap;
     std::unordered_map<int, int> externalGeometryMap;
+    std::unordered_map<int, std::string> externalRefMap;
     ImportedConstraintLookup importedConstraints;
 
     if (!importPlacementProperty(object.content, outModel, outError)) {
@@ -1711,6 +1732,7 @@ namespace
             outModel,
             internalGeometryMap,
             externalGeometryMap,
+            externalRefMap,
             outError)) {
         return false;
     }
@@ -1722,8 +1744,27 @@ namespace
                 outModel,
                 internalGeometryMap,
                 externalGeometryMap,
+                externalRefMap,
                 outError)) {
             return false;
+        }
+    }
+
+    // FreeCAD always stores the sketch H/V axes as the first two
+    // ExternalGeo entries (ids -1 and -2).  They are not part of the
+    // ExternalGeometry link list, so detect and exclude them from the
+    // ordered link pairing below.  Minimal hand-written documents that
+    // omit the axes are unaffected.
+    std::size_t externalAxisCount = 0;
+    {
+        std::vector<const Compat::Geometry*> externalGeos;
+        for (const auto& geo : outModel.geometries()) {
+            if (geo.external) externalGeos.push_back(&geo);
+        }
+        if (externalGeos.size() >= 2
+            && externalGeos[0]->originalId == -1
+            && externalGeos[1]->originalId == -2) {
+            externalAxisCount = 2;
         }
     }
 
@@ -1763,23 +1804,27 @@ namespace
                             "obj/sub attributes; external references may be misaligned.");
                     }
                     if (!links.empty()) {
-                        // Links are paired with external geometries in order.
-                        // FreeCAD does not guarantee a 1:1 correspondence
-                        // (one link may project to several geometries, or to
+                        // Links are paired with external geometries in
+                        // order, skipping the H/V axis entries.  FreeCAD
+                        // does not guarantee a 1:1 correspondence (one
+                        // link may project to several geometries, or to
                         // none), so warn when the counts diverge — the
                         // ordered pairing below may then be misaligned.
                         std::size_t externalCount = 0;
                         for (const auto& geo : outModel.geometries()) {
                             if (geo.external) ++externalCount;
                         }
-                        if (links.size() != externalCount) {
+                        if (links.size() != externalCount - externalAxisCount) {
                             outMessages.push_back(
                                 "ExternalGeometry link count does not match the ExternalGeo "
                                 "geometry count; external references may be misaligned.");
                         }
                         std::size_t linkIdx = 0;
+                        std::size_t externalIdx = 0;
                         for (auto& geo : outModel.geometries()) {
-                            if (geo.external && linkIdx < links.size()) {
+                            if (!geo.external) continue;
+                            if (externalIdx++ < externalAxisCount) continue;
+                            if (linkIdx < links.size()) {
                                 geo.externalSource = Compat::ExternalGeometrySource{
                                     .sourceObject = std::move(links[linkIdx].sourceObject),
                                     .sourceSub = std::move(links[linkIdx].sourceSub),
@@ -1791,6 +1836,31 @@ namespace
                 }
             }
         }
+    }
+
+    // ── Topological-naming refs (authoritative) ──
+    // Real FreeCAD documents bind each external geometry to its source
+    // element via a ref like "Sketch.;g59v1;SKT".  The g-id matches the
+    // source geometry's persistent id (saved as its XML id attribute),
+    // so this resolution is immune to the stale Edge/Vertex names that
+    // the ExternalGeometry links may carry.  Override the link pairing
+    // wherever a ref is present.
+    for (const auto& [geoIndex, ref] : externalRefMap) {
+        const auto dotSemi = ref.find(".;");
+        if (dotSemi == std::string::npos) continue;
+        const auto elemEnd = ref.find(';', dotSemi + 2);
+        if (elemEnd == std::string_view::npos) continue;
+        const auto sourceObject = ref.substr(0, dotSemi);
+        const auto sourceSub = ref.substr(dotSemi + 2, elemEnd - (dotSemi + 2));
+        if (sourceSub.size() < 2 || sourceSub.front() != 'g'
+            || !std::isdigit(static_cast<unsigned char>(sourceSub[1]))) {
+            continue;
+        }
+        outModel.geometries()[static_cast<std::size_t>(geoIndex)].externalSource =
+            Compat::ExternalGeometrySource{
+                .sourceObject = sourceObject,
+                .sourceSub = sourceSub,
+            };
     }
 
     // Wrap the model in an ImportResult so addConstraintFromRaw can populate it.

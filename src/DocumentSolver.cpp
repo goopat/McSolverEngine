@@ -281,7 +281,7 @@ ExternalGeometryUpdateResult updateExternalGeometry(
         // index to a concrete (geometryIndex, PointRole) pair, extract the
         // 2D point, project it between sketch planes, and write it into the
         // target Point.
-        if (simpleName.size() >= 6 && simpleName.substr(0, 6) == "Vertex") {
+        if (isVertexSubElementName(simpleName)) {
             auto vertexRef = resolveVertexSubElement(solvedSource, geo.externalSource->sourceSub);
             if (vertexRef.geometryIndex < 0) {
                 ++result.missingRefCount;

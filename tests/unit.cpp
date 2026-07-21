@@ -1262,6 +1262,101 @@ void testPlacementQuaternionNormalized()
           "quaternion: scaled quaternion normalized to unit length");
 }
 
+void testDocumentXmlExternalGeoPositionalIdsAndRefs()
+{
+    // Real FreeCAD format: the H/V axes occupy ExternalGeo[0]/[1] with
+    // ids -1/-2; real externals carry persistent ids and an authoritative
+    // topological-naming ref; constraints reference externals positionally
+    // (-3 = ExternalGeo[2]).
+    constexpr std::string_view xml = R"(<?xml version="1.0" encoding="UTF-8"?>
+<Document>
+    <ObjectData Count="1">
+        <Object name="Main" type="Sketcher::SketchObject">
+            <Properties Count="4" TransientCount="0">
+                <Property name="Constraints" type="Sketcher::PropertyConstraintList">
+                    <ConstraintList count="1">
+                        <Constrain Name="" Type="1" Value="0.0" First="0" FirstPos="1" Second="-3" SecondPos="1" Third="-2000" ThirdPos="0" LabelDistance="10.0" LabelPosition="0.0" IsDriving="1" IsInVirtualSpace="0" IsActive="1" />
+                    </ConstraintList>
+                </Property>
+                <Property name="ExternalGeo" type="Part::PropertyGeometryList">
+                    <GeometryList count="3">
+                        <Geometry type="Part::GeomLineSegment" id="-1" migrated="1">
+                            <LineSegment StartX="0.0" StartY="0.0" StartZ="0.0" EndX="1.0" EndY="0.0" EndZ="0.0"/>
+                            <Construction value="1"/>
+                        </Geometry>
+                        <Geometry type="Part::GeomLineSegment" id="-2" migrated="1">
+                            <LineSegment StartX="0.0" StartY="0.0" StartZ="0.0" EndX="0.0" EndY="1.0" EndZ="0.0"/>
+                            <Construction value="1"/>
+                        </Geometry>
+                        <Geometry type="Part::GeomLineSegment" id="51" ref="Other.;g51;SKT" migrated="1">
+                            <LineSegment StartX="5.0" StartY="5.0" StartZ="0.0" EndX="6.0" EndY="5.0" EndZ="0.0"/>
+                            <Construction value="1"/>
+                        </Geometry>
+                    </GeometryList>
+                </Property>
+                <Property name="ExternalGeometry" type="App::PropertyLinkSubList">
+                    <LinkSubList count="1">
+                        <Link obj="Other" sub="Edge99" shadow=";g51;SKT.Edge99"/>
+                    </LinkSubList>
+                </Property>
+                <Property name="Geometry" type="Part::PropertyGeometryList">
+                    <GeometryList count="1">
+                        <Geometry type="Part::GeomLineSegment" id="10">
+                            <LineSegment StartX="0.0" StartY="0.0" StartZ="0.0" EndX="1.0" EndY="0.0" EndZ="0.0"/>
+                            <Construction value="0"/>
+                        </Geometry>
+                    </GeometryList>
+                </Property>
+            </Properties>
+        </Object>
+    </ObjectData>
+</Document>)";
+
+    const auto imported = McSolverEngine::DocumentXml::importSketchFromDocumentXml(xml, "Main");
+    check(imported.imported(), "external refs: imported successfully");
+    check(imported.model.constraintCount() == 1,
+          "external refs: positional geo id -3 resolves to ExternalGeo[2]");
+
+    // The axes must not consume the ExternalGeometry link, and the
+    // authoritative ref overrides the stale link sub name ("Edge99").
+    const auto& geos = imported.model.geometries();
+    check(!geos[1].externalSource.has_value(), "external refs: H axis has no source binding");
+    check(!geos[2].externalSource.has_value(), "external refs: V axis has no source binding");
+    const auto& extGeo = geos.back();
+    check(extGeo.externalSource.has_value()
+              && extGeo.externalSource->sourceObject == "Other"
+              && extGeo.externalSource->sourceSub == "g51",
+          "external refs: topological ref overrides stale link name");
+}
+
+void testResolveSubElementTopologicalRefs()
+{
+    using namespace McSolverEngine::Compat;
+
+    SketchModel model;
+    model.addLineSegment({0.0, 0.0}, {1.0, 0.0});
+    model.geometries().back().originalId = 77;
+    model.addLineSegment({2.0, 0.0}, {3.0, 0.0});
+    model.geometries().back().originalId = 83;
+
+    check(resolveSubElementToGeoIndex(model, "g83") == 1,
+          "g-ref: edge resolves by persistent originalId");
+    check(resolveSubElementToGeoIndex(model, "g999") < 0,
+          "g-ref: unknown id rejected");
+
+    const auto v2 = resolveVertexSubElement(model, "g83v2");
+    check(v2.geometryIndex == 1 && v2.pointRole == PointRole::End,
+          "g-ref: g83v2 resolves to line end");
+    const auto v1 = resolveVertexSubElement(model, "g77v1");
+    check(v1.geometryIndex == 0 && v1.pointRole == PointRole::Start,
+          "g-ref: g77v1 resolves to line start");
+
+    check(isVertexSubElementName("Vertex2"), "vertex name: legacy Vertex2");
+    check(isVertexSubElementName("g83v2"), "vertex name: topological g83v2");
+    check(!isVertexSubElementName("g83"), "vertex name: plain g83 is an edge ref");
+    check(!isVertexSubElementName("Edge1"), "vertex name: Edge1 is an edge ref");
+}
+
 }  // namespace
 
 int main()
@@ -1304,6 +1399,8 @@ int main()
     testResolveVertexSubElementBSpline();
     testResolveSubElementStrictIndex();
     testPlacementQuaternionNormalized();
+    testDocumentXmlExternalGeoPositionalIdsAndRefs();
+    testResolveSubElementTopologicalRefs();
 
     if (failCount > 0) {
         std::cerr << "\n" << failCount << " test(s) failed.\n";
