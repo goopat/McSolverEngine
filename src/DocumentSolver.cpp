@@ -82,16 +82,63 @@ bool updateArc(
     }
     geo.center = xf.apply(src.center);
     geo.radius = src.radius * xf.scaleFactor();
-    // Angles are preserved under conformal transforms (rotation + uniform scale).
-    geo.startAngle = src.startAngle;
-    geo.endAngle = src.endAngle;
+    // Arc angles are polar angles around the center, so they are NOT
+    // preserved under a general conformal transform:
+    //   rotation   (det > 0): α → α + θ
+    //   reflection (det < 0): α → φ − α  (arc direction flips, so the
+    //                          start/end angles are swapped as well)
+    const double phi = xf.referenceAngle();
+    if (!xf.isReflection()) {
+        geo.startAngle = src.startAngle + phi;
+        geo.endAngle = src.endAngle + phi;
+    } else {
+        geo.startAngle = phi - src.endAngle;
+        geo.endAngle = phi - src.startAngle;
+    }
     return true;
 }
 
-bool updateEllipse(EllipseGeometry& geo, const EllipseGeometry& src, const PlaneTransform& xf)
+// Conic-arc angles are measured relative to the major axis (the focus1
+// direction), which is transformed together with the geometry.  They are
+// therefore preserved under rotation, but flip sign under reflection —
+// with start/end swapped to keep the arc oriented consistently.
+void transformConicAngles(
+    const PlaneTransform& xf,
+    const double srcStart,
+    const double srcEnd,
+    double& outStart,
+    double& outEnd
+)
 {
+    if (!xf.isReflection()) {
+        outStart = srcStart;
+        outEnd = srcEnd;
+    } else {
+        outStart = -srcEnd;
+        outEnd = -srcStart;
+    }
+}
+
+bool updateEllipse(
+    EllipseGeometry& geo,
+    const EllipseGeometry& src,
+    const PlaneTransform& xf,
+    int& skippedCount,
+    std::vector<std::string>& messages,
+    const std::string& refDescription
+)
+{
+    if (!xf.isConformal()) {
+        ++skippedCount;
+        messages.push_back(
+            "Skipped Ellipse external geometry update for " + refDescription
+            + ": non-conformal transform not yet handled."
+        );
+        return false;
+    }
     geo.center = xf.apply(src.center);
     geo.focus1 = xf.apply(src.focus1);
+    geo.minorRadius = src.minorRadius * xf.scaleFactor();
     return true;
 }
 
@@ -115,8 +162,7 @@ bool updateArcOfEllipse(
     geo.center = xf.apply(src.center);
     geo.focus1 = xf.apply(src.focus1);
     geo.minorRadius = src.minorRadius * xf.scaleFactor();
-    geo.startAngle = src.startAngle;
-    geo.endAngle = src.endAngle;
+    transformConicAngles(xf, src.startAngle, src.endAngle, geo.startAngle, geo.endAngle);
     return true;
 }
 
@@ -140,8 +186,7 @@ bool updateArcOfHyperbola(
     geo.center = xf.apply(src.center);
     geo.focus1 = xf.apply(src.focus1);
     geo.minorRadius = src.minorRadius * xf.scaleFactor();
-    geo.startAngle = src.startAngle;
-    geo.endAngle = src.endAngle;
+    transformConicAngles(xf, src.startAngle, src.endAngle, geo.startAngle, geo.endAngle);
     return true;
 }
 
@@ -164,8 +209,7 @@ bool updateArcOfParabola(
     }
     geo.vertex = xf.apply(src.vertex);
     geo.focus1 = xf.apply(src.focus1);
-    geo.startAngle = src.startAngle;
-    geo.endAngle = src.endAngle;
+    transformConicAngles(xf, src.startAngle, src.endAngle, geo.startAngle, geo.endAngle);
     return true;
 }
 
@@ -337,7 +381,10 @@ ExternalGeometryUpdateResult updateExternalGeometry(
                 ok = updateEllipse(
                     std::get<EllipseGeometry>(geo.data),
                     std::get<EllipseGeometry>(srcGeo.data),
-                    xf
+                    xf,
+                    result.skippedCount,
+                    result.messages,
+                    desc
                 );
                 break;
             case GeometryKind::ArcOfEllipse:

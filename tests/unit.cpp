@@ -20,7 +20,10 @@
 #include "McSolverEngine/DocumentXml.h"
 #include "McSolverEngine/GeometryExport.h"
 #include "McSolverEngine/ZipExtract.h"
+#include "DocumentSolver.h"
 #include "ParameterValueUtils.h"
+#include "PlaneTransform.h"
+#include "SubElementResolver.h"
 
 namespace
 {
@@ -807,6 +810,458 @@ void testDocumentXmlEmptySketchName()
     check(imported.sketchName == "OnlySketch", "empty sketchName: resolved sketch name is OnlySketch");
 }
 
+// ── PlaneTransform / updateExternalGeometry ────────────────────────────────
+
+void testPlaneTransformBetween()
+{
+    using McSolverEngine::Compat::Placement;
+    using McSolverEngine::Compat::PlaneTransform;
+    constexpr double kSqrt2Over2 = 0.70710678118654752;
+
+    // Identity ↔ identity → identity transform.
+    {
+        const auto xf = PlaneTransform::between(Placement {}, Placement {});
+        const auto p = xf.apply({3.0, 4.0});
+        check(std::abs(p.x - 3.0) < 1e-12 && std::abs(p.y - 4.0) < 1e-12,
+              "PlaneTransform: identity maps points unchanged");
+        check(xf.isConformal(), "PlaneTransform: identity is conformal");
+        check(!xf.isReflection(), "PlaneTransform: identity is not a reflection");
+        check(std::abs(xf.scaleFactor() - 1.0) < 1e-12, "PlaneTransform: identity scale is 1");
+    }
+
+    // Source rotated +90° about Z → M is a +90° rotation.
+    {
+        Placement src;
+        src.qz = kSqrt2Over2;
+        src.qw = kSqrt2Over2;
+        const auto xf = PlaneTransform::between(src, Placement {});
+        const auto p = xf.apply({1.0, 0.0});
+        check(std::abs(p.x) < 1e-12 && std::abs(p.y - 1.0) < 1e-12,
+              "PlaneTransform: +90° rotation maps (1,0) to (0,1)");
+        check(xf.isConformal(), "PlaneTransform: rotation is conformal");
+        check(!xf.isReflection(), "PlaneTransform: rotation is not a reflection");
+        check(std::abs(xf.referenceAngle() - std::numbers::pi / 2.0) < 1e-12,
+              "PlaneTransform: rotation reference angle is pi/2");
+    }
+
+    // Source translated by (1,2,0) → pure translation.
+    {
+        Placement src;
+        src.px = 1.0;
+        src.py = 2.0;
+        const auto xf = PlaneTransform::between(src, Placement {});
+        const auto p = xf.apply({0.0, 0.0});
+        check(std::abs(p.x - 1.0) < 1e-12 && std::abs(p.y - 2.0) < 1e-12,
+              "PlaneTransform: translation maps origin to (1,2)");
+    }
+
+    // Target rotated 180° about X (sketch on back face) → reflection.
+    {
+        Placement tgt;
+        tgt.qx = 1.0;
+        tgt.qw = 0.0;
+        const auto xf = PlaneTransform::between(Placement {}, tgt);
+        const auto p = xf.apply({2.0, 3.0});
+        check(std::abs(p.x - 2.0) < 1e-12 && std::abs(p.y + 3.0) < 1e-12,
+              "PlaneTransform: back-face target mirrors Y");
+        check(xf.isConformal(), "PlaneTransform: reflection is conformal");
+        check(xf.isReflection(), "PlaneTransform: back-face target is a reflection");
+        check(std::abs(xf.referenceAngle()) < 1e-12,
+              "PlaneTransform: mirror axis angle is 0");
+    }
+
+    // Perpendicular planes → non-conformal.
+    {
+        Placement src;
+        src.qx = kSqrt2Over2;  // 90° about X
+        src.qw = kSqrt2Over2;
+        const auto xf = PlaneTransform::between(src, Placement {});
+        check(!xf.isConformal(), "PlaneTransform: perpendicular planes are non-conformal");
+    }
+}
+
+namespace
+{
+
+// Build a dependent sketch holding one external geometry that references
+// `subElement` on "SketchSrc", plus the solved source sketch.
+McSolverEngine::Compat::Geometry makeExternalArc(
+    const McSolverEngine::Compat::ArcGeometry& stale,
+    const char* subElement
+)
+{
+    McSolverEngine::Compat::Geometry geo;
+    geo.kind = McSolverEngine::Compat::GeometryKind::Arc;
+    geo.data = stale;
+    geo.external = true;
+    geo.externalSource = McSolverEngine::Compat::ExternalGeometrySource {
+        .sourceObject = "SketchSrc",
+        .sourceSub = subElement,
+    };
+    return geo;
+}
+
+}  // namespace
+
+void testUpdateExternalGeometryArcRotation()
+{
+    using namespace McSolverEngine::Compat;
+    constexpr double kSqrt2Over2 = 0.70710678118654752;
+
+    // Source sketch rotated +90° about Z, arc 0 → pi/2 around origin.
+    SketchModel source;
+    Placement srcPlacement;
+    srcPlacement.qz = kSqrt2Over2;
+    srcPlacement.qw = kSqrt2Over2;
+    source.setPlacement(srcPlacement);
+    source.addArc({0.0, 0.0}, 2.0, 0.0, std::numbers::pi / 2.0);
+
+    SketchModel dependent;  // identity placement
+    dependent.geometries().push_back(makeExternalArc(
+        ArcGeometry {{5.0, 5.0}, 1.0, 0.1, 0.2}, "Edge1"));
+
+    const auto result = updateExternalGeometry(dependent, "SketchSrc", source);
+    check(result.updatedCount == 1, "arc rotation: one geometry updated");
+
+    const auto& arc = std::get<ArcGeometry>(dependent.geometries().back().data);
+    check(std::abs(arc.radius - 2.0) < 1e-9, "arc rotation: radius copied");
+    // Angles must shift by +pi/2 (not stay 0 → pi/2).
+    check(std::abs(arc.startAngle - std::numbers::pi / 2.0) < 1e-9,
+          "arc rotation: start angle shifted by +pi/2");
+    check(std::abs(arc.endAngle - std::numbers::pi) < 1e-9,
+          "arc rotation: end angle shifted by +pi/2");
+    // Endpoint sanity: start point ≈ (0, 2), end point ≈ (-2, 0).
+    const double sx = arc.center.x + arc.radius * std::cos(arc.startAngle);
+    const double sy = arc.center.y + arc.radius * std::sin(arc.startAngle);
+    const double ex = arc.center.x + arc.radius * std::cos(arc.endAngle);
+    const double ey = arc.center.y + arc.radius * std::sin(arc.endAngle);
+    check(std::abs(sx) < 1e-9 && std::abs(sy - 2.0) < 1e-9,
+          "arc rotation: start point is (0,2)");
+    check(std::abs(ex + 2.0) < 1e-9 && std::abs(ey) < 1e-9,
+          "arc rotation: end point is (-2,0)");
+}
+
+void testUpdateExternalGeometryArcReflection()
+{
+    using namespace McSolverEngine::Compat;
+
+    // Dependent sketch on the back face (normal -Z, 180° about X).
+    SketchModel source;  // identity placement
+    source.addArc({0.0, 0.0}, 2.0, 0.0, std::numbers::pi / 2.0);
+
+    SketchModel dependent;
+    Placement tgtPlacement;
+    tgtPlacement.qx = 1.0;
+    tgtPlacement.qw = 0.0;
+    dependent.setPlacement(tgtPlacement);
+    dependent.geometries().push_back(makeExternalArc(
+        ArcGeometry {{5.0, 5.0}, 1.0, 0.1, 0.2}, "Edge1"));
+
+    const auto result = updateExternalGeometry(dependent, "SketchSrc", source);
+    check(result.updatedCount == 1, "arc reflection: one geometry updated");
+
+    const auto& arc = std::get<ArcGeometry>(dependent.geometries().back().data);
+    // Mirror axis angle φ=0: α → −α, so 0 → pi/2 becomes −pi/2 → 0.
+    check(std::abs(arc.startAngle + std::numbers::pi / 2.0) < 1e-9,
+          "arc reflection: start angle is -pi/2");
+    check(std::abs(arc.endAngle) < 1e-9,
+          "arc reflection: end angle is 0");
+    // Endpoint sanity: start point ≈ (0,-2), end point ≈ (2,0).
+    const double sx = arc.center.x + arc.radius * std::cos(arc.startAngle);
+    const double sy = arc.center.y + arc.radius * std::sin(arc.startAngle);
+    const double ex = arc.center.x + arc.radius * std::cos(arc.endAngle);
+    const double ey = arc.center.y + arc.radius * std::sin(arc.endAngle);
+    check(std::abs(sx) < 1e-9 && std::abs(sy + 2.0) < 1e-9,
+          "arc reflection: start point is (0,-2)");
+    check(std::abs(ex - 2.0) < 1e-9 && std::abs(ey) < 1e-9,
+          "arc reflection: end point is (2,0)");
+}
+
+void testUpdateExternalGeometryEllipse()
+{
+    using namespace McSolverEngine::Compat;
+    constexpr double kSqrt2Over2 = 0.70710678118654752;
+
+    // Conformal case: source rotated +90° about Z.
+    {
+        SketchModel source;
+        Placement srcPlacement;
+        srcPlacement.qz = kSqrt2Over2;
+        srcPlacement.qw = kSqrt2Over2;
+        source.setPlacement(srcPlacement);
+        source.addEllipse({1.0, 0.0}, {3.0, 0.0}, 1.5);
+
+        SketchModel dependent;
+        Geometry geo;
+        geo.kind = GeometryKind::Ellipse;
+        geo.data = EllipseGeometry {{9.0, 9.0}, {8.0, 8.0}, 0.25};
+        geo.external = true;
+        geo.externalSource = ExternalGeometrySource {
+            .sourceObject = "SketchSrc", .sourceSub = "Edge1"};
+        dependent.geometries().push_back(geo);
+
+        const auto result = updateExternalGeometry(dependent, "SketchSrc", source);
+        check(result.updatedCount == 1, "ellipse: one geometry updated");
+        const auto& e = std::get<EllipseGeometry>(dependent.geometries().back().data);
+        check(std::abs(e.center.x) < 1e-9 && std::abs(e.center.y - 1.0) < 1e-9,
+              "ellipse: center rotated to (0,1)");
+        check(std::abs(e.focus1.x) < 1e-9 && std::abs(e.focus1.y - 3.0) < 1e-9,
+              "ellipse: focus1 rotated to (0,3)");
+        check(std::abs(e.minorRadius - 1.5) < 1e-9,
+              "ellipse: minorRadius copied from source (not left stale)");
+    }
+
+    // Non-conformal case: perpendicular planes → skipped, geometry untouched.
+    {
+        SketchModel source;
+        Placement srcPlacement;
+        srcPlacement.qx = kSqrt2Over2;  // 90° about X
+        srcPlacement.qw = kSqrt2Over2;
+        source.setPlacement(srcPlacement);
+        source.addEllipse({1.0, 0.0}, {3.0, 0.0}, 1.5);
+
+        SketchModel dependent;
+        Geometry geo;
+        geo.kind = GeometryKind::Ellipse;
+        geo.data = EllipseGeometry {{9.0, 9.0}, {8.0, 8.0}, 0.25};
+        geo.external = true;
+        geo.externalSource = ExternalGeometrySource {
+            .sourceObject = "SketchSrc", .sourceSub = "Edge1"};
+        dependent.geometries().push_back(geo);
+
+        const auto result = updateExternalGeometry(dependent, "SketchSrc", source);
+        check(result.updatedCount == 0, "ellipse non-conformal: nothing updated");
+        check(result.skippedCount == 1, "ellipse non-conformal: skip counted");
+        check(!result.messages.empty(), "ellipse non-conformal: skip reported");
+        const auto& e = std::get<EllipseGeometry>(dependent.geometries().back().data);
+        check(std::abs(e.center.x - 9.0) < 1e-12 && std::abs(e.minorRadius - 0.25) < 1e-12,
+              "ellipse non-conformal: geometry left unchanged");
+    }
+}
+
+void testDocumentXmlArcAngleXUFolded()
+{
+    // FreeCAD stores arc StartAngle/EndAngle as raw parameters relative to
+    // the basis circle's XDirection (AngleXU).  The model folds AngleXU
+    // (and a -Z Normal) into absolute CCW angles.
+    constexpr std::string_view xml = R"(<?xml version="1.0" encoding="UTF-8"?>
+<Document>
+    <ObjectData Count="1">
+        <Object name="Sketch" type="Sketcher::SketchObject">
+            <Properties Count="1" TransientCount="0">
+                <Property name="Geometry" type="Part::PropertyGeometryList">
+                    <GeometryList count="2">
+                        <Geometry type="Part::GeomArcOfCircle" id="1">
+                            <ArcOfCircle CenterX="0.0" CenterY="0.0" CenterZ="0.0" NormalX="0.0" NormalY="0.0" NormalZ="1.0" AngleXU="0.5" Radius="2.0" StartAngle="0.0" EndAngle="1.0"/>
+                            <Construction value="0"/>
+                        </Geometry>
+                        <Geometry type="Part::GeomArcOfCircle" id="2">
+                            <ArcOfCircle CenterX="0.0" CenterY="0.0" CenterZ="0.0" NormalX="0.0" NormalY="0.0" NormalZ="-1.0" AngleXU="0.5" Radius="2.0" StartAngle="0.0" EndAngle="1.0"/>
+                            <Construction value="0"/>
+                        </Geometry>
+                    </GeometryList>
+                </Property>
+            </Properties>
+        </Object>
+    </ObjectData>
+</Document>)";
+
+    const auto imported = McSolverEngine::DocumentXml::importSketchFromDocumentXml(xml, "Sketch");
+    check(imported.imported(), "arc AngleXU: imported successfully");
+    check(imported.model.geometryCount() == 2, "arc AngleXU: 2 geometries");
+
+    const auto& ccw = std::get<McSolverEngine::Compat::ArcGeometry>(
+        imported.model.geometries()[0].data);
+    check(std::abs(ccw.startAngle - 0.5) < 1e-12 && std::abs(ccw.endAngle - 1.5) < 1e-12,
+          "arc AngleXU: +Z arc angles folded with AngleXU");
+
+    // NormalZ=-1 (CW arc): start = angleXU - rawEnd, end = angleXU - rawStart.
+    const auto& cw = std::get<McSolverEngine::Compat::ArcGeometry>(
+        imported.model.geometries()[1].data);
+    check(std::abs(cw.startAngle + 0.5) < 1e-12 && std::abs(cw.endAngle - 0.5) < 1e-12,
+          "arc AngleXU: -Z arc normalized to CCW");
+}
+
+void testDocumentXmlMissingDependencyMessage()
+{
+    // External geometry referencing a sketch that does not exist in the
+    // document must produce a diagnostic message (previously silent).
+    constexpr std::string_view xml = R"(<?xml version="1.0" encoding="UTF-8"?>
+<Document>
+    <ObjectData Count="1">
+        <Object name="SketchA" type="Sketcher::SketchObject">
+            <Properties Count="3" TransientCount="0">
+                <Property name="ExternalGeo" type="Part::PropertyGeometryList">
+                    <GeometryList count="1">
+                        <Geometry type="Part::GeomLineSegment" id="-1" migrated="1">
+                            <LineSegment StartX="0.0" StartY="0.0" StartZ="0.0" EndX="1.0" EndY="0.0" EndZ="0.0"/>
+                            <Construction value="1"/>
+                        </Geometry>
+                    </GeometryList>
+                </Property>
+                <Property name="ExternalGeometry" type="App::PropertyLinkSubList">
+                    <LinkSubList count="1">
+                        <Link obj="Ghost" sub="Edge1"/>
+                    </LinkSubList>
+                </Property>
+                <Property name="Geometry" type="Part::PropertyGeometryList">
+                    <GeometryList count="1">
+                        <Geometry type="Part::GeomLineSegment" id="1">
+                            <LineSegment StartX="5.0" StartY="5.0" StartZ="0.0" EndX="15.0" EndY="5.0" EndZ="0.0"/>
+                            <Construction value="0"/>
+                        </Geometry>
+                    </GeometryList>
+                </Property>
+            </Properties>
+        </Object>
+    </ObjectData>
+</Document>)";
+
+    const auto imported = McSolverEngine::DocumentXml::importSketchFromDocumentXml(xml, "SketchA");
+    check(imported.imported(), "missing dependency: import still succeeds");
+
+    bool found = false;
+    for (const auto& msg : imported.messages) {
+        if (msg.find("Ghost") != std::string::npos
+            && msg.find("not found") != std::string::npos) {
+            found = true;
+        }
+    }
+    check(found, "missing dependency: diagnostic message mentions the missing sketch");
+}
+
+void testDocumentXmlLinkCountMismatch()
+{
+    // Two external geometries but only one ExternalGeometry link: the
+    // importer must warn that the ordered pairing may be misaligned.
+    constexpr std::string_view xml = R"(<?xml version="1.0" encoding="UTF-8"?>
+<Document>
+    <ObjectData Count="1">
+        <Object name="SketchA" type="Sketcher::SketchObject">
+            <Properties Count="3" TransientCount="0">
+                <Property name="ExternalGeo" type="Part::PropertyGeometryList">
+                    <GeometryList count="2">
+                        <Geometry type="Part::GeomLineSegment" id="-1" migrated="1">
+                            <LineSegment StartX="0.0" StartY="0.0" StartZ="0.0" EndX="1.0" EndY="0.0" EndZ="0.0"/>
+                            <Construction value="1"/>
+                        </Geometry>
+                        <Geometry type="Part::GeomLineSegment" id="-2" migrated="1">
+                            <LineSegment StartX="0.0" StartY="1.0" StartZ="0.0" EndX="1.0" EndY="1.0" EndZ="0.0"/>
+                            <Construction value="1"/>
+                        </Geometry>
+                    </GeometryList>
+                </Property>
+                <Property name="ExternalGeometry" type="App::PropertyLinkSubList">
+                    <LinkSubList count="1">
+                        <Link obj="SketchB" sub="Edge1"/>
+                    </LinkSubList>
+                </Property>
+                <Property name="Geometry" type="Part::PropertyGeometryList">
+                    <GeometryList count="1">
+                        <Geometry type="Part::GeomLineSegment" id="1">
+                            <LineSegment StartX="5.0" StartY="5.0" StartZ="0.0" EndX="15.0" EndY="5.0" EndZ="0.0"/>
+                            <Construction value="0"/>
+                        </Geometry>
+                    </GeometryList>
+                </Property>
+            </Properties>
+        </Object>
+    </ObjectData>
+</Document>)";
+
+    const auto imported = McSolverEngine::DocumentXml::importSketchFromDocumentXml(xml, "SketchA");
+    check(imported.imported(), "link count mismatch: import still succeeds");
+
+    bool found = false;
+    for (const auto& msg : imported.messages) {
+        if (msg.find("does not match") != std::string::npos) {
+            found = true;
+        }
+    }
+    check(found, "link count mismatch: warning message emitted");
+}
+
+void testResolveVertexSubElementBSpline()
+{
+    using namespace McSolverEngine::Compat;
+
+    SketchModel model;
+    model.addLineSegment({0.0, 0.0}, {1.0, 0.0});
+
+    Geometry spline;
+    spline.kind = GeometryKind::BSpline;
+    BSplineGeometry b;
+    b.poles = {{{2.0, 1.0}, 1.0}, {{3.0, 2.0}, 1.0}, {{4.0, 1.0}, 1.0}};
+    b.degree = 2;
+    spline.data = b;
+    model.geometries().push_back(spline);
+
+    // Line occupies Vertex1 (start) and Vertex2 (end); the BSpline takes
+    // Vertex3 (start = first pole) and Vertex4 (end = last pole), matching
+    // FreeCAD's rebuildVertexIndex().
+    const auto v3 = resolveVertexSubElement(model, "Vertex3");
+    check(v3.geometryIndex == 1 && v3.pointRole == PointRole::Start,
+          "BSpline vertex: Vertex3 maps to BSpline start");
+
+    const auto v4 = resolveVertexSubElement(model, "Vertex4");
+    check(v4.geometryIndex == 1 && v4.pointRole == PointRole::End,
+          "BSpline vertex: Vertex4 maps to BSpline end");
+
+    Point2 p;
+    check(extractVertexPoint(model.geometries()[1], PointRole::Start, p)
+              && std::abs(p.x - 2.0) < 1e-12 && std::abs(p.y - 1.0) < 1e-12,
+          "BSpline vertex: start point is the first pole");
+    check(extractVertexPoint(model.geometries()[1], PointRole::End, p)
+              && std::abs(p.x - 4.0) < 1e-12 && std::abs(p.y - 1.0) < 1e-12,
+          "BSpline vertex: end point is the last pole");
+}
+
+void testResolveSubElementStrictIndex()
+{
+    using namespace McSolverEngine::Compat;
+
+    SketchModel model;
+    model.addLineSegment({0.0, 0.0}, {1.0, 0.0});
+
+    check(resolveSubElementToGeoIndex(model, "Edge1") == 0,
+          "strict index: Edge1 resolves to geometry 0");
+    check(resolveSubElementToGeoIndex(model, "Edge1xyz") < 0,
+          "strict index: Edge1xyz is rejected (trailing junk)");
+    check(resolveSubElementToGeoIndex(model, "Edge0") < 0,
+          "strict index: Edge0 is rejected (1-based)");
+}
+
+void testPlacementQuaternionNormalized()
+{
+    // A scaled quaternion must be normalized at import — otherwise the
+    // rotation matrix would silently carry a scale factor.
+    constexpr std::string_view xml = R"(<?xml version="1.0" encoding="UTF-8"?>
+<Document>
+    <ObjectData Count="1">
+        <Object name="Sketch" type="Sketcher::SketchObject">
+            <Properties Count="2" TransientCount="0">
+                <Property name="Placement" type="App::PropertyPlacement">
+                    <PropertyPlacement Px="0.0" Py="0.0" Pz="0.0" Q0="0.0" Q1="0.0" Q2="0.0" Q3="2.0" A="0.0" Ox="0.0" Oy="0.0" Oz="1.0"/>
+                </Property>
+                <Property name="Geometry" type="Part::PropertyGeometryList">
+                    <GeometryList count="1">
+                        <Geometry type="Part::GeomLineSegment" id="1">
+                            <LineSegment StartX="0.0" StartY="0.0" StartZ="0.0" EndX="1.0" EndY="0.0" EndZ="0.0"/>
+                            <Construction value="0"/>
+                        </Geometry>
+                    </GeometryList>
+                </Property>
+            </Properties>
+        </Object>
+    </ObjectData>
+</Document>)";
+
+    const auto imported = McSolverEngine::DocumentXml::importSketchFromDocumentXml(xml, "Sketch");
+    check(imported.imported(), "quaternion: imported successfully");
+    check(std::abs(imported.model.placement().qw - 1.0) < 1e-12,
+          "quaternion: scaled quaternion normalized to unit length");
+}
+
 }  // namespace
 
 int main()
@@ -838,6 +1293,17 @@ int main()
 
     testDocumentXmlEmptySketch();
     testDocumentXmlEmptySketchName();
+
+    testPlaneTransformBetween();
+    testUpdateExternalGeometryArcRotation();
+    testUpdateExternalGeometryArcReflection();
+    testUpdateExternalGeometryEllipse();
+    testDocumentXmlArcAngleXUFolded();
+    testDocumentXmlMissingDependencyMessage();
+    testDocumentXmlLinkCountMismatch();
+    testResolveVertexSubElementBSpline();
+    testResolveSubElementStrictIndex();
+    testPlacementQuaternionNormalized();
 
     if (failCount > 0) {
         std::cerr << "\n" << failCount << " test(s) failed.\n";

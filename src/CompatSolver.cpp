@@ -13,6 +13,7 @@
 #include <string>
 #include <string_view>
 #include <unordered_map>
+#include <unordered_set>
 #include <utility>
 #include <vector>
 
@@ -3046,10 +3047,29 @@ SolveResult solveSketch(SketchModel& model, const McSolverEngine::ParameterMap& 
     //   (c) no cycles were detected in the dependency graph
     if (!model.dependencySolveOrder_.empty()) {
         // Solve dependencies in topological order (DFS post-order from import).
-        // Each recursive call handles its own transitive dependencies.
+        // Dependency models are stored flat in this model, and each
+        // dependency's own dependencySolveOrder_ is empty — so a
+        // dependency's external geometry is refreshed here, from its
+        // upstream dependencies (guaranteed earlier in the topo order),
+        // before the dependency itself is solved.  Without this, a chain
+        // A→B→C would solve B against the stale XML coordinates of C.
         for (const auto& depName : model.dependencySolveOrder_) {
             auto* depModel = SketchModelInternalAccess::findDependency(model, depName);
             if (!depModel) continue;
+
+            std::unordered_set<std::string> upstreamNames;
+            for (const auto& geo : depModel->geometries()) {
+                if (geo.externalSource.has_value()) {
+                    upstreamNames.insert(geo.externalSource->sourceObject);
+                }
+            }
+            for (const auto& upstreamName : upstreamNames) {
+                const auto* upstreamModel =
+                    SketchModelInternalAccess::findDependency(model, upstreamName);
+                if (upstreamModel != nullptr) {
+                    updateExternalGeometry(*depModel, upstreamName, *upstreamModel);
+                }
+            }
 
             auto depResult = solveSketch(*depModel, parameters);
             if (!depResult.solved()) {

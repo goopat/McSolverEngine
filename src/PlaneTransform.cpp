@@ -25,17 +25,16 @@ void quaternionToRotationMatrix(
     const double wy = qw * qy;
     const double wz = qw * qz;
 
-    // Row 0: X axis in world
+    // Standard active-rotation matrix (world = R * local): the local
+    // X/Y/Z axes in world coordinates are the COLUMNS of R.
     R[0] = 1.0 - 2.0 * (yy + zz);
     R[1] = 2.0 * (xy - wz);
     R[2] = 2.0 * (xz + wy);
 
-    // Row 1: Y axis in world
     R[3] = 2.0 * (xy + wz);
     R[4] = 1.0 - 2.0 * (xx + zz);
     R[5] = 2.0 * (yz - wx);
 
-    // Row 2: Z axis (normal) in world
     R[6] = 2.0 * (xz - wy);
     R[7] = 2.0 * (yz + wx);
     R[8] = 1.0 - 2.0 * (xx + yy);
@@ -45,8 +44,8 @@ namespace
 {
 
 // Extract the 3D basis vectors from a Placement.
-// u, v, n are the X, Y, Z axes in world coordinates.
-// T is the position.
+// u, v, n are the X, Y, Z axes in world coordinates — the COLUMNS of the
+// rotation matrix (world = R * local).  T is the position.
 void decomposePlacement(
     const Placement& p,
     double u[3],
@@ -58,9 +57,9 @@ void decomposePlacement(
     double R[9];
     quaternionToRotationMatrix(p.qx, p.qy, p.qz, p.qw, R);
 
-    u[0] = R[0]; u[1] = R[1]; u[2] = R[2];  // X = row 0
-    v[0] = R[3]; v[1] = R[4]; v[2] = R[5];  // Y = row 1
-    n[0] = R[6]; n[1] = R[7]; n[2] = R[8];  // Z = row 2
+    u[0] = R[0]; u[1] = R[3]; u[2] = R[6];  // X = column 0
+    v[0] = R[1]; v[1] = R[4]; v[2] = R[7];  // Y = column 1
+    n[0] = R[2]; n[1] = R[5]; n[2] = R[8];  // Z = column 2
 
     T[0] = p.px;
     T[1] = p.py;
@@ -132,6 +131,13 @@ double PlaneTransform::scaleFactor() const noexcept
     const double col0LenSq = m00 * m00 + m10 * m10;
     const double col1LenSq = m01 * m01 + m11 * m11;
     return std::sqrt(0.5 * (col0LenSq + col1LenSq));
+}
+
+double PlaneTransform::referenceAngle() const noexcept
+{
+    // For a conformal M the first column is the rotated (or mirrored)
+    // X axis, so atan2 recovers θ (rotation) resp. φ (mirror axis).
+    return std::atan2(m10, m00);
 }
 
 }  // namespace McSolverEngine::Compat

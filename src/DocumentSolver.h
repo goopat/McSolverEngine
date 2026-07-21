@@ -33,8 +33,10 @@ struct ExternalGeometryUpdateResult
 ///        it into a target Point geometry.
 ///
 /// Geometry-type-specific behaviour:
-///   Point / LineSegment / Ellipse / BSpline — always works (affine transform)
-///   Circle / Arc — only when planes are parallel (isConformal); else skip
+///   Point / LineSegment / BSpline — always works (affine transform)
+///   Circle / Arc / Ellipse / conic arcs — only when planes are parallel
+///     (isConformal); else skip. Arc polar angles are adjusted for
+///     in-plane rotation and flipped under reflection.
 ///
 /// The dependent sketch must be re-solved after this call.
 ExternalGeometryUpdateResult updateExternalGeometry(

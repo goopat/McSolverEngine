@@ -40,6 +40,21 @@ struct PlaneTransform
 
     /// When isConformal(), returns the uniform scale factor sqrt(s).
     [[nodiscard]] double scaleFactor() const noexcept;
+
+    /// Returns true when M flips orientation (det(M) < 0).  Between two
+    /// sketch placements this happens when the plane normals point in
+    /// opposite directions (target sketch on the back face).
+    [[nodiscard]] bool isReflection() const noexcept
+    {
+        return m00 * m11 - m01 * m10 < 0.0;
+    }
+
+    /// When isConformal(), returns the reference angle of M:
+    ///   - rotation (det > 0):  the in-plane rotation angle θ, so a
+    ///     polar angle α maps to α + θ.
+    ///   - reflection (det < 0): the mirror axis angle φ, so a polar
+    ///     angle α maps to φ − α.
+    [[nodiscard]] double referenceAngle() const noexcept;
 };
 
 /// Convert a quaternion (qx, qy, qz, qw) to a 3×3 rotation matrix.

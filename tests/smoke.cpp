@@ -3659,9 +3659,8 @@ int main()
         <Object name="SketchB" type="Sketcher::SketchObject">
             <Properties Count="2" TransientCount="0">
                 <Property name="Constraints" type="Sketcher::PropertyConstraintList">
-                    <ConstraintList count="2">
+                    <ConstraintList count="1">
                         <Constrain Name="" Type="2" Value="0.0" First="0" FirstPos="0" Second="-2000" SecondPos="0" Third="-2000" ThirdPos="0" LabelDistance="10.0" LabelPosition="0.0" IsDriving="1" IsInVirtualSpace="0" IsActive="1" />
-                        <Constrain Name="" Type="3" Value="0.0" First="0" FirstPos="0" Second="-2000" SecondPos="0" Third="-2000" ThirdPos="0" LabelDistance="10.0" LabelPosition="0.0" IsDriving="1" IsInVirtualSpace="0" IsActive="1" />
                     </ConstraintList>
                 </Property>
                 <Property name="Geometry" type="Part::PropertyGeometryList">
@@ -3758,16 +3757,12 @@ int main()
         const auto& updatedLine =
             std::get<McSolverEngine::Compat::LineSegmentGeometry>(updatedExtGeo.data);
 
-        // Check the line was updated from stale (0,0)-(1,0) to solved source coords:
-        // SketchB's line is constrained horizontal + vertical at start →
-        // start.x ≈ 0, start.y free, end.y = start.y (horizontal)
-        if (std::abs(updatedLine.end.x - 1.0) < 1e-6) {
-            std::cerr << "External geometry was NOT updated after cascade solve.\n";
-            return 1;
-        }
-        // Verify external geo is now horizontal (matching solved source constraint)
-        if (std::abs(updatedLine.start.y - updatedLine.end.y) > 1e-6) {
-            std::cerr << "Expected external geo horizontal after cascade (source was constrained horizontal).\n";
+        // SketchB's line is constrained horizontal only; the remaining DOFs
+        // keep their initial values, so the solved line is exactly
+        // (0,0)-(10,0).  The external geo must be an exact copy of it.
+        if (std::abs(updatedLine.start.x) > 1e-6 || std::abs(updatedLine.start.y) > 1e-6
+            || std::abs(updatedLine.end.x - 10.0) > 1e-6 || std::abs(updatedLine.end.y) > 1e-6) {
+            std::cerr << "Expected external geo to equal the solved source (0,0)-(10,0).\n";
             return 1;
         }
 
@@ -3799,9 +3794,8 @@ int main()
         <Object name="SketchC" type="Sketcher::SketchObject">
             <Properties Count="2" TransientCount="0">
                 <Property name="Constraints" type="Sketcher::PropertyConstraintList">
-                    <ConstraintList count="2">
+                    <ConstraintList count="1">
                         <Constrain Name="" Type="2" Value="0.0" First="0" FirstPos="0" Second="-2000" SecondPos="0" Third="-2000" ThirdPos="0" LabelDistance="10.0" LabelPosition="0.0" IsDriving="1" IsInVirtualSpace="0" IsActive="1" />
-                        <Constrain Name="" Type="3" Value="0.0" First="0" FirstPos="1" Second="-2000" SecondPos="0" Third="-2000" ThirdPos="0" LabelDistance="10.0" LabelPosition="0.0" IsDriving="1" IsInVirtualSpace="0" IsActive="1" />
                     </ConstraintList>
                 </Property>
                 <Property name="Geometry" type="Part::PropertyGeometryList">
@@ -3927,6 +3921,41 @@ int main()
         }
         if (std::abs(extLine.start.y - extLine.end.y) > 1e-6) {
             std::cerr << "[chain] Expected external geo horizontal after cascade.\n";
+            return 1;
+        }
+
+        // The chain assertion that distinguishes a true cascade:
+        // B's external geo must be refreshed from solved C ((0,0)-(10,0))
+        // BEFORE B is solved, so B's internal line snaps its start to
+        // (10,0); A's external geo copies B's solved internal line and
+        // must therefore start at x=10.  Without the intermediate
+        // refresh, B would snap to the stale external end (1,0) and
+        // start.x would be 1 here.
+        if (std::abs(extLine.start.x - 10.0) > 1e-6) {
+            std::cerr << "[chain] Expected external geo start.x=10 "
+                         "(intermediate sketch B refreshed from C before solving).\n";
+            return 1;
+        }
+
+        // Verify the intermediate sketch B itself: its external geo was
+        // updated from C and its internal line snapped to (10,0).
+        const auto* depB = McSolverEngine::Compat::SketchModelInternalAccess::findDependency(
+            imported.model, "SketchB");
+        if (depB == nullptr) {
+            std::cerr << "[chain] Expected SketchB to be imported as a dependency.\n";
+            return 1;
+        }
+        const auto& bExtLine = std::get<McSolverEngine::Compat::LineSegmentGeometry>(
+            depB->geometries().back().data);
+        if (std::abs(bExtLine.end.x - 10.0) > 1e-6) {
+            std::cerr << "[chain] Expected B's external geo end.x=10 (refreshed from solved C).\n";
+            return 1;
+        }
+        const auto& bIntLine = std::get<McSolverEngine::Compat::LineSegmentGeometry>(
+            depB->geometries().front().data);
+        if (std::abs(bIntLine.start.x - 10.0) > 1e-6
+            || std::abs(bIntLine.start.y) > 1e-6) {
+            std::cerr << "[chain] Expected B's internal line start to snap to (10,0).\n";
             return 1;
         }
 

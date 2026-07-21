@@ -1,6 +1,7 @@
 #include "SubElementResolver.h"
 
 #include <cctype>
+#include <climits>
 #include <cstdlib>
 
 namespace McSolverEngine::Compat
@@ -29,8 +30,9 @@ std::string extractSimpleElementName(const std::string_view subElement)
 namespace
 {
 
-// Parse a positive integer from a string_view that starts with digits.
-// Returns the parsed value, or -1 on failure.
+// Parse a positive integer from a string_view that consists of digits only.
+// Returns the parsed value, or -1 on failure (empty, trailing junk,
+// non-positive, or out of int range).
 int parseElementIndex(const std::string_view name)
 {
     if (name.empty()) {
@@ -42,7 +44,7 @@ int parseElementIndex(const std::string_view name)
         ++pos;
     }
 
-    if (pos == 0) {
+    if (pos == 0 || pos != name.size()) {
         return -1;
     }
 
@@ -111,7 +113,7 @@ int resolveSubElementToGeoIndex(
 //   ArcOfHyperbola      start             end              center (mid)
 //   ArcOfParabola       start             end              center (mid)
 //   Ellipse             center (mid)      —                 —
-//   BSpline             (not supported)   —                 —
+//   BSpline             start (1st pole)  end (last pole)   —
 // ──────────────────────────────────────────────────────────────────────────
 
 namespace
@@ -130,7 +132,7 @@ int vertexCountForKind(GeometryKind kind)
         case GeometryKind::ArcOfEllipse:    return 3;   // start, end, mid
         case GeometryKind::ArcOfHyperbola:  return 3;   // start, end, mid
         case GeometryKind::ArcOfParabola:   return 3;   // start, end, mid
-        case GeometryKind::BSpline:         return 0;   // complex — skip for now
+        case GeometryKind::BSpline:         return 2;   // start, end (FreeCAD rebuildVertexIndex)
     }
     return 0;
 }
@@ -154,7 +156,7 @@ PointRole pointRoleForVertexOffset(const Geometry& geo, int offset)
         case GeometryKind::ArcOfParabola:
             return offset == 0 ? PointRole::Start : (offset == 1 ? PointRole::End : (offset == 2 ? PointRole::Mid : PointRole::None));
         case GeometryKind::BSpline:
-            return PointRole::None;
+            return offset == 0 ? PointRole::Start : (offset == 1 ? PointRole::End : PointRole::None);
     }
     return PointRole::None;
 }
@@ -262,8 +264,16 @@ bool extractVertexPoint(
             if (role == PointRole::Mid) { outPoint = p.vertex; return true; }
             return false;
         }
-        case GeometryKind::BSpline:
+        case GeometryKind::BSpline: {
+            // Start/end are the first/last poles, matching FreeCAD's
+            // rebuildVertexIndex() which assigns two vertex ids to a
+            // BSpline curve.
+            const auto& b = std::get<BSplineGeometry>(geometry.data);
+            if (b.poles.empty()) return false;
+            if (role == PointRole::Start) { outPoint = b.poles.front().point; return true; }
+            if (role == PointRole::End)   { outPoint = b.poles.back().point;  return true; }
             return false;
+        }
     }
     return false;
 }

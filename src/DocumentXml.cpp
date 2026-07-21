@@ -949,11 +949,30 @@ void applyConstraintExpressionBindings(
             return false;
         }
 
+        // FreeCAD stores raw curve parameters relative to the basis
+        // circle's XDirection, with the in-plane rotation split out into
+        // AngleXU and the orientation in Normal.  This model has no
+        // per-arc axis, so fold both into absolute CCW angles relative
+        // to the sketch X axis (FreeCAD's emulateCCWXY semantics):
+        //   Normal +Z:  start = raw + angleXU,  end   = raw + angleXU
+        //   Normal -Z:  start = angleXU - rawEnd, end = angleXU - rawStart
+        const auto angleXU = extractDoubleAttribute(*arcTag, "AngleXU").value_or(0.0);
+        const auto normalZ = extractDoubleAttribute(*arcTag, "NormalZ").value_or(1.0);
+        double absStart = 0.0;
+        double absEnd = 0.0;
+        if (normalZ >= 0.0) {
+            absStart = *startAngle + angleXU;
+            absEnd = *endAngle + angleXU;
+        } else {
+            absStart = angleXU - *endAngle;
+            absEnd = angleXU - *startAngle;
+        }
+
         model.addArc(
             {.x = *centerX, .y = *centerY},
             *radius,
-            *startAngle,
-            *endAngle,
+            absStart,
+            absEnd,
             construction,
             external
         );
@@ -1275,14 +1294,23 @@ void applyConstraintExpressionBindings(
         return false;
     }
 
+    // Normalize the quaternion: quaternionToRotationMatrix assumes a unit
+    // quaternion, and a scaled input would silently produce a scaled
+    // "rotation" matrix.  A near-zero quaternion is invalid.
+    const double qNorm = std::sqrt((*q0) * (*q0) + (*q1) * (*q1) + (*q2) * (*q2) + (*q3) * (*q3));
+    if (qNorm < 1e-12) {
+        error = "Placement property has a zero-length quaternion.";
+        return false;
+    }
+
     model.setPlacement(Compat::Placement {
         .px = *px,
         .py = *py,
         .pz = *pz,
-        .qx = *q0,
-        .qy = *q1,
-        .qz = *q2,
-        .qw = *q3,
+        .qx = *q0 / qNorm,
+        .qy = *q1 / qNorm,
+        .qz = *q2 / qNorm,
+        .qw = *q3 / qNorm,
     });
     return true;
 }
@@ -1708,6 +1736,7 @@ namespace
                 const auto listEnd = extLinksProp->find("</LinkSubList>", listStart);
                 if (listEnd != std::string_view::npos) {
                     std::vector<ExternalGeometryLink> links;
+                    std::size_t skippedLinks = 0;
                     auto cursor = extLinksProp->find('>', listStart);
                     if (cursor != std::string_view::npos) {
                         ++cursor;
@@ -1722,11 +1751,32 @@ namespace
                             const auto sub = extractAttribute(linkEl, "sub");
                             if (obj && sub) {
                                 links.push_back({makeString(*obj), makeString(*sub)});
+                            } else {
+                                ++skippedLinks;
                             }
                             cursor = linkEnd + 2;
                         }
                     }
+                    if (skippedLinks > 0) {
+                        outMessages.push_back(
+                            "Some ExternalGeometry links were skipped because they lack "
+                            "obj/sub attributes; external references may be misaligned.");
+                    }
                     if (!links.empty()) {
+                        // Links are paired with external geometries in order.
+                        // FreeCAD does not guarantee a 1:1 correspondence
+                        // (one link may project to several geometries, or to
+                        // none), so warn when the counts diverge — the
+                        // ordered pairing below may then be misaligned.
+                        std::size_t externalCount = 0;
+                        for (const auto& geo : outModel.geometries()) {
+                            if (geo.external) ++externalCount;
+                        }
+                        if (links.size() != externalCount) {
+                            outMessages.push_back(
+                                "ExternalGeometry link count does not match the ExternalGeo "
+                                "geometry count; external references may be misaligned.");
+                        }
                         std::size_t linkIdx = 0;
                         for (auto& geo : outModel.geometries()) {
                             if (geo.external && linkIdx < links.size()) {
@@ -1919,6 +1969,10 @@ ImportResult importSketchFromDocumentXml(
                 auto depObject = findObjectBlockByName(objectBlocks, depName);
                 if (!depObject) {
                     inProgress.erase(depName);
+                    result.messages.push_back(
+                        "Dependency sketch '" + depName + "' referenced by external geometry "
+                        "was not found in Document.xml; the external geometry keeps its "
+                        "stale saved coordinates.");
                     return;
                 }
 
@@ -1935,10 +1989,16 @@ ImportResult importSketchFromDocumentXml(
                                      depBindingGaps, depFatalError,
                                      depUnsupportedSubset, depError)) {
                     inProgress.erase(depName);
+                    result.messages.push_back(
+                        "Failed to import dependency sketch '" + depName + "': " + depError
+                        + " The external geometry keeps its stale saved coordinates.");
                     return;
                 }
                 if (depFatalError) {
                     inProgress.erase(depName);
+                    result.messages.push_back(
+                        "Dependency sketch '" + depName + "' has a fatal expression binding "
+                        "error; the external geometry keeps its stale saved coordinates.");
                     return;
                 }
 
