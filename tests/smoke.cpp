@@ -3234,8 +3234,12 @@ int main()
         {"VarSet.height_2", "10000"},
     };
     const std::string sampleV101CascadeXmlPath = fcstdDocDir + "V101.Cascade.xml";
-    const std::array<std::string, 3> sampleV101CascadeStrictSketches {{
-        "Sketch", "Sketch001", "Sketch002"
+    // All four sketches are compared strictly: V101.Cascade.solver.FCStd was
+    // re-solved in FreeCAD so that Sketch003 converges to the same solution
+    // branch as this engine, and the regenerated expected BREPs now match
+    // token-by-token (float tail differences only).
+    const std::array<std::string, 4> sampleV101CascadeStrictSketches {{
+        "Sketch", "Sketch001", "Sketch002", "Sketch003"
     }};
     for (const auto& sketchName : sampleV101CascadeStrictSketches) {
         const std::string expectedPath =
@@ -3253,24 +3257,6 @@ int main()
                 sampleV101CascadeParameters)) {
             return 1;
         }
-    }
-
-    // Sketch003's internal line chain admits more than one solution branch
-    // (the downstream zigzag can fold either way while the arc, driven by
-    // the cascaded external point, matches FreeCAD exactly).  Treat the
-    // BREP comparison as non-fatal — same as V111.10 — and verify the
-    // cascade result explicitly below instead.
-    if (!verifySampleRegression(
-            sampleV101CascadeXmlPath,
-            "Sketch003",
-            fcstdDocDir + "V101.Cascade.solver.Sketch003.Shape.brp",
-            fcstdDocDir + "V101.Cascade.solver.Sketch003.solver.brp",
-            "fcstdDoc/V101.Cascade.xml / Sketch003 with solver VarSet parameters",
-            false,
-            false,
-            sampleV101CascadeParameters)) {
-        std::cerr << "[smoke] V101.Cascade Sketch003 regression mismatch"
-                     " (known multi-solution issue, continuing).\n";
     }
 
     // Explicit cascade verification for Sketch003: its external point is

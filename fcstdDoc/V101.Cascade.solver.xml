@@ -30,7 +30,7 @@
             <String value=""/>
         </Property>
         <Property name="LastModifiedDate" type="App::PropertyString" status="16777217">
-            <String value="2026-07-21T07:11:47Z"/>
+            <String value="2026-07-21T10:25:44Z"/>
         </Property>
         <Property name="License" type="App::PropertyString" status="1">
             <String value="All rights reserved"/>
@@ -169,7 +169,7 @@
                 </Extension>
             </Extensions>
             <Properties Count="12" TransientCount="1">
-                <_Property name="_GroupTouched" type="App::PropertyBool" status="100663424"/>
+                <_Property name="_GroupTouched" type="App::PropertyBool" status="100663425"/>
                 <Property name="AllowCompound" type="App::PropertyBool">
                     <Bool value="false"/>
                 </Property>
@@ -478,7 +478,7 @@
                             <GeoExtensions count="1">
                                 <GeoExtension type="Sketcher::SketchGeometryExtension" id="67" internalGeometryType="0" geometryModeFlags="00000000000000000000000000000000" geometryLayer="0"/>
                             </GeoExtensions>
-                            <Ellipse CenterX="0.0000000000000000" CenterY="20000.0000000000000000" CenterZ="0.0000000000000000" NormalX="0.0000000000000000" NormalY="0.0000000000000000" NormalZ="1.0000000000000000" MajorRadius="30000.0000000000036380" MinorRadius="19999.9999999999963620" AngleXU="-0.0000000000000000" />
+                            <Ellipse CenterX="-0.0000000000000000" CenterY="20000.0000000000000000" CenterZ="0.0000000000000000" NormalX="0.0000000000000000" NormalY="0.0000000000000000" NormalZ="1.0000000000000000" MajorRadius="30000.0000000000036380" MinorRadius="20000.0000000000036380" AngleXU="-0.0000000000000000" />
                             <Construction value="0"/>
                         </Geometry>
                         <Geometry type="Part::GeomLineSegment" id="68" migrated="1">
@@ -492,21 +492,21 @@
                             <GeoExtensions count="1">
                                 <GeoExtension type="Sketcher::SketchGeometryExtension" id="69" internalGeometryType="2" geometryModeFlags="00000000000000000000000000000010" geometryLayer="0"/>
                             </GeoExtensions>
-                            <LineSegment StartX="0.0000000000000000" StartY="40000.0000000000000000" StartZ="0.0000000000000000" EndX="0.0000000000000000" EndY="0.0000000000000000" EndZ="0.0000000000000000"/>
+                            <LineSegment StartX="-0.0000000000000000" StartY="40000.0000000000072760" StartZ="0.0000000000000000" EndX="-0.0000000000000000" EndY="0.0000000000000000" EndZ="0.0000000000000000"/>
                             <Construction value="1"/>
                         </Geometry>
                         <Geometry type="Part::GeomPoint" id="70" migrated="1">
                             <GeoExtensions count="1">
                                 <GeoExtension type="Sketcher::SketchGeometryExtension" id="70" internalGeometryType="3" geometryModeFlags="00000000000000000000000000000010" geometryLayer="0"/>
                             </GeoExtensions>
-                            <GeomPoint X="22360.6797749979050423" Y="20000.0000000000000000" Z="0.0000000000000000"/>
+                            <GeomPoint X="22360.6797749979014043" Y="20000.0000000000000000" Z="0.0000000000000000"/>
                             <Construction value="1"/>
                         </Geometry>
                         <Geometry type="Part::GeomPoint" id="71" migrated="1">
                             <GeoExtensions count="1">
                                 <GeoExtension type="Sketcher::SketchGeometryExtension" id="71" internalGeometryType="4" geometryModeFlags="00000000000000000000000000000010" geometryLayer="0"/>
                             </GeoExtensions>
-                            <GeomPoint X="-22360.6797749979050423" Y="20000.0000000000000000" Z="0.0000000000000000"/>
+                            <GeomPoint X="-22360.6797749979014043" Y="20000.0000000000000000" Z="0.0000000000000000"/>
                             <Construction value="1"/>
                         </Geometry>
                     </GeometryList>
@@ -544,7 +544,7 @@
                 <Property name="ShapeMaterial" type="Materials::PropertyMaterial">
                     <PropertyMaterial uuid="7f9fd73b-50c9-41d8-b7b2-575a030c1eeb"/>
                 </Property>
-                <Property name="Visibility" type="App::PropertyBool" status="648">
+                <Property name="Visibility" type="App::PropertyBool" status="649">
                     <Bool value="true"/>
                 </Property>
             </Properties>
@@ -861,7 +861,7 @@
                                 <GeoExtension type="Sketcher::SketchGeometryExtension" id="84" internalGeometryType="0" geometryModeFlags="00000000000000000000000000000010" geometryLayer="0"/>
                                 <GeoExtension type="Sketcher::ExternalGeometryExtension" Ref="Sketch.;g67;SKT" Flags="0"/>
                             </GeoExtensions>
-                            <Ellipse CenterX="0.0000000000000000" CenterY="20000.0000000000000000" CenterZ="0.0000000000000000" NormalX="0.0000000000000000" NormalY="0.0000000000000000" NormalZ="1.0000000000000000" MajorRadius="30000.0000000000036380" MinorRadius="19999.9999999999963620" AngleXU="-0.0000000000000000" />
+                            <Ellipse CenterX="-0.0000000000000000" CenterY="20000.0000000000000000" CenterZ="0.0000000000000000" NormalX="0.0000000000000000" NormalY="0.0000000000000000" NormalZ="1.0000000000000000" MajorRadius="30000.0000000000036380" MinorRadius="20000.0000000000036380" AngleXU="-0.0000000000000000" />
                             <Construction value="1"/>
                         </Geometry>
                     </GeometryList>
@@ -881,7 +881,7 @@
                             <GeoExtensions count="1">
                                 <GeoExtension type="Sketcher::SketchGeometryExtension" id="77" internalGeometryType="0" geometryModeFlags="00000000000000000000000000000000" geometryLayer="0"/>
                             </GeoExtensions>
-                            <ArcOfCircle CenterX="0.0000000000000000" CenterY="20000.0000000000000000" CenterZ="0.0000000000000000" NormalX="0.0000000000000000" NormalY="0.0000000000000000" NormalZ="1.0000000000000000" AngleXU="-0.0000000000000000" Radius="18560.0000000000000000" StartAngle="3.9269908169872414" EndAngle="5.4977871437821380"/>
+                            <ArcOfCircle CenterX="-0.0000000000000000" CenterY="20000.0000000000000000" CenterZ="0.0000000000000000" NormalX="0.0000000000000000" NormalY="0.0000000000000000" NormalZ="1.0000000000000000" AngleXU="-0.0000000000000000" Radius="18560.0000000000000000" StartAngle="3.9269908169872414" EndAngle="5.4977871437821380"/>
                             <Construction value="0"/>
                         </Geometry>
                         <Geometry type="Part::GeomLineSegment" id="83" migrated="1">
@@ -895,7 +895,7 @@
                             <GeoExtensions count="1">
                                 <GeoExtension type="Sketcher::SketchGeometryExtension" id="86" internalGeometryType="0" geometryModeFlags="00000000000000000000000000000000" geometryLayer="0"/>
                             </GeoExtensions>
-                            <LineSegment StartX="30000.0000000000036380" StartY="0.0000000000000000" StartZ="0.0000000000000000" EndX="30000.0000000000036380" EndY="20000.0000000000000000" EndZ="0.0000000000000000"/>
+                            <LineSegment StartX="30000.0000000000072760" StartY="0.0000000000000000" StartZ="0.0000000000000000" EndX="30000.0000000000072760" EndY="20000.0000000000000000" EndZ="0.0000000000000000"/>
                             <Construction value="0"/>
                         </Geometry>
                     </GeometryList>
@@ -933,7 +933,7 @@
                 <Property name="ShapeMaterial" type="Materials::PropertyMaterial">
                     <PropertyMaterial uuid="7f9fd73b-50c9-41d8-b7b2-575a030c1eeb"/>
                 </Property>
-                <Property name="Visibility" type="App::PropertyBool" status="648">
+                <Property name="Visibility" type="App::PropertyBool" status="649">
                     <Bool value="true"/>
                 </Property>
                 <Property name="__mc_tunnel_sketch_type__" type="App::PropertyString" group="Base" doc="" attr="0" ro="0" hide="0" status="2097152">
@@ -1040,7 +1040,7 @@
                                 <GeoExtension type="Sketcher::SketchGeometryExtension" id="1" internalGeometryType="0" geometryModeFlags="00000000000000000000000000000010" geometryLayer="0"/>
                                 <GeoExtension type="Sketcher::ExternalGeometryExtension" Ref="Sketch001.;g77;SKT" Flags="0"/>
                             </GeoExtensions>
-                            <ArcOfCircle CenterX="0.0000000000000000" CenterY="20000.0000000000000000" CenterZ="0.0000000000000000" NormalX="0.0000000000000000" NormalY="0.0000000000000000" NormalZ="1.0000000000000000" AngleXU="-0.0000000000000000" Radius="18560.0000000000000000" StartAngle="3.9269908169872414" EndAngle="5.4977871437821380"/>
+                            <ArcOfCircle CenterX="-0.0000000000000000" CenterY="20000.0000000000000000" CenterZ="0.0000000000000000" NormalX="0.0000000000000000" NormalY="0.0000000000000000" NormalZ="1.0000000000000000" AngleXU="-0.0000000000000000" Radius="18560.0000000000000000" StartAngle="3.9269908169872414" EndAngle="5.4977871437821380"/>
                             <Construction value="1"/>
                         </Geometry>
                     </GeometryList>
@@ -1066,7 +1066,7 @@
                             <GeoExtensions count="1">
                                 <GeoExtension type="Sketcher::SketchGeometryExtension" id="4" internalGeometryType="0" geometryModeFlags="00000000000000000000000000000000" geometryLayer="0"/>
                             </GeoExtensions>
-                            <LineSegment StartX="-13123.9018588223188999" StartY="6876.0981411776792811" StartZ="0.0000000000000000" EndX="-13123.9018588223188999" EndY="16876.0981411776774621" EndZ="0.0000000000000000"/>
+                            <LineSegment StartX="-13123.9018588223188999" StartY="6876.0981411776792811" StartZ="0.0000000000000000" EndX="-13123.9018588223188999" EndY="16876.0981411776811001" EndZ="0.0000000000000000"/>
                             <Construction value="0"/>
                         </Geometry>
                     </GeometryList>
@@ -1104,8 +1104,8 @@
                 <Property name="ShapeMaterial" type="Materials::PropertyMaterial">
                     <PropertyMaterial uuid="7f9fd73b-50c9-41d8-b7b2-575a030c1eeb"/>
                 </Property>
-                <Property name="Visibility" type="App::PropertyBool" status="648">
-                    <Bool value="true"/>
+                <Property name="Visibility" type="App::PropertyBool" status="649">
+                    <Bool value="false"/>
                 </Property>
             </Properties>
         </Object>
@@ -1214,49 +1214,49 @@
                             <GeoExtensions count="1">
                                 <GeoExtension type="Sketcher::SketchGeometryExtension" id="2" internalGeometryType="0" geometryModeFlags="00000000000000000000000000000000" geometryLayer="0"/>
                             </GeoExtensions>
-                            <ArcOfCircle CenterX="13123.9018588223188999" CenterY="6876.0981411776756431" CenterZ="0.0000000000000000" NormalX="0.0000000000000000" NormalY="0.0000000000000000" NormalZ="1.0000000000000000" AngleXU="-0.0000000000000000" Radius="20322.6888911073292547" StartAngle="5.9380267533102229" EndAngle="8.5560206313017186"/>
+                            <ArcOfCircle CenterX="13123.9018588223188999" CenterY="6876.0981411776756431" CenterZ="0.0000000000000000" NormalX="0.0000000000000000" NormalY="0.0000000000000000" NormalZ="1.0000000000000000" AngleXU="-0.0000000000000000" Radius="20322.6888911072892370" StartAngle="5.9380267533102229" EndAngle="8.5560206313017169"/>
                             <Construction value="0"/>
                         </Geometry>
                         <Geometry type="Part::GeomLineSegment" id="3" migrated="1">
                             <GeoExtensions count="1">
                                 <GeoExtension type="Sketcher::SketchGeometryExtension" id="3" internalGeometryType="0" geometryModeFlags="00000000000000000000000000000000" geometryLayer="0"/>
                             </GeoExtensions>
-                            <LineSegment StartX="32247.9955136241078435" StartY="-0.0000000000063665" StartZ="0.0000000000000000" EndX="32247.9955136241078435" EndY="22393.0206377533831983" EndZ="0.0000000000000000"/>
+                            <LineSegment StartX="32247.9955136240678257" StartY="0.0000000000000000" StartZ="0.0000000000000000" EndX="32247.9955136240678257" EndY="22393.0206377533722844" EndZ="0.0000000000000000"/>
                             <Construction value="0"/>
                         </Geometry>
                         <Geometry type="Part::GeomLineSegment" id="4" migrated="1">
                             <GeoExtensions count="1">
                                 <GeoExtension type="Sketcher::SketchGeometryExtension" id="4" internalGeometryType="0" geometryModeFlags="00000000000000000000000000000000" geometryLayer="0"/>
                             </GeoExtensions>
-                            <LineSegment StartX="-0.0000000000018190" StartY="22393.0206377533831983" StartZ="0.0000000000000000" EndX="32247.9955136241114815" EndY="22393.0206377533831983" EndZ="0.0000000000000000"/>
+                            <LineSegment StartX="0.0000000000000000" StartY="22393.0206377533722844" StartZ="0.0000000000000000" EndX="32247.9955136240678257" EndY="22393.0206377533722844" EndZ="0.0000000000000000"/>
                             <Construction value="0"/>
                         </Geometry>
                         <Geometry type="Part::GeomLineSegment" id="5" migrated="1">
                             <GeoExtensions count="1">
                                 <GeoExtension type="Sketcher::SketchGeometryExtension" id="5" internalGeometryType="0" geometryModeFlags="00000000000000000000000000000000" geometryLayer="0"/>
                             </GeoExtensions>
-                            <LineSegment StartX="-32247.9955136241151195" StartY="0.0000049412866718" StartZ="0.0000000000000000" EndX="-32247.9955136241151195" EndY="-22393.0206328120948456" EndZ="0.0000000000000000"/>
+                            <LineSegment StartX="-32247.9955136240678257" StartY="-0.0000000000000000" StartZ="0.0000000000000000" EndX="-32247.9955136240678257" EndY="22393.0206377533722844" EndZ="0.0000000000000000"/>
                             <Construction value="0"/>
                         </Geometry>
                         <Geometry type="Part::GeomLineSegment" id="6" migrated="1">
                             <GeoExtensions count="1">
                                 <GeoExtension type="Sketcher::SketchGeometryExtension" id="6" internalGeometryType="0" geometryModeFlags="00000000000000000000000000000000" geometryLayer="0"/>
                             </GeoExtensions>
-                            <LineSegment StartX="-32247.9955136241151195" StartY="0.0000049412866718" StartZ="0.0000000000000000" EndX="-32247.9955136241151195" EndY="-19999.9999950587152853" EndZ="0.0000000000000000"/>
+                            <LineSegment StartX="-32247.9955136240678257" StartY="-0.0000000000000000" StartZ="0.0000000000000000" EndX="-32247.9955136240678257" EndY="-20000.0000000000000000" EndZ="0.0000000000000000"/>
                             <Construction value="0"/>
                         </Geometry>
                         <Geometry type="Part::GeomLineSegment" id="7" migrated="1">
                             <GeoExtensions count="1">
                                 <GeoExtension type="Sketcher::SketchGeometryExtension" id="7" internalGeometryType="0" geometryModeFlags="00000000000000000000000000000000" geometryLayer="0"/>
                             </GeoExtensions>
-                            <LineSegment StartX="-32247.9955136241151195" StartY="-19999.9999950587152853" StartZ="0.0000000000000000" EndX="32247.9955136241078435" EndY="-19999.9999950587152853" EndZ="0.0000000000000000"/>
+                            <LineSegment StartX="-32247.9955136240678257" StartY="-20000.0000000000000000" StartZ="0.0000000000000000" EndX="32247.9955136240678257" EndY="-20000.0000000000000000" EndZ="0.0000000000000000"/>
                             <Construction value="0"/>
                         </Geometry>
                         <Geometry type="Part::GeomLineSegment" id="8" migrated="1">
                             <GeoExtensions count="1">
                                 <GeoExtension type="Sketcher::SketchGeometryExtension" id="8" internalGeometryType="0" geometryModeFlags="00000000000000000000000000000000" geometryLayer="0"/>
                             </GeoExtensions>
-                            <LineSegment StartX="32247.9955136241078435" StartY="-19999.9999950587152853" StartZ="0.0000000000000000" EndX="32247.9955136241078435" EndY="-0.0000000000072760" EndZ="0.0000000000000000"/>
+                            <LineSegment StartX="32247.9955136240678257" StartY="-20000.0000000000000000" StartZ="0.0000000000000000" EndX="32247.9955136240678257" EndY="0.0000000000000000" EndZ="0.0000000000000000"/>
                             <Construction value="0"/>
                         </Geometry>
                     </GeometryList>
@@ -1294,7 +1294,7 @@
                 <Property name="ShapeMaterial" type="Materials::PropertyMaterial">
                     <PropertyMaterial uuid="7f9fd73b-50c9-41d8-b7b2-575a030c1eeb"/>
                 </Property>
-                <Property name="Visibility" type="App::PropertyBool" status="648">
+                <Property name="Visibility" type="App::PropertyBool" status="649">
                     <Bool value="true"/>
                 </Property>
             </Properties>

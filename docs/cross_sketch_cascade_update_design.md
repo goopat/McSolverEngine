@@ -541,9 +541,15 @@ directly; `isVertexSubElementName()` covers both naming styles.
 
 `tests/smoke.cpp` imports `fcstdDoc/V101.Cascade.xml` with the four VarSet
 parameters from `V101.Cascade.solver.FCStd` (the FreeCAD recompute) and
-compares exported BREPs token-by-token for Sketch/Sketch001/Sketch002.
-Sketch003's internal line chain admits multiple solution branches (the
-downstream zigzag folds either way; the cascaded arc and external point
-match FreeCAD exactly), so its BREP comparison is non-fatal — same
-policy as V111.10 — with an explicit assertion on the cascaded external
-point coordinates instead.
+compares exported BREPs token-by-token for all four sketches
+(Sketch/Sketch001/Sketch002/Sketch003), plus an explicit assertion on
+Sketch003's cascaded external point coordinates.
+
+Note: Sketch003's internal line chain admits multiple solution branches
+(the downstream zigzag can fold either way).  The current
+`V101.Cascade.solver.FCStd` was re-solved in FreeCAD so that Sketch003
+converges to the same branch as this engine, making the strict BREP
+comparison possible.  If the FreeCAD document is ever re-saved from a
+state that folds the zigzag the other way, Sketch003's BREP comparison
+will diverge again (a genuine solution-branch difference, not a cascade
+error) — the external-point assertion is the branch-independent check.
