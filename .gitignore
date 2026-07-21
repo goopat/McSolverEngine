@@ -12,3 +12,7 @@ fcstdDoc/*.py.svg
 __pycache__/
 
 /pixi.lock
+/fcstdDoc/V101.Cascade.solver.Sketch001.solver.brp
+/fcstdDoc/V101.Cascade.solver.Sketch002.solver.brp
+/fcstdDoc/V101.Cascade.solver.Sketch003.solver.brp
+/fcstdDoc/V101.Cascade.solver.Sketch.solver.brp
