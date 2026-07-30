@@ -2153,6 +2153,49 @@ int main()
         {"min(1mm, 2mm, 3mm)", 1.0},
         {"max(1mm, 2mm, 3mm)", 3.0},
         {"average(4mm, 5mm, 6mm)", 5.0},
+        {"1 > 2 ? 10 : 20", 20.0},
+        {"2 >= 2 ? 10 : 20", 10.0},
+        {"1 < 2 ? 10 : 20", 10.0},
+        {"2 <= 1 ? 10 : 20", 20.0},
+        {"Var == 2 ? Var * 10 : 0", 20.0},
+        {"Var != 2 ? 1 : 5", 5.0},
+        {"(Var == 2) ? 7 : 8", 7.0},
+        {"(Var > 1 ? Var : 1) * 5", 10.0},
+        {"Var * (Var == 0 ? 0 : 1 / Var)", 1.0},
+        {"Var > 0 ? 1 : 1 / (Var - Var)", 1.0},
+        {"Var > 1 ? (Var > 1 ? 100 : 10) : 1", 100.0},
+        {"Var > 0 ? Var > 1 ? 100 : 10 : 1", 100.0},
+        {"min(Var > 1 ? 3 : 30, 10)", 3.0},
+        {"2 mm > 1 mm ? 5 mm : 6 mm", 5.0},
+        // Borrowed from FreeCAD's own regression suite
+        // (src/Mod/Spreadsheet/TestSpreadsheet.py::testRelationalOperators);
+        // every case is written to evaluate to 1.
+        {"1 == 1     ? 1 : 0", 1.0},
+        {"1 != 1     ? 0 : 1", 1.0},
+        {"1e9 == 1e9 ? 1 : 0", 1.0},
+        {"1e9 != 1e9 ? 0 : 1", 1.0},
+        {"1 > 1      ? 0 : 1", 1.0},
+        {"2 > 1      ? 1 : 0", 1.0},
+        {"1 > 2      ? 0 : 1", 1.0},
+        {"1 < 1      ? 0 : 1", 1.0},
+        {"1 < 2      ? 1 : 0", 1.0},
+        {"2 < 1      ? 0 : 1", 1.0},
+        {"1 >= 1     ? 1 : 0", 1.0},
+        {"2 >= 1     ? 1 : 0", 1.0},
+        {"1 >= 2     ? 0 : 1", 1.0},
+        {"1 <= 1     ? 1 : 1", 1.0},
+        {"1 <= 2     ? 1 : 0", 1.0},
+        {"2 <= 1     ? 0 : 1", 1.0},
+        {"1 >= 1.000000000000001 ? 0 : 1", 1.0},
+        {"1 >= 1.0000000000000001 ? 1 : 0", 1.0},
+        {"1 <= 1.000000000000001 ? 1 : 0", 1.0},
+        {"1 <= 1.0000000000000001 ? 1 : 0", 1.0},
+        {"1 == 1.000000000000001 ? 0 : 1", 1.0},
+        {"1 == 1.0000000000000001 ? 1 : 0", 1.0},
+        {"1 != 1.000000000000001 ? 1 : 0", 1.0},
+        {"1 != 1.0000000000000001 ? 0 : 1", 1.0},
+        // FreeCAD testParensAroundCondition: parens around the condition.
+        {"(1 == 1) ? 1 : 0", 1.0},
     };
     for (const auto& testCase : freeCadExpressionCases) {
         const auto expressionXml = makeVarSetExpressionResultDocumentXml(testCase.expression);
@@ -2183,6 +2226,8 @@ int main()
         "exp(-3mm)",
         "log(-3mm)",
         "pow(7mm, 4mm)",
+        "Var > 0 ? 1 / (Var - Var) : 1",
+        "1 mm > 1 deg ? 1 : 2",
     };
     for (const auto unsupportedExpression : unsupportedOrInvalidExpressions) {
         const auto expressionXml = makeVarSetExpressionResultDocumentXml(unsupportedExpression);
@@ -2826,6 +2871,144 @@ int main()
 
     const std::string sourceDir {MCSOLVERENGINE_SOURCE_DIR};
     const std::string fcstdDocDir = sourceDir + "/fcstdDoc/";
+
+    // V101.Ternary: sketch constraint bindings driven by FreeCAD ternary
+    // (conditional) expressions such as
+    // "VarSet.wallBottomWidth * (VarSet.wallBottomSlope == 0 ? 0 : 1 / VarSet.wallBottomSlope)".
+    // Like FreeCAD's ConditionalExpression, only the selected branch has to
+    // evaluate, so a guarded division by zero is allowed when the guard
+    // selects the other branch.
+    const std::string sampleV101TernaryXmlPath = fcstdDocDir + "V101.Ternary.xml";
+    const auto verifyV101Ternary = [&](
+                                       const McSolverEngine::ParameterMap& parameters,
+                                       const std::vector<std::pair<std::string_view, double>>& expectations,
+                                       std::string_view label) {
+        auto importedTernary = McSolverEngine::DocumentXml::importSketchFromDocumentXmlFile(
+            sampleV101TernaryXmlPath, parameters, "Sketch");
+        if (!importedTernary.imported()) {
+            std::cerr << "Expected V101.Ternary Sketch to import (" << label << ").\n";
+            for (const auto& message : importedTernary.messages) {
+                std::cerr << message << "\n";
+            }
+            return false;
+        }
+        for (const auto& [expression, expectedValue] : expectations) {
+            bool matched = false;
+            for (const auto& constraint : importedTernary.model.constraints()) {
+                if (constraint.parameterExpression != expression) {
+                    continue;
+                }
+                matched = true;
+                if (std::abs(constraint.value - expectedValue) > 1e-8) {
+                    std::cerr << "V101.Ternary (" << label << ") expression '" << expression
+                              << "' evaluated to " << constraint.value << ", expected "
+                              << expectedValue << ".\n";
+                    return false;
+                }
+            }
+            if (!matched) {
+                std::cerr << "V101.Ternary (" << label << ") missing constraint binding for '"
+                          << expression << "'.\n";
+                return false;
+            }
+        }
+        return true;
+    };
+    const McSolverEngine::ParameterMap sampleV101TernaryNoParameters {};
+    const std::vector<std::pair<std::string_view, double>> sampleV101TernaryExpectations {
+        {"VarSet.wallToeHeight > 0.01 ? VarSet.wallToeHeight : 0.01", 500.0},
+        {"VarSet.wallToeWidth > 0.01 ? VarSet.wallToeWidth : 0.01", 300.0},
+        {
+            "(VarSet.wallToeHeight > 0.01 ? VarSet.wallToeHeight : 0.01) * VarSet.wallToePlaneSlope",
+            125.0
+        },
+        {
+            "VarSet.wallBottomWidth * (VarSet.wallBottomSlope == 0 ? 0 : 1 / VarSet.wallBottomSlope)",
+            534.0
+        },
+        {"(VarSet.totalHeight - VarSet.wallToeHeight) * VarSet.wallPlaneSlope", 1125.0},
+    };
+    if (!verifyV101Ternary(sampleV101TernaryNoParameters, sampleV101TernaryExpectations, "defaults")) {
+        return 1;
+    }
+    // Zero overrides: the ternary guards must select the constant branches
+    // without evaluating the guarded division by zero.
+    const McSolverEngine::ParameterMap sampleV101TernaryZeroParameters {
+        {"VarSet.wallBottomSlope", "0"},
+        {"VarSet.wallToeHeight", "0"},
+    };
+    const std::vector<std::pair<std::string_view, double>> sampleV101TernaryZeroExpectations {
+        {"VarSet.wallToeHeight > 0.01 ? VarSet.wallToeHeight : 0.01", 0.01},
+        {
+            "VarSet.wallBottomWidth * (VarSet.wallBottomSlope == 0 ? 0 : 1 / VarSet.wallBottomSlope)",
+            0.0
+        },
+    };
+    if (!verifyV101Ternary(
+            sampleV101TernaryZeroParameters, sampleV101TernaryZeroExpectations, "zero overrides")) {
+        return 1;
+    }
+
+    // Parameterized solve: overriding VarSet.wallBottomWidth 2670 -> 2680 must
+    // flow through both the plain parameter binding (Constraints[13]) and the
+    // ternary expression (Constraints[14] = 2680 * 1/5), and must move the
+    // solved geometry relative to the default-parameter solve.
+    const McSolverEngine::ParameterMap sampleV101TernaryWidthParameters {
+        {"VarSet.wallBottomWidth", "2680"},
+    };
+    const std::vector<std::pair<std::string_view, double>> sampleV101TernaryWidthExpectations {
+        {"VarSet.wallBottomWidth", 2680.0},
+        {
+            "VarSet.wallBottomWidth * (VarSet.wallBottomSlope == 0 ? 0 : 1 / VarSet.wallBottomSlope)",
+            536.0
+        },
+    };
+    if (!verifyV101Ternary(
+            sampleV101TernaryWidthParameters, sampleV101TernaryWidthExpectations, "width override")) {
+        return 1;
+    }
+    auto importedV101TernaryDefault = McSolverEngine::DocumentXml::importSketchFromDocumentXmlFile(
+        sampleV101TernaryXmlPath, sampleV101TernaryNoParameters, "Sketch");
+    auto importedV101TernaryWidth = McSolverEngine::DocumentXml::importSketchFromDocumentXmlFile(
+        sampleV101TernaryXmlPath, sampleV101TernaryWidthParameters, "Sketch");
+    if (!importedV101TernaryDefault.imported() || !importedV101TernaryWidth.imported()) {
+        std::cerr << "Expected V101.Ternary Sketch to import for the parameterized solve.\n";
+        return 1;
+    }
+    const auto solveV101TernaryDefault = McSolverEngine::Compat::solveSketch(
+        importedV101TernaryDefault.model, sampleV101TernaryNoParameters);
+    const auto solveV101TernaryWidth = McSolverEngine::Compat::solveSketch(
+        importedV101TernaryWidth.model, sampleV101TernaryWidthParameters);
+    if (!solveV101TernaryDefault.solved() || !solveV101TernaryWidth.solved()) {
+        std::cerr << "Expected V101.Ternary to solve with and without the wallBottomWidth override.\n";
+        return 1;
+    }
+    bool widthOverrideMovedGeometry = false;
+    const auto& defaultGeometries = importedV101TernaryDefault.model.geometries();
+    const auto& widthGeometries = importedV101TernaryWidth.model.geometries();
+    for (std::size_t index = 0; index < defaultGeometries.size() && index < widthGeometries.size();
+         ++index) {
+        const auto* defaultLine =
+            std::get_if<McSolverEngine::Compat::LineSegmentGeometry>(&defaultGeometries[index].data);
+        const auto* widthLine =
+            std::get_if<McSolverEngine::Compat::LineSegmentGeometry>(&widthGeometries[index].data);
+        if (!defaultLine || !widthLine) {
+            continue;
+        }
+        if (std::abs(defaultLine->start.x - widthLine->start.x) > 1e-6
+            || std::abs(defaultLine->start.y - widthLine->start.y) > 1e-6
+            || std::abs(defaultLine->end.x - widthLine->end.x) > 1e-6
+            || std::abs(defaultLine->end.y - widthLine->end.y) > 1e-6) {
+            widthOverrideMovedGeometry = true;
+            break;
+        }
+    }
+    if (!widthOverrideMovedGeometry) {
+        std::cerr << "V101.Ternary wallBottomWidth = 2680 override did not move the solved geometry.\n";
+        return 1;
+    }
+    std::cout << "V101.Ternary conditional expression regression passed.\n";
+
 #if MCSOLVERENGINE_WITH_OCCT
     const std::string sampleXmlPath = fcstdDocDir + "1.xml";
     const std::string sampleBrpPath = fcstdDocDir + "1.brp";

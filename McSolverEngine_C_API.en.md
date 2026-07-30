@@ -657,6 +657,8 @@ Document.xml `ExpressionEngine` values are evaluated during import for:
 - Sketch scalar properties targeted by the Sketch object's own `ExpressionEngine`
 
 The reduced expression subset includes:
+- Comparisons: `==`, `!=`, `<`, `>`, `<=`, `>=`
+- Ternary conditional: `condition ? trueBranch : falseBranch` (only the selected branch is evaluated, matching FreeCAD's `ConditionalExpression`)
 - Arithmetic: `+`, `-`, `*`, `/`, `%`, `^` (left-associative)
 - Math functions: `sin`, `cos`, `tan`, `asin`, `acos`, `atan`, `atan2`, `sinh`, `cosh`, `tanh`, `sqrt`, `cbrt`, `pow`, `hypot`, `exp`, `log`, `log10`, `floor`, `ceil`, `round`, `trunc`, `abs`, `min`, `max`, `sum`, `average`, `count`, `mod`
 - Constants: `pi`, `e` (case-sensitive)
@@ -667,7 +669,7 @@ The reduced expression subset includes:
 - Limited units: length (`mm`, `cm`, `m`, `km`, `um`, `nm`, `in`, `ft`) and angle (`deg`, `degree`, `degrees`, `rad`, `radian`, `radians`)
 - Cycle detection for the combined Sketch/VarSet property graph
 
-If an expression uses FreeCAD features beyond this subset (spreadsheet refs, geometry properties, complex Quantity/Unit, conditional/logic, etc.), import returns `MCSOLVERENGINE_RESULT_VARSET_EXPRESSION_UNSUPPORTED_SUBSET` with diagnostic message tag `MCSOLVERENGINE_IMPORT_VARSET_EXPRESSION_UNSUPPORTED_SUBSET`.
+If an expression uses FreeCAD features beyond this subset (spreadsheet refs, geometry properties, complex Quantity/Unit, boolean logic operators, etc.), import returns `MCSOLVERENGINE_RESULT_VARSET_EXPRESSION_UNSUPPORTED_SUBSET` with diagnostic message tag `MCSOLVERENGINE_IMPORT_VARSET_EXPRESSION_UNSUPPORTED_SUBSET`.
 
 ---
 

@@ -327,6 +327,16 @@ struct VarSetPropertyExportValue
     );
 }
 
+enum class ComparisonOperator
+{
+    Equal,
+    NotEqual,
+    Less,
+    Greater,
+    LessOrEqual,
+    GreaterOrEqual,
+};
+
 class VarSetExpressionParser
 {
 public:
@@ -354,7 +364,7 @@ public:
             skipWhitespace();
         }
 
-        const auto value = parseAdditive();
+        const auto value = parseConditional();
         if (!value) {
             error = error_;
             return std::nullopt;
@@ -397,6 +407,143 @@ private:
         }
         ++position_;
         return true;
+    }
+
+    // Mirrors FreeCAD's ConditionalExpression (App/ExpressionParser.y:
+    // "cond '?' exp ':' exp"): the condition is any expression whose value
+    // is truthy when non-zero, and only the selected branch has to evaluate
+    // successfully, so guards like "x == 0 ? 0 : 1 / x" work.
+    [[nodiscard]] std::optional<QuantityValue> parseConditional()
+    {
+        auto condition = parseComparison();
+        if (!condition) {
+            return std::nullopt;
+        }
+        if (!consume('?')) {
+            return condition;
+        }
+
+        auto trueValue = parseConditional();
+        std::string trueError;
+        if (!trueValue) {
+            trueError = std::move(error_);
+            error_.clear();
+        }
+        if (!consume(':')) {
+            return fail("Missing ':' in VarSet conditional expression.");
+        }
+        auto falseValue = parseConditional();
+        std::string falseError;
+        if (!falseValue) {
+            falseError = std::move(error_);
+            error_.clear();
+        }
+
+        const bool selectTrue = condition->value != 0.0;
+        const auto& selected = selectTrue ? trueValue : falseValue;
+        const auto& selectedError = selectTrue ? trueError : falseError;
+        if (!selected) {
+            return fail(
+                selectedError.empty()
+                    ? "Failed to evaluate the selected branch of a VarSet conditional expression."
+                    : selectedError
+            );
+        }
+        return checked(*selected);
+    }
+
+    [[nodiscard]] std::optional<QuantityValue> parseComparison()
+    {
+        auto value = parseAdditive();
+        if (!value) {
+            return std::nullopt;
+        }
+
+        while (true) {
+            skipWhitespace();
+            const auto remaining = expression_.substr(position_);
+            ComparisonOperator op;
+            std::size_t opLength = 0;
+            if (remaining.starts_with("==")) {
+                op = ComparisonOperator::Equal;
+                opLength = 2;
+            }
+            else if (remaining.starts_with("!=")) {
+                op = ComparisonOperator::NotEqual;
+                opLength = 2;
+            }
+            else if (remaining.starts_with("<=")) {
+                op = ComparisonOperator::LessOrEqual;
+                opLength = 2;
+            }
+            else if (remaining.starts_with(">=")) {
+                op = ComparisonOperator::GreaterOrEqual;
+                opLength = 2;
+            }
+            else if (remaining.starts_with('<') && !remaining.starts_with("<<")) {
+                op = ComparisonOperator::Less;
+                opLength = 1;
+            }
+            else if (remaining.starts_with('>') && !remaining.starts_with(">>")) {
+                op = ComparisonOperator::Greater;
+                opLength = 1;
+            }
+            else {
+                break;
+            }
+            position_ += opLength;
+
+            const auto rhs = parseAdditive();
+            if (!rhs) {
+                return std::nullopt;
+            }
+            value = compare(op, *value, *rhs);
+            if (!value) {
+                return std::nullopt;
+            }
+        }
+
+        return value;
+    }
+
+    [[nodiscard]] std::optional<QuantityValue> compare(
+        ComparisonOperator op,
+        const QuantityValue& lhs,
+        const QuantityValue& rhs
+    )
+    {
+        const auto dimension = compatibleDimension(lhs, rhs);
+        if (dimension == QuantityDimension::Dimensionless
+            && lhs.dimension != QuantityDimension::Dimensionless
+            && rhs.dimension != QuantityDimension::Dimensionless) {
+            return fail(
+                "Cannot compare " + std::string(dimensionName(lhs.dimension)) + " and "
+                + std::string(dimensionName(rhs.dimension)) + " quantities in VarSet expression."
+            );
+        }
+
+        bool result = false;
+        switch (op) {
+            case ComparisonOperator::Equal:
+                result = lhs.value == rhs.value;
+                break;
+            case ComparisonOperator::NotEqual:
+                result = lhs.value != rhs.value;
+                break;
+            case ComparisonOperator::Less:
+                result = lhs.value < rhs.value;
+                break;
+            case ComparisonOperator::Greater:
+                result = lhs.value > rhs.value;
+                break;
+            case ComparisonOperator::LessOrEqual:
+                result = lhs.value <= rhs.value;
+                break;
+            case ComparisonOperator::GreaterOrEqual:
+                result = lhs.value >= rhs.value;
+                break;
+        }
+        return makeQuantity(result ? 1.0 : 0.0);
     }
 
     [[nodiscard]] std::optional<QuantityValue> parseAdditive()
@@ -533,7 +680,7 @@ private:
         }
 
         if (consume('(')) {
-            const auto value = parseAdditive();
+            const auto value = parseConditional();
             if (!value) {
                 return std::nullopt;
             }
@@ -709,7 +856,7 @@ private:
         skipWhitespace();
         if (!consume(')')) {
             while (true) {
-                const auto argument = parseAdditive();
+                const auto argument = parseConditional();
                 if (!argument) {
                     return std::nullopt;
                 }
@@ -1438,6 +1585,12 @@ ParameterBindingParseResult parseParameterBindingExpression(
         }
         objectRef = makeString(trim(expression.substr(0, separator)));
         parameterName = makeString(trim(expression.substr(separator + 1)));
+        // Only a plain identifier can start a parameter binding; anything
+        // else (e.g. a parenthesized conditional expression) is an
+        // evaluatable expression, not an external object reference.
+        if (!isSimplePropertyPath(objectRef)) {
+            return {};
+        }
     }
 
     if (objectRef.empty() || parameterName.empty()) {

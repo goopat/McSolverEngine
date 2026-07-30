@@ -663,6 +663,8 @@ OCCT 在启用构建中属于**运行时依赖**：除链接期 `.lib` 文件外
 - Sketch 标量 Property（由 Sketch 对象自己的 `ExpressionEngine` 驱动）
 
 支持的精简表达式子集包括：
+- 比较运算：`==`、`!=`、`<`、`>`、`<=`、`>=`
+- 三元条件：`condition ? trueBranch : falseBranch`（只对选定分支求值，匹配 FreeCAD 的 `ConditionalExpression`）
 - 算术运算：`+`、`-`、`*`、`/`、`%`、`^`（左结合）
 - 数学函数：`sin`、`cos`、`tan`、`asin`、`acos`、`atan`、`atan2`、`sinh`、`cosh`、`tanh`、`sqrt`、`cbrt`、`pow`、`hypot`、`exp`、`log`、`log10`、`floor`、`ceil`、`round`、`trunc`、`abs`、`min`、`max`、`sum`、`average`、`count`、`mod`
 - 常量：`pi`、`e`（区分大小写）
@@ -673,7 +675,7 @@ OCCT 在启用构建中属于**运行时依赖**：除链接期 `.lib` 文件外
 - 有限单位支持：长度（`mm`、`cm`、`m`、`km`、`um`、`nm`、`in`、`ft`）和角度（`deg`、`degree`、`degrees`、`rad`、`radian`、`radians`）
 - Sketch / VarSet 联合属性图的循环引用检测
 
-如果表达式使用了超出此子集的 FreeCAD 特性（电子表格引用、几何属性、完整 Quantity/Unit 运算、条件/逻辑表达式等），导入返回 `MCSOLVERENGINE_RESULT_VARSET_EXPRESSION_UNSUPPORTED_SUBSET`，并在诊断消息中附带标签 `MCSOLVERENGINE_IMPORT_VARSET_EXPRESSION_UNSUPPORTED_SUBSET`。
+如果表达式使用了超出此子集的 FreeCAD 特性（电子表格引用、几何属性、完整 Quantity/Unit 运算、布尔逻辑运算符等），导入返回 `MCSOLVERENGINE_RESULT_VARSET_EXPRESSION_UNSUPPORTED_SUBSET`，并在诊断消息中附带标签 `MCSOLVERENGINE_IMPORT_VARSET_EXPRESSION_UNSUPPORTED_SUBSET`。
 
 ---
 
